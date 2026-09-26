@@ -1,0 +1,14 @@
+# Demo CA public key ring for `terminal pay -ca-keys=` (EMV v4.4 Book 2 §5.1).
+#
+# It contains only the demo Certification Authority public key, derived from
+# `perso/emv/sample.perso.sda.keys` (ca.modulus + the shared 010001 exponent); the
+# integration suite asserts the two agree so they cannot drift.  These keys are
+# printed on purpose and MUST NEVER be used on a real card; a real deployment
+# keeps its own ring outside the repository.
+#
+# Format: `ca.<index>.modulus = hex` / `ca.<index>.exponent = hex`, `#` comments
+# and blank lines ignored (see card42.host.oda.CaKeyProfile).  <index> is the CA
+# Public Key Index ('8F') in hex.
+
+ca.01.modulus = 8328CDF41E543395FDB5D74A4F559CFBCA1CE46DCCDA74787D08377A591156E0FA8D6100190864991279E5C3FFA8353AC13384DB7EFA5FA5BEBE91E95D8C3C523FD26D5F4002C43E0871C62FB9C0265BBF2C5B5B7634F93F9C9E2BE9ABACE7E4713983B4ADE1B3D731A2F6A0275FE94B9504512B5AC09D0AD12AE03171F8FF19
+ca.01.exponent = 010001

@@ -1,0 +1,16 @@
+# card42 local configuration overrides.
+#
+# Copy to config/local.mk (gitignored) and edit. Use plain = (not ?=) so the
+# values really replace the defaults from the per-category config/*.mk files.
+# Command-line assignments (make VAR=...) still win over this file.
+#
+# Examples:
+#
+#   JAVA_HOME  = /opt/jdk-21
+#   JC_TARGET  = 3.1.0
+#   JC_API_VERSION = 3.1.0
+#   SIM_PORT   = 9030
+#   SIM_ENC_KEY = 00112233445566778899aabbccddeeff
+#   SIM_MAC_KEY = 00112233445566778899aabbccddeeff
+#   SIM_DEK_KEY = 00112233445566778899aabbccddeeff
+#   GP_JAR     = /opt/globalplatformpro/gp.jar

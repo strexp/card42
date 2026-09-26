@@ -1,0 +1,5 @@
+tools/*
+!tools/README.md
+build/
+config/local.mk
+docs/changelogs

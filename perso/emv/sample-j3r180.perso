@@ -1,0 +1,143 @@
+# card42 personalization script — production set for J3R180 (no DDA/CDA).
+#
+# The NXP J3R180 does not implement Signature.ALG_RSA_SHA_ISO9796_MR, so the
+# ICC DDA/CDA private key cannot be installed (personalizing it fails with
+# 6A80).  This variant keeps what works on that card: SDA (records 2-5) and
+# the enciphered offline PIN (PIN key pair), and drops the DDA/CDA key:
+#   @sda records pin       records 2-5 + ICC PIN key, no DDA/CDA key
+#   AIP 0x5800 (contact)   SDA + CVM + terminal risk management
+#   AIP 0x4800 (ctls)      SDA + terminal risk management
+# DDA/CDA are not advertised, so a terminal only attempts SDA.
+#
+# A flat description of the DGIs that are pushed to one instance.  Each section
+# starts with @instance and is turned into a single DGI sequence by PersoExport
+# and sent through GPPro (simulator and real card share the GP path).  The DGI
+# containers use the EMV CPS v2.0 length encoding (1 byte, or
+# FF + 2 bytes) and completion is signalled by P1.b8 of the last STORE DATA.
+#
+#   @instance <AID-hex>          start a section for this instance
+#   @offline-pin <ascii-digits>  EMV CPS v2.0 Annex A DGI '8010', ISO 9564-1 format 1 Reference PIN Block
+#   @key icc|kcv <hex>           8000 (CAM/ICC master key) / 9000 (KCV, ignored)
+#   @key sm-mac|sm-enc <hex>     8000 (MAC / ENC UDK, appended after the CAM key)
+#   @key <slot> derive <imk> <pan> <psn> [3des|aes]
+#                                derive the key from an issuer master key
+#                                (EMV v4.4 Book 2 Annex A1.4; 3des = Option B)
+#   @dgi <hex>                   the following raw lines form this DGI
+#   @record sfi=n rec=n          the following raw line is DGI (SFI<<8 | record)
+#   @sda                         generate records 2-5 (SDA chain, SSAD, ICC and
+#                                PIN certificates) and the ICC DDA/CDA and PIN
+#                                key pairs (8103/8101, 8104/8102)
+#   @no-complete                 do not set P1.b8 on the last block
+#
+# A raw data line is a whitespace-separated list of hex bytes and/or quoted
+# ASCII strings.
+#
+# The sections below cover the production topology only (43415244420101/02, PSE,
+# PPSE).  The test-only instances (43415244420104/06/08) and their data live in
+# perso/emv/sample-test.perso, which the simulator suites use (`SIM_PERSO_SCRIPT`);
+# real-card testing of those instances uses
+# `make card-perso CARD_PERSO_SCRIPT=perso/emv/sample-test.perso`.
+
+# --- Contact payment instance (43415244420101) --------------------------------
+@instance 43415244420101
+@offline-pin 1234
+# EMV CPS v2.0 Annex A DGI '8000' block cipher keys: CAM (ICC master) || MAC UDK || ENC UDK.  Each key
+# is derived from its own issuer master key with the CV '5' method (Option B, EMV v4.4 Book 2
+# §A1.4.2 / CCD §8.3) for PAN 1234567890, PAN sequence 00.  The secure-messaging keys are used by the
+# issuer script tests (IssuerScriptTest).
+@key icc derive 0F0E0D0C0B0A09080706050403020100 1234567890 00
+@key sm-mac derive 11111111111111111111111111111111 1234567890 00
+@key sm-enc derive 22222222222222222222222222222222 1234567890 00
+
+# SELECT response data (EMV CPS v2.0 Annex A DGI '9102'): an A5 template with the label, priority,
+# language and the PDOL (EMV v4.4 Book 3 §6.5.8, EMV CPS v2.0 Annex A).
+@dgi 9102
+A5 32 50 0E "card42 CONTACT" 87 01 01 5F2D 04 6E 6C 65 6E 9F38 15 9F02 06 9F03 06 9F1A 02 95 05 5F2A 02 9A 03 9C 01 9F37 04
+
+# GPO response data (EMV CPS v2.0 Annex A DGI '9104'): AIP 0x7900 = SDA + DDA + CDA + CVM and the AFL
+# listing records 1-5 (record 4 is the ICC PIN certificate, record 5 the ICC
+# DDA/CDA certificate).
+@dgi 9104
+82 02 58 00 94 04 08 01 05 01
+
+# Application internal data (EMV CPS v2.0 Annex A DGI '3001').  IAC-Denial bit 8 forces an AAC; the
+# IAD is the 32-byte CCD Format Code 'A' template (the card rewrites the CVR).
+# IAC-Online (9F0F) 40 00 00 80 00 forces the transaction online on SDA failure (b7) and on
+# the floor limit (byte 4 b8) but NOT on the informational 'SDA selected' TVR bit (byte 1 b2),
+# so an SDA-only card can still be approved offline (EMV v4.4 Book 3 §10.7/§10.8).  The same
+# value is repeated in record 1 (DGI 0101) because the terminal reads the IACs from the ICC
+# records; the card reads its copy from this DGI.
+@dgi 3001
+9F0E 05 80 00 00 00 00
+9F0F 05 40 00 00 80 00
+9F0D 05 40 00 00 80 00
+9F10 20 0F A5 11 00 00 00 00 00 00 00 00 00 00 00 00 00 0F 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF
+# Optional data objects (EMV v4.4 Book 3 Annex A Table 37): the IINE (9F0C)
+# and ASRPD (9F0A) are carried in the FCI issuer discretionary data (BF0C).
+9F0C 04 12 34 56 78
+9F0A 06 01 02 41 42 43 44
+
+# Record 1 (EMV CPS v2.0 Annex A DGI '0101').  The 70 length byte is patched on read.  @sda derives
+# records 2-5 and the ICC DDA/CDA and PIN key pairs (EMV v4.4 Book 2 §5–§7.2).
+# The Token Requestor ID (9F19), PAR (9F24) and Last 4 Digits of PAN (9F25)
+# are optional record data objects (EMV v4.4 Book 3 Annex A Table 37).
+@record sfi=1 rec=1
+70 00 8C 15 9F02 06 9F03 06 9F1A 02 95 05 5F2A 02 9A 03 9C 01 9F37 04 8D 0C 91 08 8A 02 95 05 9F37 04 9F4C 08 5A 05 12 34 56 78 90 5F24 03 29 12 31 8E 0A 00 00 00 00 00 00 00 00 01 00 9F49 03 9F37 04 9F19 06 00 00 00 00 00 01 9F24 1D 50 41 52 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 9F25 02 90 12 9F0E 05 80 00 00 00 00 9F0F 05 40 00 00 80 00 9F0D 05 40 00 00 80 00 57 13 12 34 56 78 90 D2 91 21 01 FF FF FF FF FF FF FF FF FF 9F07 02 3D C0 9F08 02 00 02
+@sda records pin
+
+# Cumulative offline amount limits (project DGI E002, docs/specs/emv/personalization.md §3): LCOTA=0
+# (disabled) and UCOTA=1000.  EmvFlowTest sets the counters to the upper limits
+# through a CSU and then checks the offline decline.
+@dgi E002
+00 00 00 00 00 00 00 00 00 00 10 00
+
+# --- Contactless payment instance (43415244420102) ----------------------------
+@instance 43415244420102
+@offline-pin 1234
+@key icc derive 0F0E0D0C0B0A09080706050403020100 1234567890 00
+# Secure-messaging keys for the contactless issuer-script test (ContactlessTest),
+# derived with the same CV '5' Option B method as instance 01.
+@key sm-mac derive 11111111111111111111111111111111 1234567890 00
+@key sm-enc derive 22222222222222222222222222222222 1234567890 00
+
+# AIP 0x6900 = SDA + DDA + CDA (no CVM); CVM rule 1F 03 = No CVM required.
+# The PDOL requests the contactless terminal data (EMV v4.4 Book 3 §5.4): the
+# Terminal Transaction Qualifiers ('9F66'), Terminal Capabilities ('9F33'),
+# Additional Terminal Capabilities ('9F40') and Terminal Type ('9F35') precede
+# the amount/date/unpredictable-number fields.
+@dgi 9102
+A5 3B 50 0B "card42 CTLS" 87 01 01 5F2D 04 6E 6C 65 6E 9F38 21 9F66 04 9F33 03 9F40 05 9F35 01 9F02 06 9F03 06 9F1A 02 95 05 5F2A 02 9A 03 9C 01 9F37 04
+
+@dgi 9104
+82 02 48 00 94 04 08 01 05 01
+
+@dgi 3001
+9F0E 05 80 00 00 00 00
+9F0F 05 40 00 00 80 00
+9F0D 05 40 00 00 80 00
+# Optional data objects (EMV v4.4 Book 3 Annex A Table 37), as for instance 01.
+9F0C 04 12 34 56 78
+9F0A 06 01 02 41 42 43 44
+
+@record sfi=1 rec=1
+70 00 8C 15 9F02 06 9F03 06 9F1A 02 95 05 5F2A 02 9A 03 9C 01 9F37 04 8D 0C 91 08 8A 02 95 05 9F37 04 9F4C 08 5A 05 12 34 56 78 90 5F24 03 29 12 31 8E 0A 00 00 00 00 00 00 00 00 1F 03 9F49 03 9F37 04 9F19 06 00 00 00 00 00 01 9F24 1D 50 41 52 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 9F25 02 90 12 9F0E 05 80 00 00 00 00 9F0F 05 40 00 00 80 00 9F0D 05 40 00 00 80 00 57 13 12 34 56 78 90 D2 91 21 01 FF FF FF FF FF FF FF FF FF 9F07 02 3D C0 9F08 02 00 02
+@sda records pin
+
+# --- PSE (1PAY.SYS.DDF01) ---------------------------------------------------
+@instance 315041592E5359532E4444463031
+# SELECT response (EMV CPS v2.0 Annex A DGI '9102'): A5 { 88 01 01 }.
+@dgi 9102
+A5 03 88 01 01
+# Directory record (EMV CPS v2.0 Annex A DGI '0101'): 70 { 61 { 4F, 50, 87 } }.
+@dgi 0101
+70 1E 61 1C 4F 07 43 41 52 44 42 01 01 50 0E "card42 CONTACT" 87 01 01
+
+# --- PPSE (2PAY.SYS.DDF01) --------------------------------------------------
+@instance 325041592E5359532E4444463031
+# SELECT response (EMV CPS v2.0 Annex A DGI '9102'): A5 { BF0C { 61 { 4F, 50, 87, 9F2A },
+# 9F3E, 9F3F } }.  The Kernel Identifier 9F2A 01 00 means "kernel associated with the ADF
+# Name" (EMV Contactless Book B v2.12 Table 3-2/3-4); card42 has no kernel.  The Terminal
+# Categories Supported List 9F3E (0001 transit gate, 0002 loyalty) and the SDOL 9F3F
+# (9F1A, 5F2A) advertise SEND POI INFORMATION support (Book B Annex C).
+@dgi 9102
+A5 32 BF0C 2F 61 1D 4F 07 43 41 52 44 42 01 02 50 0B "card42 CTLS" 87 01 01 9F2A 01 00 9F3E 04 00 01 00 02 9F3F 06 9F1A 02 5F 2A 02
