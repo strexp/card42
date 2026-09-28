@@ -76,7 +76,7 @@
 ## B. 卡侧实现与健壮性
 
 - [ ] **B1 瞬态预算压缩（§B3 的修复）——已完成，保留真卡验收**：P2 批次把 EMV 的全部
-      per-instance 瞬态缓冲收拢为包级共享的 `card/emv/EmvScratch`
+      per-instance 瞬态缓冲收拢为包级共享的 `card/emv/mem/EmvScratch`
       （response/work/chain/pdol/firstCdol/cda*/SM/会话/CVR/protocol，共 **1184 B**），在
       `EMVProtocolState` 构造（即安装期）分配一次；`work` 288 B 覆盖 2048-bit DDA/CDA 消息
       （prefix 234 + 实际 DDOL）、`chain` 255 B、`firstCdol` 128 B、`pdol` 64 B 亦共享。命令

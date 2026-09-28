@@ -146,7 +146,7 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_EMV_DIR)/tlv/TlvTags.java $(CARD_EMV_DIR)/constants/EMVCommands.java \
                  $(CARD_EMV_DIR)/constants/EMVStatus.java $(CARD_EMV_DIR)/constants/EMVRoles.java \
                  $(CARD_EMV_DIR)/constants/EMVCodes.java \
-                 $(CARD_EMV_DIR)/EmvScratch.java \
+                 $(CARD_EMV_DIR)/mem/EmvScratch.java \
                  $(CARD_EMV_DIR)/state/EMVProtocolState.java \
                  $(CARD_EMV_DIR)/data/EMVStaticData.java $(CARD_EMV_DIR)/data/Defaults.java \
                  $(CARD_EMV_DIR)/data/PaymentData.java $(CARD_EMV_DIR)/data/FciBuilder.java \
@@ -168,8 +168,8 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_EMV_DIR)/perso/PersoRules.java \
                  $(CARD_EMV_DIR)/applet/InstallParameters.java \
                  $(CARD_EMRTD_DIR)/tlv/EmrtdTags.java \
-                 $(CARD_EMRTD_DIR)/P256.java \
-                 $(CARD_EMRTD_DIR)/Sha1Kdf.java \
+                 $(CARD_EMRTD_DIR)/crypto/P256.java \
+                 $(CARD_EMRTD_DIR)/crypto/Sha1Kdf.java \
                  $(CARD_EMRTD_DIR)/access/MrzKeySeed.java \
                  $(CARD_EMRTD_DIR)/access/BacCrypto.java \
                  $(CARD_EMRTD_DIR)/access/Iso7816Sm.java \
@@ -193,7 +193,7 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_COMMON_DIR)/applet/ApduIo.java \
                  $(CARD_COMMON_DIR)/applet/AppletBase.java \
                  $(CARD_EMRTD_DIR)/applet/EmrtdInstallParameters.java \
-                 $(CARD_EMRTD_DIR)/EmrtdScratch.java \
+                 $(CARD_EMRTD_DIR)/mem/EmrtdScratch.java \
                  $(CARD_EMRTD_DIR)/applet/EmrtdApplet.java \
                  $(CARD_EMRTD_DIR)/command/ExternalAuthenticate.java \
                  $(CARD_EMRTD_DIR)/command/GetChallenge.java \
