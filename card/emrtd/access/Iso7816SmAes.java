@@ -52,9 +52,7 @@ public final class Iso7816SmAes extends AbstractSecureMessaging {
 
     /** Expands the 8-byte SSC to the 16-byte AES form (8 zero bytes then the counter). */
     protected void prepareSsc(byte[] ssc) {
-        for (short i = 0; i < (short) 8; i++) {
-            ssc16[i] = 0;
-        }
+        Util.arrayFillNonAtomic(ssc16, (short) 0, (short) 8, (byte) 0);
         Util.arrayCopyNonAtomic(ssc, (short) 0, ssc16, (short) 8, (short) 8);
     }
 

@@ -10,13 +10,11 @@ import javacard.framework.ISOException;
 import javacard.framework.Util;
 import javacard.security.AESKey;
 import javacard.security.DESKey;
-import javacard.security.ECKey;
 import javacard.security.ECPrivateKey;
 import javacard.security.ECPublicKey;
 import javacard.security.KeyAgreement;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
-import javacard.security.MessageDigest;
 import javacardx.crypto.Cipher;
 
 /* PACE, ECDH generic mapping, 3DES or AES-128 secure messaging
@@ -40,38 +38,6 @@ import javacardx.crypto.Cipher;
  */
 
 public final class Pace implements PaceSeedSink {
-
-    // P-256 (secp256r1) domain parameters.
-    private static final byte[] FP = {
-        (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, 0x00, 0x00, 0x00, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,
-        (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF };
-    private static final byte[] FA = {
-        (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, 0x00, 0x00, 0x00, 0x01,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,
-        (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFC };
-    private static final byte[] FB = {
-        0x5A, (byte) 0xC6, 0x35, (byte) 0xD8, (byte) 0xAA, 0x3A, (byte) 0x93, (byte) 0xE7,
-        (byte) 0xB3, (byte) 0xEB, (byte) 0xBD, 0x55, 0x76, (byte) 0x98, (byte) 0x86, (byte) 0xBC,
-        0x65, 0x1D, 0x06, (byte) 0xB0, (byte) 0xCC, 0x53, (byte) 0xB0, (byte) 0xF6,
-        0x3B, (byte) 0xCE, 0x3C, 0x3E, 0x27, (byte) 0xD2, 0x60, 0x4B };
-    private static final byte[] FG = {
-        0x04,
-        0x6B, 0x17, (byte) 0xD1, (byte) 0xF2, (byte) 0xE1, 0x2C, 0x42, 0x47,
-        (byte) 0xF8, (byte) 0xBC, (byte) 0xE6, (byte) 0xE5, 0x63, (byte) 0xA4, 0x40, (byte) 0xF2,
-        0x77, 0x03, 0x7D, (byte) 0x81, 0x2D, (byte) 0xEB, 0x33, (byte) 0xA0,
-        (byte) 0xF4, (byte) 0xA1, 0x39, 0x45, (byte) 0xD8, (byte) 0x98, (byte) 0xC2, (byte) 0x96,
-        0x4F, (byte) 0xE3, 0x42, (byte) 0xE2, (byte) 0xFE, 0x1A, 0x7F, (byte) 0x9B,
-        (byte) 0x8E, (byte) 0xE7, (byte) 0xEB, 0x4A, 0x7C, 0x0F, (byte) 0x9E, 0x16,
-        0x2B, (byte) 0xCE, 0x33, 0x57, 0x6B, 0x31, 0x5E, (byte) 0xCE,
-        (byte) 0xCB, (byte) 0xB6, 0x40, 0x68, 0x37, (byte) 0xBF, 0x51, (byte) 0xF5 };
-    private static final byte[] FR = {
-        (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, 0x00, 0x00, 0x00, 0x00,
-        (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,
-        (byte) 0xBC, (byte) 0xE6, (byte) 0xFA, (byte) 0xAD, (byte) 0xA7, 0x17, (byte) 0x9E, (byte) 0x84,
-        (byte) 0xF3, (byte) 0xB9, (byte) 0xCA, (byte) 0xC2, (byte) 0xFC, (byte) 0x63, 0x25, 0x51 };
 
     /** OID prefix id-PACE-ECDH-GM-* (the last byte selects the cipher). */
     private static final byte[] OID_PREFIX = {
@@ -118,7 +84,7 @@ public final class Pace implements PaceSeedSink {
     private final KeyAgreement xy;
     private final KeyAgreement plain;
 
-    private final MessageDigest sha1;
+    private final Sha1Kdf kdf;
     private final RetailMac mac;
     private final AesCmac aesMac;
     private final Cipher des3;
@@ -127,11 +93,9 @@ public final class Pace implements PaceSeedSink {
     private final AESKey aesKey;
     private final byte[] zeroIv8 = new byte[8];
     private final byte[] zeroIv16 = new byte[16];
-    private final byte[] derivation = new byte[4];
-    private final byte[] digest = new byte[20];
 
     public Pace() {
-        sha1 = MessageDigest.getInstance(MessageDigest.ALG_SHA, false);
+        kdf = new Sha1Kdf();
         mac = new RetailMac();
         aesMac = new AesCmac();
         des3 = Cipher.getInstance(Cipher.ALG_DES_CBC_NOPAD, false);
@@ -197,12 +161,7 @@ public final class Pace implements PaceSeedSink {
     }
 
     private static boolean equal(byte[] a, short aOff, byte[] b, short len) {
-        for (short i = 0; i < len; i++) {
-            if (a[(short) (aOff + i)] != b[i]) {
-                return false;
-            }
-        }
-        return true;
+        return Util.arrayCompare(a, aOff, b, (short) 0, len) == 0;
     }
 
     /** GENERAL AUTHENTICATE; writes the 7C-wrapped response to out. */
@@ -233,7 +192,7 @@ public final class Pace implements PaceSeedSink {
         if (nonceKey == null) {
             nonceKey = (ECPrivateKey) KeyBuilder.buildKey(
                     KeyBuilder.TYPE_EC_FP_PRIVATE, KeyBuilder.LENGTH_EC_FP_256, false);
-            setCurve(nonceKey);
+            P256.setCurve(nonceKey);
         }
         nonceKey.setS(nonceScalar, (short) 0, (short) 32);
         encrypt(kpi, nonce, (short) 0, nonceLen, scratch, (short) 0);
@@ -249,8 +208,8 @@ public final class Pace implements PaceSeedSink {
         }
         if (mappingPair == null) {
             mappingPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
-            setCurve((ECPublicKey) mappingPair.getPublic());
-            setCurve((ECPrivateKey) mappingPair.getPrivate());
+            P256.setCurve((ECPublicKey) mappingPair.getPublic());
+            P256.setCurve((ECPrivateKey) mappingPair.getPrivate());
         }
         mappingPair.genKeyPair();
 
@@ -272,8 +231,8 @@ public final class Pace implements PaceSeedSink {
 
         if (ephemeralPair == null) {
             ephemeralPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
-            setCurve((ECPublicKey) ephemeralPair.getPublic());
-            setCurve((ECPrivateKey) ephemeralPair.getPrivate());
+            P256.setCurve((ECPublicKey) ephemeralPair.getPublic());
+            P256.setCurve((ECPrivateKey) ephemeralPair.getPrivate());
         }
         ((ECPublicKey) ephemeralPair.getPublic()).setG(mapped, (short) 0, ml);
         ((ECPrivateKey) ephemeralPair.getPrivate()).setG(mapped, (short) 0, ml);
@@ -296,9 +255,7 @@ public final class Pace implements PaceSeedSink {
         short kl = plain.generateSecret(data, r[0], r[1], scratch, (short) 0);
         derive(applet.ksEnc, (short) 0, scratch, (short) 0, kl, (byte) 1);
         derive(applet.ksMac, (short) 0, scratch, (short) 0, kl, (byte) 2);
-        for (short i = 0; i < (short) 8; i++) {
-            applet.ssc[i] = 0;
-        }
+        Util.arrayFillNonAtomic(applet.ssc, (short) 0, (short) 8, (byte) 0);
         // Secure messaging is not "established" until the terminal proves it
         // knows K_mac in step 4 (the fresh-PACE step 4 is sent in the clear, as
         // in jMRTD); only then does a plaintext APDU abort the session.
@@ -357,16 +314,8 @@ public final class Pace implements PaceSeedSink {
     /** KDF(x, counter) = SHA-1(x || 00 00 00 counter), 16-byte key. */
     private void derive(byte[] out, short outOff, byte[] x, short xOff, short xLen,
                         byte counter) {
-        derivation[3] = counter;
-        sha1.reset();
-        sha1.update(x, xOff, xLen);
-        sha1.update(derivation, (short) 0, (short) 4);
-        sha1.doFinal(digest, (short) 0, (short) 0, digest, (short) 0);
-        Util.arrayCopyNonAtomic(digest, (short) 0, out, outOff, (short) 16);
-        if (!aes) {
-            // DES parity adjustment applies to 3DES keys only (BSI A.2.3.1).
-            BacCrypto.adjustParity(out, outOff, (short) 16);
-        }
+        // DES parity adjustment applies to 3DES keys only (BSI A.2.3.1).
+        kdf.derive(x, xOff, xLen, counter, out, outOff, !aes);
     }
 
     /** Encrypts whole blocks with a zero IV (3DES-CBC or AES-CBC). */
@@ -390,14 +339,5 @@ public final class Pace implements PaceSeedSink {
         out[0] = (byte) 0x7C;
         out[1] = (byte) (p - 2);
         return p;
-    }
-
-    private static void setCurve(ECKey key) {
-        key.setFieldFP(FP, (short) 0, (short) FP.length);
-        key.setA(FA, (short) 0, (short) FA.length);
-        key.setB(FB, (short) 0, (short) FB.length);
-        key.setG(FG, (short) 0, (short) FG.length);
-        key.setR(FR, (short) 0, (short) FR.length);
-        key.setK((short) 1);
     }
 }

@@ -183,9 +183,7 @@ public class AcProcessor implements ISO7816 {
         finalizer.complete(cid, false, false, cid, firstCdol, firstCdolLength);
 
         short length = Tlv.totalLength(response, (short) 0);
-        apdu.setOutgoing();
-        apdu.setOutgoingLength(length);
-        apdu.sendBytesLong(response, (short) 0, length);
+        ApduIo.send(apdu, response, (short) 0, length);
     }
 
     /**
@@ -339,9 +337,7 @@ public class AcProcessor implements ISO7816 {
                 firstCdol, firstCdolLength);
 
         short length = Tlv.totalLength(response, (short) 0);
-        apdu.setOutgoing();
-        apdu.setOutgoingLength(length);
-        apdu.sendBytesLong(response, (short) 0, length);
+        ApduIo.send(apdu, response, (short) 0, length);
     }
 
     /** Maps a Cryptogram Information Data code to the AC type constant. */

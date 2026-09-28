@@ -168,6 +168,8 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_EMV_DIR)/perso/PersoRules.java \
                  $(CARD_EMV_DIR)/applet/InstallParameters.java \
                  $(CARD_EMRTD_DIR)/tlv/EmrtdTags.java \
+                 $(CARD_EMRTD_DIR)/P256.java \
+                 $(CARD_EMRTD_DIR)/Sha1Kdf.java \
                  $(CARD_EMRTD_DIR)/access/MrzKeySeed.java \
                  $(CARD_EMRTD_DIR)/access/BacCrypto.java \
                  $(CARD_EMRTD_DIR)/access/Iso7816Sm.java \
@@ -188,6 +190,7 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_EMRTD_DIR)/lds/Lds2Perso.java \
                  $(CARD_EMRTD_DIR)/access/ChipAuth.java \
                  $(CARD_EMRTD_DIR)/access/PaceSeedSink.java \
+                 $(CARD_COMMON_DIR)/applet/ApduIo.java \
                  $(CARD_COMMON_DIR)/applet/AppletBase.java \
                  $(CARD_EMRTD_DIR)/applet/EmrtdInstallParameters.java \
                  $(CARD_EMRTD_DIR)/EmrtdScratch.java \

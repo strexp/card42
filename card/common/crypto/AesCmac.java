@@ -87,12 +87,7 @@ public final class AesCmac implements MacAlgorithm {
 
     /** True when the 16 bytes at key/keyOff equal the last loaded session key. */
     private boolean sameKey(byte[] key, short keyOff) {
-        for (short i = 0; i < BLOCK; i++) {
-            if (loadedKey[i] != key[(short) (keyOff + i)]) {
-                return false;
-            }
-        }
-        return true;
+        return ConstantTime.equals(loadedKey, (short) 0, key, keyOff, BLOCK);
     }
 
     public void update(byte[] msg, short msgOff, short msgLen) {

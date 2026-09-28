@@ -265,9 +265,7 @@ public abstract class EMVAppletBase extends AppletBase implements ISO7816, Perso
 		// agree even if getFCI() invalidates the cached length (docs/specs/common/architecture.md §2).
 		byte[] fci = getFCI();
 		short length = getFCILength();
-		apdu.setOutgoing();
-		apdu.setOutgoingLength(length);
-		apdu.sendBytesLong(fci, (short)0, length);
+		ApduIo.send(apdu, fci, (short)0, length);
 	}
 
 	/** The FCI of this instance (built for its role). */

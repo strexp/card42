@@ -135,9 +135,7 @@ public class DynamicAuth implements ISO7816 {
         p += nic;
         protocolState.setDdaPerformed(); // CVR byte 1 b3 (EMV v4.4 Book 3 Annex C §C9)
 
-        apdu.setOutgoing();
-        apdu.setOutgoingLength(p);
-        apdu.sendBytesLong(response, (short) 0, p);
+        ApduIo.send(apdu, response, (short) 0, p);
     }
 
     /** Fills authMessage[from..to) with the EMV pad pattern 0xBB. */
@@ -251,9 +249,7 @@ public class DynamicAuth implements ISO7816 {
         Util.arrayCopyNonAtomic(iad, (short) 0, response, p, iadLength);
         p += iadLength;
 
-        apdu.setOutgoing();
-        apdu.setOutgoingLength(p);
-        apdu.sendBytesLong(response, (short) 0, p);
+        ApduIo.send(apdu, response, (short) 0, p);
     }
 
     /** Copies the 4-byte Unpredictable Number at unOffset into cdaUn. */

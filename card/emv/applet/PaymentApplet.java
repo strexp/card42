@@ -449,9 +449,7 @@ public class PaymentApplet extends EMVAppletBase {
             if (logLength < 0) {
                 ISOException.throwIt(SW_RECORD_NOT_FOUND); // 6A83
             }
-            apdu.setOutgoing();
-            apdu.setOutgoingLength(logLength);
-            apdu.sendBytesLong(response, (short) 0, logLength);
+            ApduIo.send(apdu, response, (short) 0, logLength);
             return;
         }
 
@@ -461,9 +459,7 @@ public class PaymentApplet extends EMVAppletBase {
         // buffer, where the length is normalised (EMV v4.4 Book 3 §7.1).
         RecordBuilder.View direct = staticData.directRecord(apduBuffer);
         if (direct != null) {
-            apdu.setOutgoing();
-            apdu.setOutgoingLength(direct.length);
-            apdu.sendBytesLong(direct.pool, direct.offset, direct.length);
+            ApduIo.send(apdu, direct.pool, direct.offset, direct.length);
             return;
         }
 
@@ -472,9 +468,7 @@ public class PaymentApplet extends EMVAppletBase {
         // The length is taken from the 70 template itself, so a long-form
         // length would be handled too (docs/specs/emv/personalization.md §3).
         short length = Tlv.totalLength(response, (short) 0);
-        apdu.setOutgoing();
-        apdu.setOutgoingLength(length);
-        apdu.sendBytesLong(response, (short) 0, length);
+        ApduIo.send(apdu, response, (short) 0, length);
     }
 
     private void getProcessingOptions(APDU apdu, byte[] apduBuffer) {
@@ -536,9 +530,7 @@ public class PaymentApplet extends EMVAppletBase {
         byte[] gpo = staticData.getGpo(protocolState.getRole());
         short length = staticData.getGpoLength(protocolState.getRole());
 
-        apdu.setOutgoing();
-        apdu.setOutgoingLength(length);
-        apdu.sendBytesLong(gpo, (short)0, length);
+        ApduIo.send(apdu, gpo, (short) 0, length);
     }
 
     // --- Personalization (EMV CPS v2.0 Annex A, docs/specs/emv/personalization.md §1)

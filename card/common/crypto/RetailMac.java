@@ -91,17 +91,8 @@ public class RetailMac implements MacAlgorithm {
 
     /** Loads K1/K2 once per session key (the key is stable within a session). */
     private void setKeyOnce(byte[] key, short keyOff) {
-        if (keyLoaded) {
-            boolean same = true;
-            for (short i = 0; i < (short) 16; i++) {
-                if (loadedKey[i] != key[(short) (keyOff + i)]) {
-                    same = false;
-                    break;
-                }
-            }
-            if (same) {
-                return;
-            }
+        if (keyLoaded && ConstantTime.equals(loadedKey, (short) 0, key, keyOff, (short) 16)) {
+            return;
         }
         cbcKey.setKey(key, keyOff);
         finalKey.setKey(key, (short) (keyOff + 8));

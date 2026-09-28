@@ -1,5 +1,6 @@
 package card42.emrtd;
 
+import card42.common.ApduIo;
 import card42.common.AppletBase;
 
 import javacard.framework.APDU;
@@ -154,17 +155,18 @@ public final class EmrtdApplet extends AppletBase
         // 7816-4, Doc 9303-11): a prior BAC/PACE must not leak into the next one.
         resetSession();
         // FCI: 6F { 84 <DF name> } (Doc 9303-10 §3.6.1.2).
-        byte[] fci = apduBuffer;
-        short p = 0;
-        fci[p++] = (byte) 0x6F;
-        fci[p++] = (byte) (dfNameLength + 2);
-        fci[p++] = (byte) 0x84;
-        fci[p++] = (byte) dfNameLength;
-        Util.arrayCopyNonAtomic(dfName, (short) 0, fci, p, dfNameLength);
-        p += dfNameLength;
-        apdu.setOutgoing();
-        apdu.setOutgoingLength(p);
-        apdu.sendBytes((short) 0, p);
+        short p = writeFci(apduBuffer, (short) 0);
+        ApduIo.send(apdu, apduBuffer, (short) 0, p);
+    }
+
+    /** Writes {@code 6F { 84 <DF name> }} into buf[off..); returns the new offset. */
+    private short writeFci(byte[] buf, short off) {
+        buf[off++] = (byte) 0x6F;
+        buf[off++] = (byte) (dfNameLength + 2);
+        buf[off++] = (byte) 0x84;
+        buf[off++] = (byte) dfNameLength;
+        Util.arrayCopyNonAtomic(dfName, (short) 0, buf, off, dfNameLength);
+        return (short) (off + dfNameLength);
     }
 
     /** eMRTD uses INS=A4 for SELECT FILE, so it must reach processCommand. */
@@ -183,23 +185,12 @@ public final class EmrtdApplet extends AppletBase
      * the established SM session, a different name is 6A82.
      */
     short selectByName(byte[] data, short off, short len) {
-        if (len != dfNameLength) {
+        if (len != dfNameLength
+                || Util.arrayCompare(data, off, dfName, (short) 0, dfNameLength) != 0) {
             ISOException.throwIt(ISO7816.SW_FILE_NOT_FOUND);
         }
-        for (short i = 0; i < dfNameLength; i++) {
-            if (data[(short) (off + i)] != dfName[i]) {
-                ISOException.throwIt(ISO7816.SW_FILE_NOT_FOUND);
-            }
-        }
         // FCI: 6F { 84 <DF name> } (Doc 9303-10 §3.6.1.2).
-        short p = 0;
-        response[p++] = (byte) 0x6F;
-        response[p++] = (byte) (dfNameLength + 2);
-        response[p++] = (byte) 0x84;
-        response[p++] = (byte) dfNameLength;
-        Util.arrayCopyNonAtomic(dfName, (short) 0, response, p, dfNameLength);
-        p += dfNameLength;
-        return p;
+        return writeFci(response, (short) 0);
     }
 
     /** Clears the secure-messaging session state on application selection. */
@@ -291,22 +282,16 @@ public final class EmrtdApplet extends AppletBase
             // protected by secure messaging like any other (Doc 9303-11 §9.8).
             short n = sm.wrap(ksEnc, ksMac, ssc, response, (short) 0,
                     e.getReason(), plain, (short) 0);
-            apdu.setOutgoing();
-            apdu.setOutgoingLength(n);
-            apdu.sendBytesLong(plain, (short) 0, n);
+            ApduIo.send(apdu, plain, (short) 0, n);
             return;
         }
 
         if (smActive) {
             short n = sm.wrap(ksEnc, ksMac, ssc, response, respLen,
                     (short) 0x9000, plain, (short) 0);
-            apdu.setOutgoing();
-            apdu.setOutgoingLength(n);
-            apdu.sendBytesLong(plain, (short) 0, n);
+            ApduIo.send(apdu, plain, (short) 0, n);
         } else {
-            apdu.setOutgoing();
-            apdu.setOutgoingLength(respLen);
-            apdu.sendBytesLong(response, (short) 0, respLen);
+            ApduIo.send(apdu, response, (short) 0, respLen);
         }
         if (caPending) {
             // Chip Authentication: switch the SM session keys for the next
@@ -315,9 +300,7 @@ public final class EmrtdApplet extends AppletBase
             // retail-MAC wrapper even if PACE had negotiated AES.
             Util.arrayCopyNonAtomic(caEnc, (short) 0, ksEnc, (short) 0, (short) 16);
             Util.arrayCopyNonAtomic(caMac, (short) 0, ksMac, (short) 0, (short) 16);
-            for (short i = 0; i < 8; i++) {
-                ssc[i] = 0;
-            }
+            Util.arrayFillNonAtomic(ssc, (short) 0, (short) 8, (byte) 0);
             sm = sm3des;
             smEstablished = true;
             caPending = false;

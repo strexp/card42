@@ -206,9 +206,7 @@ public class DirectoryApplet extends EMVAppletBase {
 			short key = (short) ((sfi << 8) | rec);
 			short offset = records.offsetOf(key);
 			if (offset >= 0) {
-				apdu.setOutgoing();
-				apdu.setOutgoingLength(records.lengthOf(key));
-				apdu.sendBytesLong(records.pool(), offset, records.lengthOf(key));
+				ApduIo.send(apdu, records.pool(), offset, records.lengthOf(key));
 				break;
 			}
 			if (rec == 1) {
@@ -220,9 +218,7 @@ public class DirectoryApplet extends EMVAppletBase {
 				if (directoryRecordLength == 0) {
 					buildDefaultRecord();
 				}
-				apdu.setOutgoing();
-				apdu.setOutgoingLength(directoryRecordLength);
-				apdu.sendBytesLong(directoryRecord, (short)0, directoryRecordLength);
+				ApduIo.send(apdu, directoryRecord, (short)0, directoryRecordLength);
 				break;
 			}
 			// The directory file exists but has no such record
@@ -244,9 +240,7 @@ public class DirectoryApplet extends EMVAppletBase {
 			validateSpiCommand(apduBuffer, OFFSET_CDATA, lc);
 			byte[] spiFci = getFCI();
 			short spiLength = getFCILength();
-			apdu.setOutgoing();
-			apdu.setOutgoingLength(spiLength);
-			apdu.sendBytesLong(spiFci, (short)0, spiLength);
+			ApduIo.send(apdu, spiFci, (short)0, spiLength);
 			break;
 
 		default:

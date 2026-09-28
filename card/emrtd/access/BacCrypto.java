@@ -5,7 +5,6 @@ import card42.common.RetailMac;
 import javacard.framework.Util;
 import javacard.security.DESKey;
 import javacard.security.KeyBuilder;
-import javacard.security.MessageDigest;
 import javacardx.crypto.Cipher;
 
 /* Basic Access Control key derivation and mutual authentication
@@ -30,16 +29,10 @@ public final class BacCrypto {
 
     private static final short KEY_LENGTH = (short) 16;
 
-    private final MessageDigest sha1;
+    private final Sha1Kdf kdf;
     private final RetailMac retailMac;
     private final Cipher des3;
     private final DESKey key;
-
-    /** 4-byte SHA-1 derivation suffix 00 00 00 marker. */
-    private final byte[] derivation = new byte[4];
-
-    /** Scratch for the 20-byte SHA-1 output; the key is its first 16 bytes. */
-    private final byte[] digest = new byte[20];
 
     /** Reused MAC output (the J3R180 does not reclaim per-call allocations). */
     private final byte[] macBuffer = new byte[8];
@@ -48,7 +41,7 @@ public final class BacCrypto {
     private final byte[] zeroIv = new byte[8];
 
     public BacCrypto() {
-        sha1 = MessageDigest.getInstance(MessageDigest.ALG_SHA, false);
+        kdf = new Sha1Kdf();
         retailMac = new RetailMac();
         des3 = Cipher.getInstance(Cipher.ALG_DES_CBC_NOPAD, false);
         key = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES,
@@ -61,13 +54,7 @@ public final class BacCrypto {
      * odd DES parity.
      */
     public void deriveKey(byte[] seed, short seedOff, byte marker, byte[] out, short outOff) {
-        derivation[3] = marker;
-        sha1.reset();
-        sha1.update(seed, seedOff, KEY_LENGTH);
-        sha1.update(derivation, (short) 0, (short) 4);
-        sha1.doFinal(digest, (short) 0, (short) 0, digest, (short) 0);
-        Util.arrayCopyNonAtomic(digest, (short) 0, out, outOff, KEY_LENGTH);
-        adjustParity(out, outOff, KEY_LENGTH);
+        kdf.derive(seed, seedOff, KEY_LENGTH, marker, out, outOff, true);
     }
 
     /** Sets odd parity on each of the len key bytes (Doc 9303-11 §9.7.2 note). */

@@ -95,42 +95,26 @@ final class EmvScratch {
         if (initialized) {
             return;
         }
-        response = transientBytes((short) 256);
-        work = transientBytes((short) 288);
-        chain = transientBytes((short) 255);
-        pdol = transientBytes((short) 64);
-        firstCdol = transientBytes((short) 128);
-        cdaHeader = transientBytes((short) 48);
-        cdaUn = transientBytes((short) 4);
-        smMacKey = transientBytes((short) 16);
-        smEncKey = transientBytes((short) 16);
-        smIcv = transientBytes((short) 16);
-        smDerivedAc = transientBytes((short) 8);
-        sessionKey = transientBytes((short) 16);
-        acScratch = transientBytes((short) 4);
-        lastAc = transientBytes((short) 16);
-        skData = transientBytes((short) 16);
-        cvr = transientBytes(Iad.CVR_LENGTH);
-        m1Length = transientShorts((short) 1);
-        volatileState = transientBytes((short) 10);
-        arqc = transientBytes((short) 8);
-        challenge = transientBytes((short) 8);
+        response = TransientBuffers.makeByteArray((short) 256);
+        work = TransientBuffers.makeByteArray((short) 288);
+        chain = TransientBuffers.makeByteArray((short) 255);
+        pdol = TransientBuffers.makeByteArray((short) 64);
+        firstCdol = TransientBuffers.makeByteArray((short) 128);
+        cdaHeader = TransientBuffers.makeByteArray((short) 48);
+        cdaUn = TransientBuffers.makeByteArray((short) 4);
+        smMacKey = TransientBuffers.makeByteArray((short) 16);
+        smEncKey = TransientBuffers.makeByteArray((short) 16);
+        smIcv = TransientBuffers.makeByteArray((short) 16);
+        smDerivedAc = TransientBuffers.makeByteArray((short) 8);
+        sessionKey = TransientBuffers.makeByteArray((short) 16);
+        acScratch = TransientBuffers.makeByteArray((short) 4);
+        lastAc = TransientBuffers.makeByteArray((short) 16);
+        skData = TransientBuffers.makeByteArray((short) 16);
+        cvr = TransientBuffers.makeByteArray(Iad.CVR_LENGTH);
+        m1Length = TransientBuffers.makeShortArray((short) 1);
+        volatileState = TransientBuffers.makeByteArray((short) 10);
+        arqc = TransientBuffers.makeByteArray((short) 8);
+        challenge = TransientBuffers.makeByteArray((short) 8);
         initialized = true;
-    }
-
-    /**
-     * Allocates in the transient (RAM) space when the platform has room and
-     * degrades to a persistent array otherwise, so an exhausted
-     * {@code MEMORY_TRANSIENT_DESELECT} budget costs EEPROM writes instead of a
-     * 6F00 at install (docs/specs/common/risks.md §2).  The card's transient
-     * budget is the scarce resource; the EEPROM fallback is the deliberate
-     * second choice ("priority: transient must not blow up").
-     */
-    private static byte[] transientBytes(short length) {
-        return TransientBuffers.makeByteArray(length);
-    }
-
-    private static short[] transientShorts(short length) {
-        return TransientBuffers.makeShortArray(length);
     }
 }

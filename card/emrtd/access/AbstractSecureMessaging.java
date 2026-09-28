@@ -57,17 +57,8 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
 
     /** Loads K_enc into the cipher key once per session key. */
     protected final void setEncKey(byte[] k) {
-        if (encLoaded) {
-            boolean same = true;
-            for (short i = 0; i < (short) 16; i++) {
-                if (loadedEnc[i] != k[i]) {
-                    same = false;
-                    break;
-                }
-            }
-            if (same) {
-                return;
-            }
+        if (encLoaded && ConstantTime.equals(loadedEnc, (short) 0, k, (short) 0, (short) 16)) {
+            return;
         }
         loadKey(k);
         Util.arrayCopyNonAtomic(k, (short) 0, loadedEnc, (short) 0, (short) 16);
