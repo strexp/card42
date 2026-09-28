@@ -1,6 +1,6 @@
 package card42.emrtd;
 
-import javacard.framework.JCSystem;
+import card42.common.TransientBuffers;
 
 /* Package-shared scratch for the eMRTD secure-messaging wrappers
  * ({@link AbstractSecureMessaging}, {@link Iso7816Sm}, {@link Iso7816SmAes}).
@@ -18,9 +18,11 @@ import javacard.framework.JCSystem;
  * also avoids the multi-instance transient exhaustion that per-instance lazy
  * allocations cause on a J3R180 (docs/specs/common/risks.md §2).
  *
- * The buffer is allocated lazily on the first secure-messaging command, i.e.
- * while an applet is selected, which is required for CLEAR_ON_DESELECT; the
- * personalization path never uses these wrappers.
+ * The buffer is allocated once, from {@code EmrtdApplet}'s constructor via
+ * {@link #init()} during installation, so no command path performs a transient
+ * allocation (docs/specs/common/risks.md §2).  {@link #get()} keeps the lazy
+ * first-use allocation for any caller that does not go through the applet.
+ * The personalization path never uses these wrappers.
  *
  * @author card42
  */
@@ -29,14 +31,24 @@ final class SmScratch {
 
     /**
      * Largest area used by a wrapper: the encryption input starts at offset 512
-     * and holds the response plus M2 padding, and the MAC input starts at 0 and
-     * holds SSC + the wrapped response + status object.
+     * and holds the response plus M2 padding (512 + 272 = 784 for a 256-byte
+     * response), and the MAC input starts at 0 and holds SSC + the wrapped
+     * response + status object (< 320).  800 covers both.
      */
-    private static final short SIZE = (short) 1024;
+    private static final short SIZE = (short) 800;
 
     private static byte[] buffer;
 
     private SmScratch() {
+    }
+
+    /**
+     * Allocates the shared scratch once, at install (see
+     * {@code EmrtdApplet}), so no secure-messaging command path performs a
+     * transient allocation.  Idempotent.
+     */
+    static void init() {
+        get();
     }
 
     /** The shared scratch array, allocated on first use. */
@@ -55,10 +67,6 @@ final class SmScratch {
      * still runs the command instead of returning 6F00.
      */
     private static byte[] allocate() {
-        try {
-            return JCSystem.makeTransientByteArray(SIZE, JCSystem.CLEAR_ON_DESELECT);
-        } catch (RuntimeException e) {
-            return new byte[SIZE];
-        }
+        return TransientBuffers.makeByteArray(SIZE);
     }
 }

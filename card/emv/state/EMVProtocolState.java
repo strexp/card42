@@ -4,7 +4,6 @@ import card42.common.*;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /* Class to track the transient - ie. "session" - state of the EMV protocol,
@@ -94,12 +93,11 @@ public class EMVProtocolState implements ISO7816 {
 	 * §6.5.13).  A chain is active between a non-final VERIFY or PIN
 	 * CHANGE/UNBLOCK command (CLA b5=1) and its final command (b5=0); the
 	 * accumulated command data is transient and reset on SELECT.  The buffer is
-	 * allocated lazily so a card that never chains does not spend the shared
-	 * transient budget (docs/specs/common/risks.md). */
+	 * the package-shared {@link EmvScratch#chain}, so it is allocated once for
+	 * every instance and never during a command (docs/specs/common/risks.md). */
 	private boolean chainActive;
 	private byte chainIns;
 	private short chainLength;
-	private byte[] chainData;
 
 	/** Upper bound of a PDOL-related data expansion accepted by the GPO handler
 	 *  (EMV v4.4 Book 3 §6.5.8); a longer expansion is refused with 6985. */
@@ -107,11 +105,8 @@ public class EMVProtocolState implements ISO7816 {
 
 	/* PDOL-related data of the current GPO (EMV v4.4 Book 3 §6.5.8), kept for the
 	 * Card Action Analysis and the CDA Transaction Data Hash Code.  The buffer
-	 * is transient (cleared on deselect) and allocated on the first non-empty
-	 * GPO data, sized to the actual expansion, so an instance without a PDOL
-	 * does not spend the shared transient budget (docs/specs/common/risks.md); the
-	 * length is reset by startNewSession. */
-	private byte[] pdolData;
+	 * is the package-shared {@link EmvScratch#pdol} (transient, cleared on
+	 * deselect); the length is reset by startNewSession. */
 	private short pdolDataLength;
 
 	/* Persistent, per-instance state (docs/specs/common/architecture.md §2: never static). */
@@ -229,7 +224,7 @@ public class EMVProtocolState implements ISO7816 {
 	 * non-empty expansion (docs/specs/common/risks.md).
 	 */
 	public byte[] getPdolData() {
-		return pdolData;
+		return EmvScratch.pdol;
 	}
 
 	public short getPdolDataLength() {
@@ -252,17 +247,14 @@ public class EMVProtocolState implements ISO7816 {
 			ISOException.throwIt(SW_WRONG_LENGTH);
 		}
 		if (len == 0) {
-			// No PDOL data: keep the buffer unallocated (docs/specs/common/risks.md).
+			// No PDOL data: keep the shared buffer untouched
+			// (docs/specs/common/risks.md).
 			pdolDataLength = 0;
 			return;
 		}
-		if (pdolData == null || pdolData.length < len) {
-			// Allocated while the applet is selected (GPO), sized to the actual
-			// expansion, so the shared transient budget is only spent as needed
-			// (docs/specs/common/risks.md).
-			pdolData = JCSystem.makeTransientByteArray(len, JCSystem.CLEAR_ON_DESELECT);
-		}
-		Util.arrayCopyNonAtomic(buf, off, pdolData, (short) 0, len);
+		// The shared PDOL buffer is a fixed 64 bytes, the on-card bound
+		// (MAX_PDOL_DATA); GPO refuses a longer expansion before this point.
+		Util.arrayCopyNonAtomic(buf, off, EmvScratch.pdol, (short) 0, len);
 		pdolDataLength = len;
 	}
 
@@ -379,18 +371,28 @@ public class EMVProtocolState implements ISO7816 {
 	/** Records a successful issuer authentication: clears the failure state. */
 	public void issuerAuthSucceeded() {
 		setIssuerAuthStatus(EMVStatus.ISSUER_AUTH_SUCCESS);
-		issuerAuthFailedPersistent = false;
+		// Same-value guarded: the persistent CVR bits are usually already
+		// clear, and each write costs an EEPROM programming cycle.
+		if (issuerAuthFailedPersistent) {
+			issuerAuthFailedPersistent = false;
+		}
 		// A successful issuer authentication also clears the persistent
 		// "Issuer Script Processing Failed" and "Last Online Transaction Not
 		// Completed" CVR bits (EMV v4.4 Book 3 §9.2.3.2).
-		scriptFailedPersistent = false;
-		lastOnlineNotCompleted = false;
+		if (scriptFailedPersistent) {
+			scriptFailedPersistent = false;
+		}
+		if (lastOnlineNotCompleted) {
+			lastOnlineNotCompleted = false;
+		}
 	}
 
 	/** Records a failed issuer authentication: sets the persistent indicator. */
 	public void issuerAuthFailed() {
 		setIssuerAuthStatus(EMVStatus.ISSUER_AUTH_FAILED);
-		issuerAuthFailedPersistent = true;
+		if (!issuerAuthFailedPersistent) {
+			issuerAuthFailedPersistent = true;
+		}
 	}
 
 	/** Persistent "Issuer Script Processing Failed" CVR bit (EMV v4.4 Book 3 §9.2.3.2). */
@@ -399,7 +401,11 @@ public class EMVProtocolState implements ISO7816 {
 	}
 
 	public void setScriptFailedPersistent(boolean failed) {
-		scriptFailedPersistent = failed;
+		// Same value: skip the write, a same-value byte may still cost an
+		// EEPROM programming cycle on a real card.
+		if (scriptFailedPersistent != failed) {
+			scriptFailedPersistent = failed;
+		}
 	}
 
 	/** Persistent "Last Online Transaction Not Completed" CVR bit (EMV v4.4 Book 3 §9.2.3.2). */
@@ -408,7 +414,9 @@ public class EMVProtocolState implements ISO7816 {
 	}
 
 	public void setLastOnlineNotCompleted(boolean notCompleted) {
-		lastOnlineNotCompleted = notCompleted;
+		if (lastOnlineNotCompleted != notCompleted) {
+			lastOnlineNotCompleted = notCompleted;
+		}
 	}
 
 	/** The "Issuer Authentication Not Performed" bit of the last second AC. */
@@ -417,7 +425,9 @@ public class EMVProtocolState implements ISO7816 {
 	}
 
 	public void setIssuerAuthNotPerformedPrevious(boolean notPerformed) {
-		issuerAuthNotPerformedPrevious = notPerformed;
+		if (issuerAuthNotPerformedPrevious != notPerformed) {
+			issuerAuthNotPerformedPrevious = notPerformed;
+		}
 	}
 
 	/** The "ODA Failed on Previous Transaction" CVR bit (EMV v4.4 Book 3 §9.2.3.2). */
@@ -426,7 +436,9 @@ public class EMVProtocolState implements ISO7816 {
 	}
 
 	public void setOdaFailedPrevious(boolean failed) {
-		odaFailedPrevious = failed;
+		if (odaFailedPrevious != failed) {
+			odaFailedPrevious = failed;
+		}
 	}
 
 	/**
@@ -470,39 +482,27 @@ public class EMVProtocolState implements ISO7816 {
 	}
 
 	/**
-	 * The accumulated command data of the active chain.  Allocated on first use
-	 * while the applet is selected, so a card that never chains does not spend
-	 * the shared transient budget (docs/specs/common/risks.md).
+	 * The accumulated command data of the active chain.  The package-shared
+	 * {@link EmvScratch#chain} buffer (transient, cleared on deselect), so a
+	 * card that never chains still spends nothing extra and no allocation
+	 * happens during a command (docs/specs/common/risks.md).
 	 */
 	public byte[] getChainData() {
-		if (chainData == null) {
-			chainData = JCSystem.makeTransientByteArray((short) 255,
-					JCSystem.CLEAR_ON_DESELECT);
-		}
-		return chainData;
+		return EmvScratch.chain;
 	}
-
-	/** Default size of the shared work scratch (RSA-2048 recovery / DDA message). */
-	private static final short WORK_SCRATCH_SIZE = (short) 256;
-
-	private byte[] workScratch;
 
 	/**
 	 * A shared work buffer for the mutually exclusive large scratch users: the
-	 * enciphered-PIN recovery block, the DDA/CDA ISO 9796-2 message and the ARPC
-	 * message.  They are never active at the same time (a single command uses
-	 * one of them), so one buffer serves all of them and the transient budget
-	 * holds a single allocation.  Allocated on first use while the applet is
-	 * selected, and grown if a caller needs more than the default
-	 * (docs/specs/common/risks.md).
+	 * enciphered-PIN recovery block, the DDA/CDA ISO 9796-2 message and the
+	 * ARPC / secure-messaging MAC input.  They are never active at the same
+	 * time (a single command uses one of them), so the package-shared
+	 * {@link EmvScratch#work} buffer serves every instance and the transient
+	 * budget holds a single allocation (docs/specs/common/risks.md).  The
+	 * {@code minLength} argument is kept for callers that size their own work
+	 * against the returned length.
 	 */
 	public byte[] getWorkScratch(short minLength) {
-		if (workScratch == null || workScratch.length < minLength) {
-			short size = minLength < WORK_SCRATCH_SIZE ? WORK_SCRATCH_SIZE : minLength;
-			workScratch = JCSystem.makeTransientByteArray(size,
-					JCSystem.CLEAR_ON_DESELECT);
-		}
-		return workScratch;
+		return EmvScratch.work;
 	}
 
 	/** Starts a chain for the given chainable command (EMV v4.4 Book 3 §6.5.13). */
@@ -534,21 +534,25 @@ public class EMVProtocolState implements ISO7816 {
 	}
 
 	public EMVProtocolState(){
+		// Allocate the package-shared transient buffers once, at install time:
+		// no command path allocates a transient array (docs/specs/common/risks.md).
+		EmvScratch.init();
+
 		// [0] CVM performed, [1] first AC, [2] second AC, [3] GPO done,
 		// [4] issuer authentication state, [5] EXTERNAL AUTHENTICATE used,
 		// [6] CCD CSU "Issuer Approves Online Transaction", [7] CSU applied,
 		// [8] Offline DDA performed, [9] CDA performed.
-		volatileState = JCSystem.makeTransientByteArray((short) 10, JCSystem.CLEAR_ON_DESELECT);
+		volatileState = EmvScratch.volatileState;
 
 		// PDOL-related data of the current GPO (EMV v4.4 Book 3 §6.5.8) is
-		// allocated lazily by setPdolData (docs/specs/common/risks.md).
+		// stored in the shared buffer; only the length is per instance.
 		pdolDataLength = 0;
 
 		// Issuer authentication session state (EMV v4.4 Book 2 §8.2).
-		arqc = JCSystem.makeTransientByteArray((short) 8, JCSystem.CLEAR_ON_DESELECT);
+		arqc = EmvScratch.arqc;
 
 		// ICC Unpredictable Number of the current session (GET CHALLENGE).
-		challenge = JCSystem.makeTransientByteArray((short) 8, JCSystem.CLEAR_ON_DESELECT);
+		challenge = EmvScratch.challenge;
 		challengeValid = false;
 		issuerAuthNotPerformedPrevious = false;
 		odaFailedPrevious = false;

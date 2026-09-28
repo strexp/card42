@@ -34,6 +34,18 @@
     导致的 `6F00`）；真卡连续 50 次 PACE 通过。
   - **MF-level EF.CardAccess**：LDS1 实例以 GP `CardReset` 默认选中 + 卡侧 `SELECT MF`
     分支，reader 可在选应用前于 MF 读 `011C`（PACE）；接触/非接触均验证。
+  - **响应缓冲转瞬态 / EEPROM 写入削减**：`EmrtdApplet` 的 `plain`/`response`（各 256 B 实例
+    持久）与静态 `smOut`（512 B）改为包级共享的瞬态 `EmrtdScratch`（`io` 320 B 兼作解包命令与
+    SM 封装响应、`response` 256 B，均 `CLEAR_ON_DESELECT`，安装期一次分配，命令路径不再
+    `makeTransient*`）；`SmScratch` 亦改为安装期 `init()`。纯 JVM 基线里 BAC 读五组 DG 的持久
+    写由 4330 B 降到 498 B，AA 由 ~1100 B 降到 ~555 B；EMV 的包级共享 `EmvScratch` 见
+    `TODO.emv.md` §B1。`LdsCatalog` 的 COM 构造 scratch 由运行期局部数组改为包级 `static`（LDS2
+    实例不再各占 160 B）；`DdaCrypto` 重灌密钥后显式 `JCSystem.requestObjectDeletion()`。
+  - **真卡持久堆修复（第 4 个实例 6F00）**：LDS2（Travel/Visa/Biometrics）实例按角色门控，
+    不再创建只有 LDS1 用得到的 `LdsCatalog`（19 个 `LdsFile` + 数组）、`LdsPerso`
+    （seed + 520 B scratch）、`BacCrypto` 与 2048-bit `AaCrypto`，每例省约 1.5–1.8 KB 持久堆。
+    Java Card 不自动回收已删对象，反复失败的 INSTALL 会泄漏，故真卡复测前应
+    `make card-uninstall` 再 `make card-install`（新增卸载目标）。
   - **读路径性能优化**：BAC/PACE 的 Alg-3 MAC 优先用平台 `Signature`（
     `ALG_DES_MAC8_ISO9797_M2`/`ALG_DES_MAC8_NOPAD` + 两次单 DES 终变换），平台不支持时自动回退
     到逐块手工构造，单测两条路径同向量；SM 的 1 KB scratch 改为包级共享 `SmScratch`（瞬态优先、

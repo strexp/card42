@@ -60,7 +60,6 @@ public final class EmrtdApplet extends AppletBase
     final byte[] ksEnc = new byte[16];
     final byte[] ksMac = new byte[16];
     final byte[] ssc = new byte[8];
-    boolean bacDone;
     /** True once BAC or Chip Authentication has established secure messaging. */
     boolean smEstablished;
     /**
@@ -82,18 +81,17 @@ public final class EmrtdApplet extends AppletBase
     final byte[] caMac = new byte[16];
     boolean caPending;
 
-    /* Plaintext command data and response data (SM unwrap/wrap). */
-    final byte[] plain = new byte[256];
-    final byte[] response = new byte[256];
-
-    /* Wrapped SM response.  An RSA-2048 Active Authentication signature is 256
-     * bytes, and its SM envelope (DO87 + DO99 + DO8E, with padding) is ~290
-     * bytes, which does not fit the JCRE APDU buffer.  Wrapping into a static
-     * buffer and sending it with sendBytesLong lets an extended-length command
-     * (jMRTD sends AA with Le=65536) carry the whole wrapped response instead
-     * of overflowing the APDU buffer (which surfaced as 6F00).  Static because
-     * only one command is processed at a time. */
-    private static final byte[] smOut = new byte[512];
+    /* Plaintext command data and response data (SM unwrap/wrap).  Package-shared
+     * transient buffers (CLEAR_ON_DESELECT, allocated once at install), so no
+     * command allocates a transient array and the repeated READ BINARY path no
+     * longer writes hundreds of bytes to EEPROM (docs/specs/common/risks.md).
+     * {@link EmrtdScratch#io} doubles as the wrapped SM response buffer: a
+     * 256-byte AA signature wrapped by SM is ~290 bytes and does not fit the
+     * JCRE APDU buffer, and it cannot share with {@code response} (which wrap
+     * reads while writing the envelope).  The command data is consumed by
+     * dispatch before wrap writes io, so the two uses of io do not overlap. */
+    final byte[] plain;
+    final byte[] response;
 
     /* Personalization.  The DGI sequence is applied incrementally as each
      * STORE DATA block arrives (a per-instance DgiStream drives LdsPerso /
@@ -107,20 +105,34 @@ public final class EmrtdApplet extends AppletBase
         this.dfName = new byte[(short) 16];
         Util.arrayCopyNonAtomic(dfName, (short) 0, this.dfName, (short) 0, dfNameLength);
         this.dfNameLength = dfNameLength;
-        catalog = new LdsCatalog();
+        // Allocate the package-shared transient session buffers and the SM
+        // scratch once, at install: no command path allocates a transient array
+        // (docs/specs/common/risks.md).
+        EmrtdScratch.init();
+        SmScratch.init();
+        plain = EmrtdScratch.io;
+        response = EmrtdScratch.response;
+        boolean lds1Role = role == EmrtdInstallParameters.ROLE_LDS1;
+        // Only the LDS1 instance uses the LDS1 catalog, BAC and AA crypto; an
+        // LDS2 instance (Travel/Visa/Biometrics) would otherwise pay ~1.5 KB of
+        // persistent heap it never touches (LdsFileSystem's 19 LdsFile objects,
+        // LdsPerso's 536-byte key scratch and the 2048-bit AA key), which is
+        // exactly the margin four eMRTD instances need on a J3R180
+        // (docs/specs/common/risks.md §2).
+        catalog = lds1Role ? new LdsCatalog() : null;
         lds2 = role == EmrtdInstallParameters.ROLE_LDS2_TRAVEL ? Lds2FileSystem.travel()
                 : role == EmrtdInstallParameters.ROLE_LDS2_VISA ? Lds2FileSystem.visa()
                 : role == EmrtdInstallParameters.ROLE_LDS2_BIOMETRICS ? Lds2FileSystem.biometrics()
                 : null;
         random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
-        bac = new BacCrypto();
-        aa = new AaCrypto((short) 2048, AaCrypto.AA_SHA1);
+        bac = lds1Role ? new BacCrypto() : null;
+        aa = lds1Role ? new AaCrypto((short) 2048, AaCrypto.AA_SHA1) : null;
         sm3des = new Iso7816Sm();
         smAes = new Iso7816SmAes();
         sm = sm3des;
         chipAuth = new ChipAuth();
         pace = new Pace();
-        perso = new LdsPerso(catalog, aa, chipAuth, pace);
+        perso = lds1Role ? new LdsPerso(catalog, aa, chipAuth, pace) : null;
         lds2Perso = lds2 == null ? null : new Lds2Perso(lds2, chipAuth, pace);
         expectedBlock = 0;
         // EF.DIR lists every application the card hosts (Doc 9303-10 §3.11.2).
@@ -198,7 +210,6 @@ public final class EmrtdApplet extends AppletBase
         if (lds2 != null) {
             lds2.clearSelection();
         }
-        bacDone = false;
         challengeValid = false;
         caPending = false;
         Util.arrayFillNonAtomic(kenc, (short) 0, (short) 16, (byte) 0);
@@ -279,19 +290,19 @@ public final class EmrtdApplet extends AppletBase
             // An error status word is part of the response and must be
             // protected by secure messaging like any other (Doc 9303-11 §9.8).
             short n = sm.wrap(ksEnc, ksMac, ssc, response, (short) 0,
-                    e.getReason(), smOut, (short) 0);
+                    e.getReason(), plain, (short) 0);
             apdu.setOutgoing();
             apdu.setOutgoingLength(n);
-            apdu.sendBytesLong(smOut, (short) 0, n);
+            apdu.sendBytesLong(plain, (short) 0, n);
             return;
         }
 
         if (smActive) {
             short n = sm.wrap(ksEnc, ksMac, ssc, response, respLen,
-                    (short) 0x9000, smOut, (short) 0);
+                    (short) 0x9000, plain, (short) 0);
             apdu.setOutgoing();
             apdu.setOutgoingLength(n);
-            apdu.sendBytesLong(smOut, (short) 0, n);
+            apdu.sendBytesLong(plain, (short) 0, n);
         } else {
             apdu.setOutgoing();
             apdu.setOutgoingLength(respLen);

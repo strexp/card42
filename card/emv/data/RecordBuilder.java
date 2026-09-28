@@ -96,30 +96,52 @@ public final class RecordBuilder implements ISO7816 {
         ISOException.throwIt(SW_RECORD_NOT_FOUND); // 6A83
     }
 
-    /** A stored record that can be served directly from the persistent pool. */
+    /**
+     * A stored record that can be served directly from the persistent pool.
+     *
+     * <p>A view is a mutable cursor handed out by {@link #directView}: the
+     * caller consumes it inside the READ RECORD command that produced it and
+     * must not keep it.  Reusing one instance per card object keeps the
+     * persistent heap free of one short-lived object per command, which the
+     * Java Card heap never reclaims.
+     */
     public static final class View {
-        public final byte[] pool;
-        public final short offset;
-        public final short length;
+        public byte[] pool;
+        public short offset;
+        public short length;
 
-        View(byte[] pool, short offset, short length) {
-            this.pool = pool;
-            this.offset = offset;
-            this.length = length;
+        /** Package-private so EMVStaticData can own the reusable instance. */
+        View() {
+        }
+
+        /** Points this view at one stored record; each field write is same-value guarded. */
+        View pointTo(byte[] pool, short offset, short length) {
+            if (this.pool != pool) {
+                this.pool = pool;
+            }
+            if (this.offset != offset) {
+                this.offset = offset;
+            }
+            if (this.length != length) {
+                this.length = length;
+            }
+            return this;
         }
     }
 
     /**
      * Returns the stored record for the READ RECORD in {@code apduBuffer} as a
-     * view over the persistent record pool, when it can be served without a
-     * transient copy, or null when the caller must fall back to
-     * {@link #readRecord}.  A record is served directly only when its '70'
+     * view over the persistent record pool, or null when the caller must fall
+     * back to {@link #readRecord}.  {@code reuse} is the caller-owned view
+     * instance that is repointed at the record, so this path allocates nothing.
+     * A record is served directly only when its '70'
      * template length field is already the exact width for its body (so no
      * normalisation is needed); a placeholder length still goes through the
      * response-buffer path.  The SFI readability rule and its 6A82 are applied
      * here exactly as in {@link #readRecord} (EMV v4.4 Book 3 §6.5.11).
      */
-    public static View directView(RecordStore records, byte[] apduBuffer, PaymentData data) {
+    public static View directView(RecordStore records, byte[] apduBuffer,
+            PaymentData data, View reuse) {
         short sfi = (short) ((apduBuffer[OFFSET_P2] & 0xFF) >> 3);
         short rec = (short) (apduBuffer[OFFSET_P1] & 0xFF);
         if (!isReadableSfi(data, sfi)) {
@@ -145,7 +167,7 @@ public final class RecordBuilder implements ISO7816 {
                 || Tlv.totalLength(pool, offset) != stored) {
             return null;
         }
-        return new View(pool, offset, stored);
+        return reuse.pointTo(pool, offset, stored);
     }
 
     /**

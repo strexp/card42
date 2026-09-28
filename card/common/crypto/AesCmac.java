@@ -1,7 +1,6 @@
 package card42.common;
 
 import javacard.framework.ISOException;
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
 import javacard.security.KeyBuilder;
@@ -50,27 +49,26 @@ public final class AesCmac implements MacAlgorithm {
     private final byte[] loadedKey = new byte[BLOCK];
     private boolean keyLoaded;
 
-    /** Transient working blocks, allocated lazily on the first AES MAC. */
-    private byte[] state;
-    private byte[] pending;
+    /** Transient working blocks, allocated once with the object (install time). */
+    private final byte[] state;
+    private final byte[] pending;
     private short pendingLength;
 
     public AesCmac() {
         ecb128 = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, false);
         key128 = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES,
                 KeyBuilder.LENGTH_AES_128, false);
+        // Allocated at construction so no command path performs a transient
+        // allocation; a card without transient budget falls back to EEPROM
+        // instead of failing the install (docs/specs/common/risks.md §2).
+        state = TransientBuffers.makeByteArray(BLOCK);
+        pending = TransientBuffers.makeByteArray(BLOCK);
     }
 
     public void start(byte[] key, short keyOff, short keyLen) {
         if (keyLen != 16) {
             // Only AES-128 is available on the simulator (docs/specs/common/cryptography.md §1).
             ISOException.throwIt((short) 0x6700);
-        }
-        if (state == null) {
-            // Allocated on first use so a CV '5' instance never consumes the
-            // transient budget for the AES path (docs/specs/common/cryptography.md §9).
-            state = JCSystem.makeTransientByteArray(BLOCK, JCSystem.CLEAR_ON_DESELECT);
-            pending = JCSystem.makeTransientByteArray(BLOCK, JCSystem.CLEAR_ON_DESELECT);
         }
         if (!keyLoaded || !sameKey(key, keyOff)) {
             key128.setKey(key, keyOff);

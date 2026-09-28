@@ -5,7 +5,6 @@ import card42.common.*;
 import javacard.framework.APDU;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /* The Application Cryptogram path of a payment instance: GENERATE AC, the Card
@@ -43,10 +42,11 @@ public class AcProcessor implements ISO7816 {
     private static final short MAX_CDOL1_DATA = (short) 128;
 
     /* Transient copy of the first GENERATE AC CDOL1 data, needed by the CDA
-     * signature of the second GENERATE AC and the CSU amount update.  It is
-     * sized to the actual CDOL1 data on the first AC (capped at MAX_CDOL1_DATA)
-     * instead of reserving 128 bytes up front (docs/specs/common/risks.md). */
-    private byte[] firstCdol;
+     * signature of the second GENERATE AC and the CSU amount update.  It is the
+     * package-shared {@link EmvScratch#firstCdol} buffer (128 bytes, the
+     * on-card bound), so no allocation happens on a GENERATE AC
+     * (docs/specs/common/risks.md). */
+    private final byte[] firstCdol;
     private short firstCdolLength;
 
     public AcProcessor(EMVProtocolState protocolState, EMVStaticData staticData,
@@ -66,24 +66,20 @@ public class AcProcessor implements ISO7816 {
         finalizer = new TransactionFinalizer(protocolState, staticData, offlineRisk,
                 transactionLog, secureMessaging);
 
-        firstCdol = null;
+        firstCdol = EmvScratch.firstCdol;
     }
 
     /**
-     * Returns the first-AC CDOL1 copy, (re)allocated to the exact CDOL1 data
-     * length on first use.  The CDOL1-related data must fit MAX_CDOL1_DATA
-     * (the on-card bound, EMV v4.4 Book 2 §6.6.1); a longer one is refused
-     * rather than truncated into a wrong CDA signature.
+     * Validates the first-AC CDOL1 data length against the shared buffer.  The
+     * CDOL1-related data must fit MAX_CDOL1_DATA (the on-card bound, EMV v4.4
+     * Book 2 §6.6.1); a longer one is refused rather than truncated into a wrong
+     * CDA signature.  The shared buffer is fixed, so no allocation happens here
+     * (docs/specs/common/risks.md).
      */
-    private byte[] firstCdolBuffer(short length) {
-        if (length > MAX_CDOL1_DATA) {
+    private void ensureFirstCdol(short length) {
+        if (length > MAX_CDOL1_DATA || length > firstCdol.length) {
             ISOException.throwIt(SW_WRONG_DATA);
         }
-        if (firstCdol == null || firstCdol.length < length) {
-            short size = length < (short) 1 ? (short) 1 : length;
-            firstCdol = JCSystem.makeTransientByteArray(size, JCSystem.CLEAR_ON_DESELECT);
-        }
-        return firstCdol;
     }
 
     /**
@@ -136,7 +132,7 @@ public class AcProcessor implements ISO7816 {
         // AC (EMV v4.4 Book 2 section 6.6.1, second GENERATE AC).  The buffer is sized
         // to the actual CDOL1 data; a longer one than MAX_CDOL1_DATA is refused
         // rather than truncated into a wrong signature (EMV v4.4 Book 2 §6.6.1).
-        firstCdol = firstCdolBuffer(cdol1Length);
+        ensureFirstCdol(cdol1Length);
         firstCdolLength = cdol1Length;
         Util.arrayCopyNonAtomic(apduBuffer, OFFSET_CDATA, firstCdol,
                 (short) 0, firstCdolLength);

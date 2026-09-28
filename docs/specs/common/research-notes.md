@@ -145,8 +145,10 @@ Oracle Java Card Simulator (v26.0) - Java Card v3.2 - GP Card v2.3 - Secure Chan
 - jcsl 的 AES 仅支持 128-bit（`LENGTH_AES_256` / `ALG_AES_BLOCK_256_*` 抛
   `NO_SUCH_ALGORITHM`），且 AES `doFinal` 不接受输入输出别名；RFC 4493 向量、平台
   `Signature.ALG_AES_CMAC_128` 与手工 CMAC（ECB + K1/K2）均已实测一致。
-- jcsl applet 实例上限 7 个；瞬态预算按 package context 共享，实例越多越紧
-  （卡侧 AES/离线 PIN/DDA 缓冲已改为按需分配）。
+- jcsl applet 实例上限 7 个；瞬态预算按 package context 共享，实例越多越紧。卡侧已把
+  瞬态 scratch 改为**包级共享、安装期一次性分配**（`EmvScratch`/`EmrtdScratch`/`SmScratch`，
+  全部 `CLEAR_ON_DESELECT`），命令路径不再 `makeTransient*`，同 context 多实例只占一份
+  （见 [risks.md](risks.md) §2）。
 
 ## 12. C-8（Kernel 8）能力与 Java Card 3.0.5 / J3R180 的差距
 

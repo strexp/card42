@@ -140,11 +140,13 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_COMMON_DIR)/crypto/RetailMac.java \
                  $(CARD_COMMON_DIR)/crypto/AesCmac.java \
                  $(CARD_COMMON_DIR)/crypto/MacAlgorithm.java \
+                 $(CARD_COMMON_DIR)/mem/TransientBuffers.java \
                  $(CARD_EMV_DIR)/tlv/DolReader.java \
                  $(CARD_EMV_DIR)/tlv/Dgi.java $(CARD_EMV_DIR)/tlv/DgiReader.java \
                  $(CARD_EMV_DIR)/tlv/TlvTags.java $(CARD_EMV_DIR)/constants/EMVCommands.java \
                  $(CARD_EMV_DIR)/constants/EMVStatus.java $(CARD_EMV_DIR)/constants/EMVRoles.java \
                  $(CARD_EMV_DIR)/constants/EMVCodes.java \
+                 $(CARD_EMV_DIR)/EmvScratch.java \
                  $(CARD_EMV_DIR)/state/EMVProtocolState.java \
                  $(CARD_EMV_DIR)/data/EMVStaticData.java $(CARD_EMV_DIR)/data/Defaults.java \
                  $(CARD_EMV_DIR)/data/PaymentData.java $(CARD_EMV_DIR)/data/FciBuilder.java \
@@ -188,6 +190,7 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_EMRTD_DIR)/access/PaceSeedSink.java \
                  $(CARD_COMMON_DIR)/applet/AppletBase.java \
                  $(CARD_EMRTD_DIR)/applet/EmrtdInstallParameters.java \
+                 $(CARD_EMRTD_DIR)/EmrtdScratch.java \
                  $(CARD_EMRTD_DIR)/applet/EmrtdApplet.java \
                  $(CARD_EMRTD_DIR)/command/ExternalAuthenticate.java \
                  $(CARD_EMRTD_DIR)/command/GetChallenge.java \

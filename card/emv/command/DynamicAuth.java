@@ -5,7 +5,6 @@ import card42.common.*;
 import javacard.framework.APDU;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.MessageDigest;
 import javacard.security.RandomData;
@@ -50,10 +49,8 @@ public class DynamicAuth implements ISO7816 {
         this.randomData = randomData;
 
         authMessage = null;
-        cdaHeader = JCSystem.makeTransientByteArray(
-                (short) 48, JCSystem.CLEAR_ON_DESELECT);
-        cdaUn = JCSystem.makeTransientByteArray(
-                (short) 4, JCSystem.CLEAR_ON_DESELECT);
+        cdaHeader = EmvScratch.cdaHeader;
+        cdaUn = EmvScratch.cdaUn;
         sha1 = MessageDigest.getInstance(MessageDigest.ALG_SHA, false);
     }
 
@@ -64,7 +61,14 @@ public class DynamicAuth implements ISO7816 {
      * (docs/specs/common/cryptography.md §6, §9).
      */
     private void ensureAuthMessage(short needed) {
-        authMessage = protocolState.getWorkScratch(needed);
+        byte[] scratch = protocolState.getWorkScratch(needed);
+        // The scratch is a single shared buffer, so this is the same reference
+        // on every DDA/CDA: assign it only when it actually changes, otherwise
+        // each command costs a same-value persistent write, and a same-value
+        // write may still cost a programming cycle.
+        if (authMessage != scratch) {
+            authMessage = scratch;
+        }
     }
 
     /*

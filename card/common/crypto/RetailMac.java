@@ -1,7 +1,6 @@
 package card42.common;
 
 import javacard.framework.ISOException;
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.CryptoException;
 import javacard.security.DESKey;
@@ -63,7 +62,7 @@ public class RetailMac implements MacAlgorithm {
         finalKey = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES,
                 KeyBuilder.LENGTH_DES, false);
         des = Cipher.getInstance(Cipher.ALG_DES_ECB_NOPAD, false);
-        block = JCSystem.makeTransientByteArray((short) 8, JCSystem.CLEAR_ON_DESELECT);
+        block = TransientBuffers.makeByteArray((short) 8);
         pending = 0;
     }
 

@@ -4,7 +4,6 @@ import card42.common.*;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
 import javacard.security.DESKey;
@@ -78,9 +77,12 @@ public class EMVCrypto implements ISO7816 {
 		this.staticData = staticData;
 		this.profile = new CryptoProfile();
 
-		sessionkey = JCSystem.makeTransientByteArray((short) 16, JCSystem.CLEAR_ON_DESELECT);
-		scratch = JCSystem.makeTransientByteArray((short) 4, JCSystem.CLEAR_ON_DESELECT);
-		lastAc = JCSystem.makeTransientByteArray((short) 16, JCSystem.CLEAR_ON_DESELECT);
+		// Package-shared transient buffers, allocated once at install (see
+		// EmvScratch): no command path allocates a transient array.
+		EmvScratch.init();
+		sessionkey = EmvScratch.sessionKey;
+		scratch = EmvScratch.acScratch;
+		lastAc = EmvScratch.lastAc;
 
 		retailMac = new RetailMac();
 		aesCmac = new AesCmac();

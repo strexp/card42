@@ -49,6 +49,14 @@ public class EMVStaticData implements ISO7816 {
     private short fciLength;
     private final byte[] gpo = new byte[(short) 64];
     private short gpoLength;
+    /** Role {@link #gpo} was built for; the GPO content depends on it. */
+    private byte gpoRole;
+    /**
+     * The one view {@link #directRecord} hands out, repointed per READ RECORD
+     * so the command allocates nothing on the persistent heap (which the
+     * Java Card platform never reclaims).
+     */
+    private final RecordBuilder.View directView = new RecordBuilder.View();
 
     public EMVStaticData() {
         data = new PaymentData();
@@ -66,7 +74,17 @@ public class EMVStaticData implements ISO7816 {
         }
         aidLength = (short) newAid.length;
         Util.arrayCopyNonAtomic(newAid, (short) 0, aid, (short) 0, aidLength);
-        fciLength = 0; // force a rebuild on the next getFCI()
+        invalidateCache(); // force a rebuild on the next getFCI()/getGpo()
+    }
+
+    /**
+     * Drops the cached FCI and GPO: both are built from {@code data} (and the
+     * role), so every personalization path that changes it must invalidate them
+     * (docs/specs/emv/personalization.md §3).
+     */
+    private void invalidateCache() {
+        fciLength = 0;
+        gpoLength = 0;
     }
 
     // --- Personalization (EMV CPS v2.0 Annex A) -----------------------------
@@ -74,13 +92,13 @@ public class EMVStaticData implements ISO7816 {
     /** Applies the structured tags of the EMV CPS v2.0 Annex A DGIs '3001'/'9104' or record 1. */
     public void applyPaymentConfig(byte[] buf, short off, short len) {
         data.applyPaymentConfig(buf, off, len);
-        fciLength = 0;
+        invalidateCache();
     }
 
     /** Stores the SELECT response A5 template (EMV CPS v2.0 Annex A DGI '9102'). */
     public void setFciOverride(byte[] buf, short off, short len) {
         data.setFciOverride(buf, off, len);
-        fciLength = 0;
+        invalidateCache();
     }
 
     /** Stores one record (DGI (SFI<<8)|record). */
@@ -125,7 +143,7 @@ public class EMVStaticData implements ISO7816 {
             // them so the transaction accessors work from the EMV CPS v2.0 record model
             // (EMV CPS v2.0 Annex A).
             data.applyRecord1Fields(buf, off, len);
-            fciLength = 0;
+            invalidateCache();
         }
     }
 
@@ -290,12 +308,18 @@ public class EMVStaticData implements ISO7816 {
      * (EMV v4.4 Book 3 §6.5.8).
      */
     public byte[] getGpo(byte role) {
+        if (gpoLength > 0 && gpoRole == role) {
+            return gpo;
+        }
+        gpoRole = role;
         gpoLength = FciBuilder.buildGpo(role, data, gpo);
         return gpo;
     }
 
     public short getGpoLength(byte role) {
-        getGpo(role);
+        if (gpoLength == 0 || gpoRole != role) {
+            getGpo(role);
+        }
         return gpoLength;
     }
 
@@ -331,6 +355,6 @@ public class EMVStaticData implements ISO7816 {
      * caller must use {@link #readRecord} (EMV v4.4 Book 3 §7.1).
      */
     public RecordBuilder.View directRecord(byte[] apduBuffer) {
-        return RecordBuilder.directView(records, apduBuffer, data);
+        return RecordBuilder.directView(records, apduBuffer, data, directView);
     }
 }

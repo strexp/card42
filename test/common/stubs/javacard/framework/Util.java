@@ -6,6 +6,10 @@ package javacard.framework;
  * {@code api_classic} jar on the classpath so the card sources link against
  * this implementation instead of the native one.  Only the methods the tested
  * card classes call are provided.
+ *
+ * <p>Every write method reports its destination to {@link NvmWrite}, which
+ * separates EEPROM-bound writes from RAM (transient) ones — see the class note
+ * there and docs/specs/common/risks.md §2 ("unnecessary EEPROM writes").
  */
 public final class Util {
 
@@ -14,17 +18,20 @@ public final class Util {
 
     public static short arrayCopy(byte[] src, short srcOff,
                                   byte[] dest, short destOff, short length) {
+        NvmWrite.note(dest, length);
         System.arraycopy(src, srcOff, dest, destOff, length);
         return (short) (destOff + length);
     }
 
     public static short arrayCopyNonAtomic(byte[] src, short srcOff,
                                            byte[] dest, short destOff, short length) {
+        NvmWrite.note(dest, length);
         System.arraycopy(src, srcOff, dest, destOff, length);
         return (short) (destOff + length);
     }
 
     public static short arrayFillNonAtomic(byte[] bArray, short bOff, short bLen, byte bValue) {
+        NvmWrite.note(bArray, bLen);
         for (short i = 0; i < bLen; i++) {
             bArray[(short) (bOff + i)] = bValue;
         }
@@ -52,6 +59,7 @@ public final class Util {
     }
 
     public static short setShort(byte[] bArray, short bOff, short sValue) {
+        NvmWrite.note(bArray, 2);
         bArray[bOff] = (byte) (sValue >> 8);
         bArray[(short) (bOff + 1)] = (byte) sValue;
         return (short) (bOff + 2);

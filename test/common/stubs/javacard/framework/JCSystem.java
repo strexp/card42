@@ -16,7 +16,21 @@ public final class JCSystem {
     }
 
     public static byte[] makeTransientByteArray(short length, byte event) {
-        return new byte[length];
+        byte[] b = new byte[length];
+        NvmWrite.register(b, length);
+        return b;
+    }
+
+    /**
+     * RAM-backed short array, registered with {@link NvmWrite} like the byte
+     * variant.  The card sources that need it ({@code DdaCrypto}, and the DOL
+     * cursor once it moves off EEPROM) link against this factory in the
+     * pure-JVM build.
+     */
+    public static short[] makeTransientShortArray(short length, byte event) {
+        short[] a = new short[length];
+        NvmWrite.register(a, (int) length * 2);
+        return a;
     }
 
     /**
@@ -31,5 +45,14 @@ public final class JCSystem {
     }
 
     public static void abortTransaction() {
+    }
+
+    /**
+     * No-op object-deletion request for the unit tests.  The card sources call
+     * it after dropping a large persistent object (a re-keyed DDA key, a
+     * replaced page array) to ask the platform to reclaim it; a plain JVM
+     * reclaims via its own garbage collector, so there is nothing to model.
+     */
+    public static void requestObjectDeletion() {
     }
 }

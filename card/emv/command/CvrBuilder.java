@@ -2,7 +2,6 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.JCSystem;
 
 /* Builds the Card Verification Results of the current transaction and writes
  * them into the IAD (bytes 4-8) before the Application Cryptogram is computed
@@ -34,8 +33,8 @@ public class CvrBuilder {
         this.offlineRisk = offlineRisk;
         this.secureMessaging = secureMessaging;
         this.pin = pin;
-        cvr = JCSystem.makeTransientByteArray((short) Iad.CVR_LENGTH,
-                JCSystem.CLEAR_ON_DESELECT);
+        EmvScratch.init();
+        cvr = EmvScratch.cvr;
     }
 
     /**

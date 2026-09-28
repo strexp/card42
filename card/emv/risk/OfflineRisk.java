@@ -91,7 +91,9 @@ public class OfflineRisk implements ISO7816 {
     }
 
     public void clearGoOnlineNext() {
-        goOnlineNext = false;
+        if (goOnlineNext) {
+            goOnlineNext = false;
+        }
     }
 
     /** Whether the CSU 'Set Go Online on Next Transaction' flag is set. */

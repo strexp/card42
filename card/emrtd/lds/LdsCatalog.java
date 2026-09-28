@@ -34,6 +34,15 @@ public final class LdsCatalog {
     private short dataGroupMask;
     private boolean comStored;
 
+    /* Scratch for building EF.COM when the personalizer did not send one.
+     * Static (one copy for the whole eMRTD package) because only the LDS1
+     * instance builds EF.COM, once, during personalization; this avoids
+     * reserving 160 B of persistent heap in every LDS2 instance, which never
+     * use it (docs/specs/common/risks.md §2). */
+    private static final byte[] COM_LIST = new byte[32];
+    private static final byte[] COM_BODY = new byte[64];
+    private static final byte[] COM_BYTES = new byte[64];
+
     public LdsCatalog() {
         files = new LdsFileSystem();
     }
@@ -109,7 +118,7 @@ public final class LdsCatalog {
         if (com == null) {
             return;
         }
-        byte[] list = new byte[32];
+        byte[] list = COM_LIST;
         short listLength = 0;
         for (short dg = 1; dg <= 16; dg++) {
             if ((dataGroupMask & DG_BITS[(short) (dg - 1)]) == 0) {
@@ -121,13 +130,13 @@ public final class LdsCatalog {
             }
             list[listLength++] = (byte) tag;
         }
-        byte[] body = new byte[64];
+        byte[] body = COM_BODY;
         short p = 0;
         p = Tlv.append((short) 0x5F01, LDS_VERSION_1_7, (short) 0, (short) 4, body, p);
         p = Tlv.append((short) 0x5F36, UNICODE_VERSION_4_0_1, (short) 0, (short) 6, body, p);
         p = Tlv.append((short) 0x5C, list, (short) 0, listLength, body, p);
 
-        byte[] comBytes = new byte[64];
+        byte[] comBytes = COM_BYTES;
         short n = Tlv.append((short) 0x60, body, (short) 0, p, comBytes, (short) 0);
         com.set(comBytes, (short) 0, n);
     }

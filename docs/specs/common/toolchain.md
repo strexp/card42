@@ -192,10 +192,15 @@ progress. **Do not use.**”），故**只用于模拟器**；真卡一律不加
 make card-install                          # both：加载三 CAP + 生产实例（deploy.conf）
 make card-emv-install                      # EMV：common+emv + 生产/测试实例
 make card-emrtd-install                    # eMRTD：common+emrtd + LDS1/LDS2
+make card-uninstall                        # 删除全部实例 + emv/emrtd package（重装前清卡）
 make card-emv-install GP_ARGS="--key-enc ... --key-mac ... --key-dek ..."
 make card-emv-install GP_PERSONALIZE=1     # 追加 INSTALL [for personalization]
 make card-perso / card-emv-perso / card-emrtd-perso   # 下发每实例 DGI 序列（见下）
 ```
+
+> Java Card 不自动回收已删除对象；反复失败的 INSTALL 会在持久堆留下泄漏，之后某一实例的
+> INSTALL 以 `6F00` 失败。真卡重装前先 `make card-uninstall`（用 `GP_ARGS` 的 SD 密钥删除
+> 实例与 emv/emrtd package），或换用新卡。
 
 个性化：`make card-emv-perso` 把 `$(CARD_EMV_PERSO_SCRIPT)`（默认 `perso/emv/sample.perso`，仅生产
 实例）每实例的 DGI 序列（由 `PersoExporter` 输出为 hex，即 `PersoScript.sequence()`）交给 GPPro

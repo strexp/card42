@@ -213,8 +213,13 @@ public class DirectoryApplet extends EMVAppletBase {
 			}
 			if (rec == 1) {
 				// The built-in default record 1 when no DGI was personalized
-				// (EMV v4.4 Book 1 §12.2.3).
-				buildDefaultRecord();
+				// (EMV v4.4 Book 1 §12.2.3).  It only depends on the directory
+				// type, which is fixed for this instance, so it is built once
+				// and reused instead of rewriting the 128-byte record buffer on
+				// every READ RECORD (perso clears directoryRecordLength).
+				if (directoryRecordLength == 0) {
+					buildDefaultRecord();
+				}
 				apdu.setOutgoing();
 				apdu.setOutgoingLength(directoryRecordLength);
 				apdu.sendBytesLong(directoryRecord, (short)0, directoryRecordLength);

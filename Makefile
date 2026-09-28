@@ -131,7 +131,7 @@ HOST_JAVA := $(JAVA) -p $(JC_SIM_CLIENT)/COMService \
         sim-emrtd-install sim-emrtd-perso \
         sim-configure sim-start sim-wait sim-stop \
         card-install card-perso card-emv-install card-emv-perso \
-        card-emrtd-install card-emrtd-perso card-keychange FORCE
+        card-emrtd-install card-emrtd-perso card-keychange card-uninstall FORCE
 
 all: card jar
 
@@ -514,6 +514,23 @@ card-install: card-common card-emv card-emrtd
 	  echo ">>> create $$instance (applet $$class, package $$pkg) $$privs"; \
 	  $(JAVA) -jar $(GP_JAR) $(GP_ARGS) --create $$instance --applet $$class \
 	    --package $$pkg $$privs || exit 1; \
+	done
+
+# Removes the deployed card42 applets and business packages from a card
+# (destructive).  Java Card does not reclaim deleted objects on its own, so a
+# clean DELETE before a re-install avoids the persistent-heap leak that repeated
+# failed INSTALLs leave behind (a J3R180 then fails a later INSTALL with 6F00).
+# Uses the same GP_ARGS keys as the other card targets (config/local.mk).
+#
+#   make card-uninstall
+card-uninstall:
+	@for aid in $$(awk '!/^[[:space:]]*#/ && NF >= 1 { print $$1 }' $(DEPLOY_BOTH_CONF)); do \
+	  echo ">>> delete applet $$aid"; \
+	  $(JAVA) -jar $(GP_JAR) $(GP_ARGS) --delete $$aid || true; \
+	done
+	@for pkg in $(EMRTD_PACKAGE_AID_HEX) $(PACKAGE_AID_HEX); do \
+	  echo ">>> delete package $$pkg"; \
+	  $(JAVA) -jar $(GP_JAR) $(GP_ARGS) --delete $$pkg || true; \
 	done
 
 # Personalizes every instance of $(CARD_EMV_PERSO_SCRIPT) (production set by default)

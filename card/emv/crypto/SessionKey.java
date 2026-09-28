@@ -2,7 +2,6 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
 import javacard.security.DESKey;
@@ -48,7 +47,8 @@ public final class SessionKey {
     public SessionKey() {
         desCipher = Cipher.getInstance(Cipher.ALG_DES_ECB_NOPAD, false);
         aes128 = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, false);
-        data = JCSystem.makeTransientByteArray((short) 16, JCSystem.CLEAR_ON_DESELECT);
+        EmvScratch.init();
+        data = EmvScratch.skData;
     }
 
     /**

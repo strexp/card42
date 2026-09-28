@@ -4,7 +4,6 @@ import card42.common.*;
 
 import javacard.framework.APDU;
 import javacard.framework.ISOException;
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.RandomData;
 
@@ -53,13 +52,12 @@ public class PaymentApplet extends EMVAppletBase {
     private PaymentApplet() {
         super();
 
-        // Short-APDU response buffer.  The card serves records and AC responses
-        // through this buffer.  A full 256 bytes covers the 254-byte EMV record
-        // limit (EMV v4.4 Book 3 §7) as well as an RSA-2048 CDA SDAD.  It fits the
-        // shared transient budget only because the AC/CDOL, secure-messaging
-        // and offline-PIN buffers are sized on demand and the session-key
-        // derivation is shared (docs/specs/common/risks.md).
-        response = JCSystem.makeTransientByteArray((short) 256, JCSystem.CLEAR_ON_DESELECT);
+        // Short-APDU response buffer, shared by every instance of this package
+        // (transient, CLEAR_ON_DESELECT); it is allocated once at install, not
+        // per instance and never during a command.  A full 256 bytes covers the
+        // 254-byte EMV record limit (EMV v4.4 Book 3 §7) as well as an RSA-2048
+        // CDA SDAD (docs/specs/common/risks.md).
+        response = EmvScratch.response;
 
         // Offline PIN: BCD, up to 8 bytes; the length is taken from the APDU
         // (docs/specs/common/architecture.md §4).  Default "1234".  This is the EMV transaction

@@ -96,6 +96,10 @@ public final class UnitTests {
         ConstantTimeTest.run();
 
         System.out.println();
+        System.out.println("== nvm ==");
+        NvmBaselineTest.run();
+
+        System.out.println();
         System.out.println(Asserts.checks() + " checks, " + Asserts.failures() + " failure(s)");
         if (Asserts.failures() > 0) {
             System.out.println("UNIT TESTS FAILED");

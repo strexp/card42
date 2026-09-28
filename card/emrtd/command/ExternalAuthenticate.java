@@ -68,7 +68,6 @@ public final class ExternalAuthenticate {
         applet.bac.deriveKey(sessionSeed, (short) 0, BacCrypto.DERIVE_MAC,
                 applet.ksMac, (short) 0);
         BacCrypto.initialSsc(s, (short) 8, s, (short) 0, applet.ssc, (short) 0);
-        applet.bacDone = true;
         applet.smEstablished = true;
         applet.useSecureMessaging(false); // BAC is always 3DES
         applet.challengeValid = false;

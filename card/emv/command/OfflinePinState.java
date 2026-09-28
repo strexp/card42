@@ -103,6 +103,12 @@ public class OfflinePinState {
      * docs/specs/emv/personalization.md §7).
      */
     private void writeCounter(byte value) {
+        if (triesRemaining == value) {
+            // Same value: skip the EEPROM programming cycle. Java Card does
+            // not guarantee that writing a value the cell already holds is
+            // free of one.
+            return;
+        }
         if (JCSystem.getTransactionDepth() == 0) {
             JCSystem.beginTransaction();
             triesRemaining = value;

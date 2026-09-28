@@ -36,8 +36,8 @@ public class DdaCrypto implements ISO7816 {
     private SignatureMessageRecovery iso9796;
 
     public DdaCrypto() {
-        m1Length = JCSystem.makeTransientShortArray((short) 1,
-                JCSystem.CLEAR_ON_DESELECT);
+        EmvScratch.init();
+        m1Length = EmvScratch.m1Length;
     }
 
     /** True once a usable private key and signer have been injected. */
@@ -62,6 +62,7 @@ public class DdaCrypto implements ISO7816 {
      * DGIs.  Called inside the personalization transaction.
      */
     public void setPrivateKey(byte[] buf, short off, short len) {
+        boolean hadKey = ddaKey != null || iso9796 != null;
         try {
             PrivateKey key = RsaKey.parse(buf, off, len);
             SignatureMessageRecovery signer = (SignatureMessageRecovery)
@@ -71,12 +72,25 @@ public class DdaCrypto implements ISO7816 {
         } catch (ISOException e) {
             ddaKey = null;
             iso9796 = null;
+            if (hadKey) {
+                JCSystem.requestObjectDeletion();
+            }
             throw e;
         } catch (Exception e) {
             // Unsupported key size or ISO 9796-2 message recovery not available.
             ddaKey = null;
             iso9796 = null;
+            if (hadKey) {
+                JCSystem.requestObjectDeletion();
+            }
             ISOException.throwIt(SW_WRONG_DATA);
+        }
+        if (hadKey) {
+            // A re-personalization replaced the previous key and signer objects;
+            // ask the platform to reclaim the persistent space now instead of
+            // waiting for it (a J3R180 does not reclaim promptly on its own, see
+            // docs/specs/common/risks.md §2).
+            JCSystem.requestObjectDeletion();
         }
     }
 

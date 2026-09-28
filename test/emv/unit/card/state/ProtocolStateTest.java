@@ -70,26 +70,27 @@ final class ProtocolStateTest {
         Asserts.check(EMVRoles.BLOCKED != EMVRoles.CARD_BLOCKED,
                 "invalidated and card-blocked differ");
 
-        // The PDOL session buffer is bounded; the GPO handler refuses an
-        // over-long expansion with 6985 before copying (docs/specs/emv/transaction.md
-        // §2).  The decision is exposed as pdolFits() so it is testable without
-        // an APDU.
+        // The PDOL session buffer is the package-shared fixed 64-byte bound
+        // (EmvScratch.pdol); the GPO handler refuses an over-long expansion with
+        // 6985 before copying (docs/specs/emv/transaction.md §2).  The decision is
+        // exposed as pdolFits() so it is testable without an APDU.
         EMVProtocolState pdol = new EMVProtocolState();
-        Asserts.check(pdol.getPdolData() == null, "no PDOL buffer before GPO data");
+        Asserts.check(pdol.getPdolData() != null, "PDOL shared buffer exists");
+        Asserts.eq(64, pdol.getPdolData().length, "PDOL shared buffer is the on-card bound");
+        Asserts.eq(0, pdol.getPdolDataLength(), "no PDOL length before GPO data");
         Asserts.check(pdol.pdolFits((short) 64), "a 64-byte PDOL expansion fits");
         Asserts.check(!pdol.pdolFits((short) 65), "a 65-byte PDOL expansion does not fit");
         Asserts.check(!pdol.pdolFits((short) -1), "a negative PDOL length does not fit");
         pdol.setPdolData(new byte[64], (short) 0, (short) 64);
         Asserts.eq(64, pdol.getPdolDataLength(), "setPdolData within the buffer");
-        Asserts.eq(64, pdol.getPdolData().length, "PDOL buffer sized to the expansion");
+        Asserts.eq(64, pdol.getPdolData().length, "PDOL buffer is the shared bound");
 
-        // A GPO without PDOL data keeps the transient buffer unallocated, so a
-        // no-PDOL instance does not spend the shared transient budget
-        // (docs/specs/common/risks.md).
+        // A GPO without PDOL data only resets the length; the shared buffer is
+        // allocated once at install, not on first use (docs/specs/common/risks.md).
         EMVProtocolState noPdol = new EMVProtocolState();
         noPdol.setPdolData(new byte[0], (short) 0, (short) 0);
         Asserts.eq(0, noPdol.getPdolDataLength(), "empty PDOL data accepted");
-        Asserts.check(noPdol.getPdolData() == null, "empty PDOL data does not allocate");
+        Asserts.check(noPdol.getPdolData() != null, "empty PDOL data keeps the shared buffer");
 
         // A GET CHALLENGE challenge is valid only until the next command
         // (EMV v4.4 Book 3 §6.5.6.1): clearChallengeValid invalidates it.

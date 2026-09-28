@@ -33,7 +33,7 @@
     测试实例 `04/06/08` 真卡回归（含 `BoundaryTest`/`VelocityTest`/`AesFlowTest`）。
   - **生产实例真卡回归**：仅部署生产 4 实例 + J3R180 生产脚本时，卡侧最新规范修复全绿，
     全程无 `6F00`/`6883`。
-- **未完成**：§A（A1/A3）、§B（B1–B3）、§C（C.1–C.3）、§D、§E 可选、§G。
+- **未完成**：§A（A1/A3）、§B（B2）、§C（C.1–C.3）、§D、§E 可选、§G。
   范围外项（XDA/ODE、生物 CVM、Book C-8 专属、国别变体等）见
   [`docs/specs/`](docs/specs/) 的范围声明，不再单列。
 
@@ -66,51 +66,47 @@
       KDD/发现上下文，jcsl 下不可达。
 - [ ] **A3 瞬态余量实测**：J3R180 上实测
       `JCSystem.getAvailableMemory(MEMORY_TRANSIENT_DESELECT)` 余量。真卡已确认多实例惰性
-      缓冲（`workScratch` 256、`chainData` 255、PIN 恢复 256）耗尽后 `6F00`（见 §B3），本项需
-      给出余量实据以定 §B1 的 a/b/c 组合。实现建议：加只读诊断（`PersoHandler` 的 `3000` 报告
+      缓冲（`workScratch` 256、`chainData` 255、PIN 恢复 256）耗尽后 `6F00`（见 §B3）；
+      §B1 的包级共享 `EmvScratch` 已把 per-instance 瞬态归零（共 1408 B，一次分配），本项
+      现只需**实测安装后的余量**并复跑 §B3 的 `BoundaryTest`/`AesFlowTest`/非接触第二 AC
+      确认不再复现。实现建议：加只读诊断（`PersoHandler` 的 `3000` 报告
       已带 persistent 余量，可并列 transient；或项目私有 GET DATA/DGI），用
       `terminal apdu`/`card get-data` 在交易前后取值。硬件已具备，待执行。
 
 ## B. 卡侧实现与健壮性
 
-- [ ] **B1 瞬态预算压缩（§B3 的修复）**：批次 A/B-1/B-2/C 已完成；`SecureMessaging.scratch`
-      已并入共享 work scratch、存储记录已支持从持久化池直发。剩余（按收益排序）：
-      1. `workScratch`（256 B）与 `chainData`（255 B）提升为 **package 级共享**（同一时刻仅一条
-         命令，无重入；`EMVProtocolState` 目前每实例一份）：省 `256×(N−1) + 255×(N−1)`，
-         直接消除 §B3 的 1/2/3/4。
-      2. `response`（256 B × N，安装期最大静态占用）按角色/按需分配（较大重构）。
-      3. `getWorkScratch` 按实际 `minLength` 分配（ARPC 仅需 40 B），或给 ARPC 单独小缓冲。
-      4. 惰性分配失败降级而非 `6F00`：`chainData` 用固定小段、`OfflinePin` 无缓冲时回 `6985`；
-         另可在 `6F00` 路径 `resetChain()` 以避免 `6883` 级联。
-      5. 真卡验收见 §A3；修复后重跑 `BoundaryTest`/`AesFlowTest` 与非接触第二 AC（§B3 复现步骤）。
+- [ ] **B1 瞬态预算压缩（§B3 的修复）——已完成，保留真卡验收**：P2 批次把 EMV 的全部
+      per-instance 瞬态缓冲收拢为包级共享的 `card/emv/EmvScratch`
+      （response/work/chain/pdol/firstCdol/cda*/SM/会话/CVR/protocol，共 **1184 B**），在
+      `EMVProtocolState` 构造（即安装期）分配一次；`work` 288 B 覆盖 2048-bit DDA/CDA 消息
+      （prefix 234 + 实际 DDOL）、`chain` 255 B、`firstCdol` 128 B、`pdol` 64 B 亦共享。命令
+      路径已无任何 `makeTransient*`（单元测试逐步断言）。**真卡实测教训**：把全部缓冲在安装期
+      直接 `makeTransient` 会在创建第 4 个 eMRTD 实例时耗尽预算抛 `SystemException` → `6F00`；
+      故所有分配改走共享的 `card42.common.TransientBuffers.makeByteArray/makeShortArray`
+      （`RetailMac`/`AesCmac` 小块同）——优先 `CLEAR_ON_DESELECT`，**耗尽时回退持久数组**而非
+      失败。同理 eMRTD 侧 `SmScratch` 由 1 KB 收到 800 B、`LdsCatalog` 的 COM 构造 scratch 改
+      包级 static、LDS2 实例不再分配只有 LDS1 用的 `LdsCatalog`/`LdsPerso`/`BacCrypto`/`AaCrypto`
+      （每例省约 1.5–1.8 KB 持久堆）。**剩余仅真卡验收**：见 §A3，用生产+测试实例
+      重跑 `BoundaryTest`/`AesFlowTest`/非接触第二 AC；模拟器矩阵 `make test`/`make test-emv`/
+      `make TEST_CONTACTLESS=1 test-emv` 已全绿，真卡只读套件（Directory/ContactKernel/EmvFlow/
+      OnlineClosedLoop/BAC/PACE/ChipAuth）亦已通过。回退到持久只影响 EEPROM 写量，不影响功能；
+      真卡余量实测后再决定是否收紧。
 - [ ] **B2 健壮性与资源**：EEPROM 预算与事务原子性、模糊测试、日志格式可配置与审计。
-- [ ] **B3 瞬态内存耗尽（J3R180 真卡已确认；关联 §A3/B1）**：JCOP 的
+- [~] **B3 瞬态内存耗尽（J3R180 真卡已确认；由 §B1 的包级共享修复，待真卡复测）**：JCOP 的
       `MEMORY_TRANSIENT_DESELECT` 预算在多个实例各自惰性分配大缓冲后耗尽，此后**任何**惰性
-      `JCSystem.makeTransientByteArray` 抛 `SystemException` → `6F00`；**不止 ARPC 一条路径**。
-      真卡实测（同一测试脚本在 jcsl 不复现）：
-      1. 实例 02（非接触）第二 `GENERATE AC`：`Arpc.verifyMethod2` 首次
-         `getWorkScratch(40)`，而 `getWorkScratch` 对任何 `< 256` 的请求都按
-         `WORK_SCRATCH_SIZE = 256` 分配（`EMVProtocolState.java:498-505`）。
-      2. 实例 08（CV '6'/AES）第二 AC：同上；`AesFlowTest` 1 fail（第一 AC 与 CV '6' 密码学
-         校验均 PASS）。
-      3. 实例 01 chained VERIFY：`chainData` **255 B** 惰性分配
-         （`EMVProtocolState.java:476-482`）；`BoundaryTest` 8 条 `6F00`，且因链未复位级联出
-         `READ RECORD P2 -> 6883`（级联非独立缺陷）。
-      4. 实例 06 加密脱机 PIN：`OfflinePin` 恢复缓冲 `getWorkScratch(256)`
-         （`OfflinePin.java:169`）；`BoundaryTest` 7 条 `6F00`（无挑战/格式错者回 `6984`/`6A80`
-         之前不受影响）。
-      共性：`EMVProtocolState`/`AcProcessor`/`OfflinePin` 的惰性缓冲均**每实例一份**，且安装期
-      `PaymentApplet.response` 256 B × 7 已占约 1.8 KB，余量不足以再容纳多实例的 255/256 B。
-      修复候选见 §B1；先由 §A3 实测余量。
-      **真卡补充（仅生产实例）**：不部署/个性化 `04/06/08`、只保留
-      01/02/PSE/PPSE 时，`EmvFlowTest`（含实例 01 加密 PIN、多轮 AC）、实例 02 第二 AC、
-      全部生产可移植套件与手动接触/非接触联机均无 `6F00` → 耗尽确由**多实例各自惰性分配**
-      累积所致，生产 4 实例在 J3R180 预算内。故 §B1 的包级共享缓冲仍是带测试实例构建的
-      **必需修复**；§A3 余量实测仍待做。
-      **真卡补充 2（测试实例）**：单加 06 跑 `VelocityTest`、单加 08 跑
-      `AesFlowTest` 均全绿；`BoundaryTest`（01+04+06）仅实例 06 加密 PIN 的
-      `getWorkScratch(256)` 回 7 条 `6F00`，而实例 01 链式 VERIFY（`chainData` 255 B）本次
-      成功 —— 失败点随实例数量/使用顺序移动，确证为同 context 共享预算累积，而非单实例缺陷。
+      `JCSystem.makeTransientByteArray` 抛 `SystemException` → `6F00`；真卡实测路径见下（历史）：
+      1. 实例 02（非接触）第二 `GENERATE AC`：`Arpc.verifyMethod2` `getWorkScratch(40)`；
+      2. 实例 08（CV '6'/AES）第二 AC：同上；
+      3. 实例 01 链式 VERIFY：`chainData` 255 B；
+      4. 实例 06 加密脱机 PIN：`OfflinePin` 恢复缓冲 256 B。
+      共性：缓冲**每实例一份**且安装期 `response` 256 B × N 已占约 1.8 KB。`EmvScratch`
+      把上述四块及 `response` 全部改为包级共享、安装期一次分配，per-instance 瞬态归零，
+      故真卡上应不再复现；待 §A3/真卡回归确认。
+      **真卡复现（P2 后）**：安装第 2 个 eMRTD 实例时 `6F00`——安装期直接 `makeTransient`
+      仍会在总预算不足时抛 `SystemException`。已改为 `transientBytes()` 瞬态优先、**耗尽回退
+      持久**（EMV/eMRTD/SM/MAC 全部），安装不再因瞬态失败；代价是回退缓冲的 EEPROM 写。
+      另注意卡上残留同名实例（日志 `Applet ... already present`）会叠加占用，复测前应
+      `gp --delete 434152444201`/`434152444202` 干净重装。
 
 ## C. 规范符合性遗留
 

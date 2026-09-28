@@ -182,22 +182,31 @@ public class TransactionLog implements ISO7816 {
             reader.next();
             short tag = reader.tag();
             short len = reader.valueLength();
-            for (short k = 0; k < len; k++) {
-                records[(short) (p + k)] = 0;
-            }
+            // Each field is stored byte by byte and only where the stored value
+            // differs: the previous blanket zero-fill wrote every byte of the
+            // record on each transaction, and a same-value byte may still cost
+            // an EEPROM programming cycle.
             if (tag == TlvTags.TAG_ATC) {
-                Util.setShort(records, p, state.getATC());
+                // 2-byte big-endian ATC (EMV v4.4 Book 3 Annex D4).
+                short atc = state.getATC();
+                storeByte(records, p, len, (short) 0, (byte) (atc >> 8));
+                storeByte(records, p, len, (short) 1, (byte) atc);
+                storeZero(records, p, (short) 2, len);
             } else if (tag == TlvTags.TAG_CID) {
-                records[p] = cid;
+                storeByte(records, p, len, (short) 0, cid);
+                storeZero(records, p, (short) 1, len);
             } else if (tag == TlvTags.TAG_IAD) {
                 short n = data.getIadLength() < len ? data.getIadLength() : len;
-                Util.arrayCopyNonAtomic(data.getIad(), (short) 0, records, p, n);
+                storeBytes(records, p, len, data.getIad(), (short) 0, n);
             } else {
                 short off = data.getCDOL1ValueOffset(tag);
                 short l = data.getCDOL1ValueLength(tag);
                 if (off >= 0 && l > 0 && (short) (off + l) <= terminalLength) {
                     short n = l < len ? l : len;
-                    Util.arrayCopyNonAtomic(terminalData, off, records, p, n);
+                    storeBytes(records, p, len, terminalData, off, n);
+                } else {
+                    // No value for this tag: the field stays zero.
+                    storeZero(records, p, (short) 0, len);
                 }
             }
             p += len;
@@ -209,6 +218,51 @@ public class TransactionLog implements ISO7816 {
         sequence[target] = (short) (max + 1);
         checksum[target] = sum;
         JCSystem.commitTransaction();
+    }
+
+    /**
+     * Stores the byte at {@code records[p + k]} of a {@code len}-byte DOL field
+     * when, and only when, it differs from what is already there; k beyond the
+     * field is ignored.
+     */
+    private static void storeByte(byte[] records, short p, short len, short k, byte value) {
+        if (k >= len) {
+            return;
+        }
+        short idx = (short) (p + k);
+        if (records[idx] != value) {
+            records[idx] = value;
+        }
+    }
+
+    /**
+     * Zero-fills {@code records[p + from .. p + len)} for the bytes a field
+     * value does not cover, writing only the bytes that are not zero yet.
+     */
+    private static void storeZero(byte[] records, short p, short from, short len) {
+        for (short k = from; k < len; k++) {
+            short idx = (short) (p + k);
+            if (records[idx] != 0) {
+                records[idx] = 0;
+            }
+        }
+    }
+
+    /**
+     * Fills the {@code len}-byte DOL field at {@code records[p]} with the first
+     * {@code n} bytes of {@code src[srcOff..)} followed by zero padding,
+     * writing only the bytes whose value differs, since a same-value byte may
+     * still cost an EEPROM programming cycle.
+     */
+    private static void storeBytes(byte[] records, short p, short len,
+            byte[] src, short srcOff, short n) {
+        for (short k = 0; k < len; k++) {
+            byte want = k < n ? src[(short) (srcOff + k)] : (byte) 0;
+            short idx = (short) (p + k);
+            if (records[idx] != want) {
+                records[idx] = want;
+            }
+        }
     }
 
     /**

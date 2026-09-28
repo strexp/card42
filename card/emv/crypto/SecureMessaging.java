@@ -4,7 +4,6 @@ import card42.common.*;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
 import javacard.security.DESKey;
@@ -58,22 +57,22 @@ public class SecureMessaging implements ISO7816 {
     private boolean hasMacMasterKey;
     private boolean hasEncMasterKey;
 
-    /* The MAC/ENC session-key bytes, the ICV and the derived-AC marker are
-     * allocated together on first use while the applet is selected, so an
-     * instance that never uses secure messaging does not spend the shared
-     * transient budget (docs/specs/common/cryptography.md §9).  The derivation object
-     * is shared with EMVCrypto, whose AC path always needs it. */
+    /* The MAC/ENC session-key bytes, the ICV and the derived-AC marker are the
+     * package-shared {@link EmvScratch} buffers, so every instance shares one
+     * allocation made at install and no command allocates a transient array
+     * (docs/specs/common/cryptography.md §9, docs/specs/common/risks.md).  The
+     * derivation object is shared with EMVCrypto, whose AC path always needs it. */
     private final SessionKey derivation;
-    private byte[] macSessionKeyBytes;
-    private byte[] encSessionKeyBytes;
+    private final byte[] macSessionKeyBytes;
+    private final byte[] encSessionKeyBytes;
 
     /** First AC the session keys were derived for; CLEAR_ON_DESELECT. */
-    private byte[] derivedAc;
+    private final byte[] derivedAc;
     /** True once prepare() has derived the session keys for derivedAc. */
     private boolean derived;
 
     /** MAC chaining value (EMV v4.4 Book 2 section 9.2.3.1); up to 16 bytes for AES. */
-    private byte[] scriptIcv;
+    private final byte[] scriptIcv;
     private boolean icvInitialised;
 
     /** Set after a MAC failure; later commands are refused with 6985. */
@@ -119,9 +118,13 @@ public class SecureMessaging implements ISO7816 {
         encSessionAes = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES,
                 KeyBuilder.LENGTH_AES_128, false);
 
-        // The key/ICV buffers are allocated on first use (see
-        // ensureKeyBuffers), while the applet is selected: a CV '5' instance
-        // that never runs secure messaging never needs them.
+        // The key/ICV buffers are package-shared and allocated once at install
+        // (see EmvScratch): no command path allocates a transient array.
+        EmvScratch.init();
+        macSessionKeyBytes = EmvScratch.smMacKey;
+        encSessionKeyBytes = EmvScratch.smEncKey;
+        scriptIcv = EmvScratch.smIcv;
+        derivedAc = EmvScratch.smDerivedAc;
         derived = false;
 
         desCbc = Cipher.getInstance(Cipher.ALG_DES_CBC_NOPAD, false);
@@ -166,12 +169,10 @@ public class SecureMessaging implements ISO7816 {
         if (encSessionAes.isInitialized()) {
             encSessionAes.clearKey();
         }
-        if (macSessionKeyBytes != null) {
-            Util.arrayFillNonAtomic(macSessionKeyBytes, (short) 0, (short) 16, (byte) 0);
-            Util.arrayFillNonAtomic(encSessionKeyBytes, (short) 0, (short) 16, (byte) 0);
-            Util.arrayFillNonAtomic(scriptIcv, (short) 0, (short) 16, (byte) 0);
-            Util.arrayFillNonAtomic(derivedAc, (short) 0, (short) 8, (byte) 0);
-        }
+        Util.arrayFillNonAtomic(macSessionKeyBytes, (short) 0, (short) 16, (byte) 0);
+        Util.arrayFillNonAtomic(encSessionKeyBytes, (short) 0, (short) 16, (byte) 0);
+        Util.arrayFillNonAtomic(scriptIcv, (short) 0, (short) 16, (byte) 0);
+        Util.arrayFillNonAtomic(derivedAc, (short) 0, (short) 8, (byte) 0);
         derived = false;
         icvInitialised = false;
     }
@@ -187,27 +188,8 @@ public class SecureMessaging implements ISO7816 {
 
     /** Clears the persistent 'Issuer Script Processing Failed' bit. */
     public void clearScriptFailedPersistent() {
-        scriptFailedPersistent = false;
-    }
-
-    /**
-     * Allocates the session-key / ICV buffers on first use, while the applet is
-     * selected.  This must not happen in the key setters: personalization runs
-     * in processData with the applet deselected, where CLEAR_ON_DESELECT
-     * allocation is not available (docs/specs/common/risks.md).  CLEAR_ON_DESELECT
-     * arrays live for the whole package context, so an instance that never uses
-     * secure messaging never spends this budget (docs/specs/common/cryptography.md §9).
-     */
-    private void ensureKeyBuffers() {
-        if (macSessionKeyBytes == null) {
-            macSessionKeyBytes = JCSystem.makeTransientByteArray((short) 16,
-                    JCSystem.CLEAR_ON_DESELECT);
-            encSessionKeyBytes = JCSystem.makeTransientByteArray((short) 16,
-                    JCSystem.CLEAR_ON_DESELECT);
-            scriptIcv = JCSystem.makeTransientByteArray((short) 16,
-                    JCSystem.CLEAR_ON_DESELECT);
-            derivedAc = JCSystem.makeTransientByteArray((short) 8,
-                    JCSystem.CLEAR_ON_DESELECT);
+        if (scriptFailedPersistent) {
+            scriptFailedPersistent = false;
         }
     }
 
@@ -252,7 +234,6 @@ public class SecureMessaging implements ISO7816 {
      * first GENERATE AC of the transaction.
      */
     public void prepare(byte[] ac, short off) {
-        ensureKeyBuffers();
         // derivedAc is this session's Application Cryptogram, not a long-term
         // secret, so the short-circuiting Util.arrayCompare is fine here
         // (docs/specs/common/cryptography.md §9).
@@ -383,7 +364,6 @@ public class SecureMessaging implements ISO7816 {
         if (!hasMacMasterKey) {
             ISOException.throwIt(SW_CONDITIONS_NOT_SATISFIED);
         }
-        ensureKeyBuffers();
         if (scriptFailed) {
             ISOException.throwIt(SW_CONDITIONS_NOT_SATISFIED); // 6985
         }
