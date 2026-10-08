@@ -30,13 +30,16 @@ LDS1 应用是一组以 2 字节 FID 寻址的透明基本文件（ICAO Doc 9303
 | DG15 | `010F` | 512 |
 | DG16 | `0110` | 256 |
 | EF.CardAccess | `011C` | 256 |
-| EF.SOD | `011D` | 2048 |
+| EF.SOD | `011D` | 4096 |
 | EF.COM | `011E` | 64 |
 
 EF.CardSecurity 也是主文件 EF（`011D`，Doc 9303-10 §3.11.4），与 DF 内的 EF.SOD 同 FID：
 LDS1 实例在 `SELECT MF` 后用 `SELECT FILE 011D` 选主文件 EF.CardSecurity（`LdsMfStore`），
 普通 `SELECT 011D` 仍指向本 DF 的 EF.SOD；读访问为 PACE（Table 34）。它由 DGI `FF05`
 个性化（§8），与 LDS2 应用共享同一主文件文件（每张卡一个 EF.CardSecurity）。
+EF.CardSecurity 的个性化预算为 4096（`LdsMfStore.CARD_SECURITY_CAPACITY`）；EF.SOD 与
+EF.CardSecurity 都内嵌 Document Signer 证书链，实际 DSC 证书可达 ~2 KB，容量是受限卡持久
+内存的**上限**（`LdsFile`/`Lds2TransparentFile` 按需分页），故取足够余量而不预先占用。
 
 `SELECT FILE`（P1=02，P2=0C）按 FID 选 EF；`READ BINARY`（`B0`）读窗口。READ BINARY 接受
 ISO/IEC 7816-4 §6.1.1 的两种寻址形式：P1 b8=0 时 P1P2 为所选 EF 的 15 位偏移

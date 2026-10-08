@@ -28,6 +28,14 @@ public final class LdsFileSystem {
      */
     public static final short DG2_CAPACITY = (short) 16384;
 
+    /**
+     * EF.SOD personalization capacity.  EF.SOD embeds the Document Signer
+     * certificate (and its chain), so a larger DSC certificate can push the
+     * file well past the original 2048-byte budget; it is paged, so this is an
+     * upper bound that costs nothing until written.
+     */
+    public static final short SOD_CAPACITY = (short) 4096;
+
     private final LdsFile[] files;
     private LdsFile selected;
 
@@ -50,7 +58,7 @@ public final class LdsFileSystem {
                 new LdsFile(EmrtdTags.FID_DG15, (short) 512),
                 new LdsFile(EmrtdTags.FID_DG16, (short) 256),
                 new LdsFile(EmrtdTags.FID_CARD_ACCESS, (short) 256),
-                new LdsFile(EmrtdTags.FID_SOD, (short) 2048),
+                new LdsFile(EmrtdTags.FID_SOD, SOD_CAPACITY),
                 new LdsFile(EmrtdTags.FID_COM, (short) 64),
         };
         selected = null;

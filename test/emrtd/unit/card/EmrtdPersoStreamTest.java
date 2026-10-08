@@ -42,6 +42,7 @@ final class EmrtdPersoStreamTest {
         recordStreaming();
         dgiStreamFraming();
         lds1PersonalizationStreaming();
+        largeSignedObjects();
         lds2PersonalizationStreaming();
     }
 
@@ -287,6 +288,45 @@ final class EmrtdPersoStreamTest {
         Asserts.sw((short) 0x6A80,
                 () -> other.apply(missingDg1, (short) 0, (short) missingDg1.length),
                 "LDS1 sequence without DG1 -> 6A80");
+    }
+
+    // --- large signed objects (EF.SOD / EF.CardSecurity) ---------------------
+
+    /**
+     * Regression: EF.SOD and EF.CardSecurity embed the Document Signer
+     * certificate chain, so a real DSC made the CMS objects ~2 KB (a script
+     * with a 1243-byte DSC produced a 1938-byte EF.CardSecurity and a 2005-byte
+     * EF.SOD).  The old fixed budgets (SOD 2048, EF.CardSecurity 1792) were
+     * too small and STORE DATA failed with 6A84; the paged budgets are now
+     * generous enough that a multi-KB signed object personalizes intact.
+     */
+    private static void largeSignedObjects() {
+        byte[] dg1 = Hex.parse("615B5F1F58504C383938393032433C");
+        byte[] cardSecurity = pattern(2000);
+        byte[] sod = pattern(2500);
+
+        ByteArrayOutputStream seq = new ByteArrayOutputStream();
+        writeDgi(seq, EmrtdTags.DGI_BAC_SEED, pattern(16));
+        writeDgi(seq, EmrtdTags.FID_DG1, dg1);
+        writeDgi(seq, EmrtdTags.DGI_CARD_SECURITY, cardSecurity);
+        writeDgi(seq, EmrtdTags.FID_SOD, sod);
+        byte[] sequence = seq.toByteArray();
+
+        LdsCatalog catalog = new LdsCatalog();
+        LdsPerso perso = new LdsPerso(catalog,
+                new AaCrypto((short) 2048, AaCrypto.AA_SHA1), new ChipAuth(),
+                (src, off, len) -> { });
+        perso.apply(sequence, (short) 0, (short) sequence.length);
+
+        Lds2TransparentFile mfSecurity = LdsMfStore.file(EmrtdTags.FID_CARD_SECURITY);
+        Asserts.eq(cardSecurity.length, mfSecurity.getLength(),
+                "multi-KB MF EF.CardSecurity length");
+        sameBytes(cardSecurity, read(mfSecurity, 0, cardSecurity.length),
+                "multi-KB MF EF.CardSecurity content");
+        Asserts.eq(sod.length, catalog.file(EmrtdTags.FID_SOD).getLength(),
+                "multi-KB EF.SOD length");
+        sameBytes(sod, read(catalog.file(EmrtdTags.FID_SOD), 0, sod.length),
+                "multi-KB EF.SOD content");
     }
 
     // --- LDS2 streaming personalization --------------------------------------

@@ -194,8 +194,10 @@ context 共享）。因此"把照片放进内存"的正确目标是**持久**且
 
 **关键事实（本项目实测/推演结合实现）**：
 
-- eMRTD 的 DG2（人脸）是唯一可能达到数 KB–数十 KB 的 LDS1 文件；其余 DG/SOD 都在 1–2 KB
-  以内，AA 私钥 516 B。DG2 的取值上限受两条约束：DGI 长度字段（CPS 编到 16 位）与 READ
+- eMRTD 的 DG2（人脸）是唯一可能达到数 KB–数十 KB 的 LDS1 文件；其余 DG 都在 1–2 KB
+  以内，而 EF.SOD/EF.CardSecurity 内嵌 Document Signer 证书链、实际可达数 KB（本项目一份
+  真实 DSC 夹具即产生 1938 B 的 EF.CardSecurity 与 2005 B 的 EF.SOD），AA 私钥 516 B。
+  DG2 的取值上限受两条约束：DGI 长度字段（CPS 编到 16 位）与 READ
   BINARY 的 15 位偏移，故任何 EF 实际 **≤32767 B**。
 - **读路径本来就是流式的**：`READ BINARY` 每包明文 ≤`0xE7`，卡侧一次只搬一块到 `response`
    (256 B) 再经 `SmScratch` 封装，瞬态占用是常数，与 EF 大小无关；照片变大只增加往返次数。
