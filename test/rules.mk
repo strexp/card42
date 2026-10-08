@@ -112,11 +112,19 @@ test-emv-card-all: $(HOST_STAMP)
 #   make test-emrtd-card                 # all EMRTD_SUITES (reader 0)
 #   make test-emrtd-card CARD_HOST=pcsc:1
 #   make test-emrtd-card-run S=EmrtdBacTest CARD_HOST=pcsc:1   # one suite
+#
+# The ACR1581 contactless reader intermittently returns 6F00 on the Biometrics
+# PACE when a suite follows several others in one run (not reproducible when the
+# suite runs standalone), so each suite is retried once; a genuine failure still
+# fails the target (TODO.emrtd.md T5.3).
 test-emrtd-card: $(HOST_STAMP)
 	@for s in $(EMRTD_SUITES); do \
 	  echo ">>> $$s"; \
 	  $(JAVA) -p $(JC_SIM_CLIENT)/COMService --add-modules ALL-MODULE-PATH \
-	    -cp $(HOST_CLASSES) card42.test.$$s -host=$(CARD_HOST) || exit 1; \
+	    -cp $(HOST_CLASSES) card42.test.$$s -host=$(CARD_HOST) || \
+	    { echo ">>> retry $$s (intermittent real-card hiccup)"; sleep 2; \
+	      $(JAVA) -p $(JC_SIM_CLIENT)/COMService --add-modules ALL-MODULE-PATH \
+	        -cp $(HOST_CLASSES) card42.test.$$s -host=$(CARD_HOST) || exit 1; }; \
 	done
 
 test-emrtd-card-run: $(HOST_STAMP)

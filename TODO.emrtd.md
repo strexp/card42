@@ -82,6 +82,12 @@
   单包 `READ BINARY` 是否仍触发 WTX，并与优化前对比记录。并复测**大 DG2 个性化**：确认 SD 的
   `processData` 事务粒度（逐命令 vs 整段）、约 10 KB 序列在真卡事务缓冲下不 `BUFFER_FULL`、
   以及 `MEMORY_TYPE_PERSISTENT` 余量（J3R180 ~180 KB NVM，DG2 预算 16384）。
+- [ ] **T5.3 真卡 `test-emrtd-card` 间歇 6F00**：ACR1581 非接触口上，`EmrtdLds2AppsIntegrationTest`
+  的 Additional Biometrics PACE step 4 在**多个 suite 连跑**时间歇回 `6F00`（`make test-emrtd-card`），
+  但单独运行该 suite（含连续 3 次）以及 Travel→Apps 两次连跑均通过，特征更像读卡器/卡复位或
+  持久堆余量而非确定性逻辑；`test-emrtd-card` 暂对每个 suite 重试一次。需在真卡定位：
+  失败时读 `JCSystem.getAvailableMemory(MEMORY_TYPE_PERSISTENT)`、确认是否与前置 suite 的持久写
+  （LDS2 APPEND RECORD）或 PACE 会话次数相关，必要时在 `Pace`/实例初始化处进一步复用/回收对象。
 - [ ] **SEARCH RECORD 命令 DO 解析复核（命令级单测发现，待正文复核）**：
   ① 搜索窗口的两个 `DO'02'`（偏移/字节数）由 `Lds2Record.searchRecord` 固定按 2 字节
   `Util.getShort` 读取，未按 BER 长度字段解码；ICAO Doc 9303-10 §3.7.3 Table 17 与
