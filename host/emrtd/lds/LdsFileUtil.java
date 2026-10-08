@@ -10,6 +10,8 @@ public final class LdsFileUtil {
     // LDS1 elementary files (Doc 9303-10 §4.6).
     public static final int FID_DG1 = 0x0101;
     public static final int FID_DG2 = 0x0102;
+    public static final int FID_DG11 = 0x010B;
+    public static final int FID_DG12 = 0x010C;
     public static final int FID_DG15 = 0x010F;
     public static final int FID_CVCA = 0x011C;
     public static final int FID_SOD = 0x011D;

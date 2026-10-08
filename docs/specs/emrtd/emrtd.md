@@ -216,7 +216,9 @@ DGI 序列。DG1 与 DG15 内联构造；DG2 由 `Dg2Builder` 构造成 CBEFF/IS
 （`75 { 7F61 { 7F60 { A1 SBH, 5F2E } } }`），内含一个 ISO/IEC 19794-5 Basic Facial
 Image Record。头像来自输入图片（默认 `perso/emrtd/portrait.png`，可用 `-face=<path>` 覆盖），
 按 4:5 居中裁切并把最长边缩到 512 px（`Dg2Builder.MAX_SIDE`）后编码为 JPEG（DG2 约 8 KB）；
-图片缺失或不可读即报错，host 不再合成占位图。SOD 覆盖 DG1、DG2、DG15 的 SHA-256 哈希（A3）。
+图片缺失或不可读即报错，host 不再合成占位图。SOD 覆盖 DG1、DG2、DG11、DG12、DG15 的
+SHA-256 哈希（A3）。DG11/DG12 由 `EmrtdPersoExporter.dg11/dg12` 按 Doc 9303-10 §4.7.11/§4.7.12
+构造（DG11 姓名/出生地/住址/电话，DG12 签发机关/签发日期/个性化时间/个性化系统序列号）。
 `LdsScript` 是人类可读输入格式；`perso/emrtd/sample.perso` 是演示集，
 `EmrtdPersoExporter -script=<path>` 个性化每个 `@instance` 段（`-emit` 打印内置样例脚本；
 无 `-script` 时用内置样例，头像取自 `-face=<path>`，默认 `perso/emrtd/portrait.png`）。
@@ -275,7 +277,10 @@ EF.CardAccess `011C` 与 EF.CardSecurity `011D` 属**主文件**（`LdsMfStore`�
 实例共享），不在任何 LDS2 DF 内（Doc 9303-10 §3.11.3/§3.11.4）。EF.CardAccess 恒可
 选择/读取；EF.CardSecurity 与所有 LDS2 记录/透明 EF 的访问 **MUST** 先完成 PACE，否则
 回 `6982`（Doc 9303-11 §1.2 Note 2 / §4.2 step 3；Doc 9303-10 §3.11.4 Table 34、§5.4）。
-SM 建立（BAC/PACE/CA）后收到明文 APDU 即中止会话并回 `6982`（Doc 9303-11 §9.8.3）。
+SM 建立（BAC/PACE/CA）后收到明文 APDU 即中止会话并回 `6982`（Doc 9303-11 §9.8.3）；
+**当前临时放行所有明文命令（互操作排障，见 `EmrtdApplet.processCommand` 的实验注释）**：
+明文命令在明文下应答且不中止会话（SSC 不推进、会话密钥保留），之后仍可继续 SM 读；逐命令的
+访问控制不变（明文读受保护 DG 仍在 `ReadBinary` 回 `6982`，EF.CardSecurity/LDS2 仍要求 PACE）。
 
 命令：
 

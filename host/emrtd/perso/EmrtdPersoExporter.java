@@ -64,11 +64,15 @@ public final class EmrtdPersoExporter {
 
         byte[] dg1 = dg1();
         byte[] dg2 = dg2(portrait);
+        byte[] dg11 = dg11();
+        byte[] dg12 = dg12();
         byte[] dg15 = dg15(modulus);
 
         Map<Integer, byte[]> hashes = new LinkedHashMap<Integer, byte[]>();
         hashes.put(1, sha256(dg1));
         hashes.put(2, sha256(dg2));
+        hashes.put(11, sha256(dg11));
+        hashes.put(12, sha256(dg12));
         hashes.put(15, sha256(dg15));
         byte[] sod = SodBuilder.build(hashes, dscKey, dscCertificate);
 
@@ -88,6 +92,8 @@ public final class EmrtdPersoExporter {
         writeDgi(out, 0xFF04, paceSeed(DOCUMENT_NUMBER, DATE_OF_BIRTH, DATE_OF_EXPIRY));
         writeDgi(out, LdsFileUtil.FID_DG1, dg1);
         writeDgi(out, LdsFileUtil.FID_DG2, dg2);
+        writeDgi(out, LdsFileUtil.FID_DG11, dg11);
+        writeDgi(out, LdsFileUtil.FID_DG12, dg12);
         writeDgi(out, LdsFileUtil.FID_DG15, dg15);
         // EF.CardAccess in the master file (Doc 9303-10 §3.11.3): the LDS1
         // instance advertises PACE and Chip Authentication.
@@ -195,10 +201,14 @@ public final class EmrtdPersoExporter {
 
         byte[] dg1 = dg1();
         byte[] dg2 = dg2(portrait);
+        byte[] dg11 = dg11();
+        byte[] dg12 = dg12();
         byte[] dg15 = dg15(modulus);
         Map<Integer, byte[]> hashes = new LinkedHashMap<Integer, byte[]>();
         hashes.put(1, sha256(dg1));
         hashes.put(2, sha256(dg2));
+        hashes.put(11, sha256(dg11));
+        hashes.put(12, sha256(dg12));
         hashes.put(15, sha256(dg15));
         byte[] sod = SodBuilder.build(hashes, dscKey, dscCertificate);
 
@@ -229,6 +239,8 @@ public final class EmrtdPersoExporter {
         sb.append("@doe ").append(DATE_OF_EXPIRY).append('\n');
         sb.append("@dg 1 ").append(Hex.format(dg1)).append('\n');
         sb.append("@dg 2 ").append(Hex.format(dg2)).append('\n');
+        sb.append("@dg 11 ").append(Hex.format(dg11)).append('\n');
+        sb.append("@dg 12 ").append(Hex.format(dg12)).append('\n');
         sb.append("@dg 15 ").append(Hex.format(dg15)).append('\n');
         sb.append("@sod ").append(Hex.format(sod)).append('\n');
         sb.append("@aa ").append(Hex.format(aaPrivateKey(modulus, privateExponent))).append('\n');
@@ -390,6 +402,46 @@ public final class EmrtdPersoExporter {
                 DerWriter.oid("1.2.840.113549.1.1.1"),
                 DerWriter.nullValue());
         return tlv(0x6F, DerWriter.sequence(algorithm, subjectPublicKey));
+    }
+
+    /**
+     * DG11 = {@code 6B { 5C <tag list> 5F0E <full name> 5F11 <place of birth>
+     * 5F42 <address> 5F12 <telephone> }} (ICAO Doc 9303-10 §4.7.11).  The tag
+     * list mirrors the optional-group form an issuing State normally writes;
+     * the values follow the ICAO Doc 9303-11 sample passport.
+     */
+    private static byte[] dg11() {
+        byte[] tags = { 0x5F, 0x0E, 0x5F, 0x11, 0x5F, 0x42, 0x5F, 0x12 };
+        ByteArrayOutputStream inner = new ByteArrayOutputStream();
+        TlvWriter.writeTlv(inner, 0x5C, tags);
+        ascii(inner, 0x5F0E, "ERIKSSON<<ANNA<MARIA");
+        ascii(inner, 0x5F11, "UTO");
+        ascii(inner, 0x5F42, "UTOPIA");
+        ascii(inner, 0x5F12, "+4680000000");
+        return tlv(0x6B, inner.toByteArray());
+    }
+
+    /**
+     * DG12 = {@code 6C { 5C <tag list> 5F19 <issuing authority> 5F26 <date of
+     * issue> 5F55 <date/time of personalization> 5F56 <personalization system
+     * serial> }} (ICAO Doc 9303-10 §4.7.12).  The last two mirror the metadata
+     * a personalization system normally stamps.
+     */
+    private static byte[] dg12() {
+        byte[] tags = { 0x5F, 0x19, 0x5F, 0x26, 0x5F, 0x55, 0x5F, 0x56 };
+        ByteArrayOutputStream inner = new ByteArrayOutputStream();
+        TlvWriter.writeTlv(inner, 0x5C, tags);
+        ascii(inner, 0x5F19, "UTO");
+        ascii(inner, 0x5F26, "20260101");
+        ascii(inner, 0x5F55, "20260101120000");
+        ascii(inner, 0x5F56, "card42");
+        return tlv(0x6C, inner.toByteArray());
+    }
+
+    /** Appends {@code tag || len || US-ASCII(value)} to {@code out}. */
+    private static void ascii(ByteArrayOutputStream out, int tag, String value) {
+        TlvWriter.writeTlv(out, tag,
+                value.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
     }
 
     private static byte[] aaPrivateKey(BigInteger modulus, BigInteger privateExponent) {
