@@ -99,6 +99,10 @@ final class EmrtdCliTest {
                 "-host=socket:localhost:1", "-doc=123456789", "-dob=000101",
                 "-doe=300101", "-pace" }),
                 "read flow accepts the -pace flag (Doc 9303-11 §4.4)");
+        Asserts.check(reachesTransport("read", new String[] {
+                "-host=socket:localhost:1", "-doc=123456789", "-dob=000101",
+                "-doe=300101", "-ca" }),
+                "read flow accepts the -ca flag (Doc 9303-11 §6.2)");
         Asserts.check(reachesTransport("inspect", new String[] {
                 "-host=socket:localhost:1", "-json=1" }),
                 "inspect flow accepts -json=1 and reaches the transport");

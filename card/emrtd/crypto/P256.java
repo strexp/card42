@@ -1,6 +1,5 @@
 package card42.emrtd;
 
-import javacard.framework.Util;
 import javacard.security.ECKey;
 
 /* P-256 (secp256r1) domain parameters, FIPS 186-4 / BSI TR-03110 Table 6.
@@ -60,11 +59,23 @@ final class P256 {
 
     /**
      * True when the 32-byte big-endian value at off is strictly less than the
-     * field prime p (a coordinate outside [0, p) is not reduced).  The value is
-     * a public EC point coordinate, so the short-circuiting Util.arrayCompare
-     * is fine.
+     * field prime p (a coordinate outside [0, p) is not reduced).
+     *
+     * <p>The comparison is done explicitly as unsigned bytes: some Java Card
+     * platforms implement {@code Util.arrayCompare} with signed bytes (the
+     * J3R180 / nextgen simulator does), which made the Chip Authentication
+     * peer-point check reject a valid coordinate whenever its first differing
+     * byte differed in the high bit, so CA failed intermittently (regression
+     * test: {@code EmrtdChipAuthIntegrationTest}).
      */
     static boolean isLessThanP(byte[] value, short off) {
-        return Util.arrayCompare(value, off, FP, (short) 0, (short) 32) < 0;
+        for (short i = 0; i < (short) 32; i++) {
+            short v = (short) (value[(short) (off + i)] & 0xFF);
+            short p = (short) (FP[i] & 0xFF);
+            if (v != p) {
+                return v < p;
+            }
+        }
+        return false; // equal to p is not less than p
     }
 }

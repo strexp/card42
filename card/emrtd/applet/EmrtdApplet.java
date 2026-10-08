@@ -75,6 +75,14 @@ public final class EmrtdApplet extends AppletBase
      * {@link LdsMfStore}, not in the DF (Doc 9303-10 §3.11.3/§3.11.4).
      */
     Lds2TransparentFile selectedMf;
+    /**
+     * True when the last SELECT selected the master file in the LDS1 role.  A
+     * following SELECT FILE of FID {@code 011D} then resolves to the
+     * master-file EF.CardSecurity rather than the DF's EF.SOD: both share FID
+     * {@code 011D}, but EF.CardSecurity lives in the MF (Doc 9303-10 §3.11.4)
+     * while EF.SOD lives in the LDS1 DF (Doc 9303-10 §4.6.2).
+     */
+    boolean atMf;
 
     /* Chip Authentication: the new session keys are applied after the response
      * to the authenticating command has been wrapped with the old keys. */
@@ -198,6 +206,7 @@ public final class EmrtdApplet extends AppletBase
         smEstablished = false;
         paceDone = false;
         selectedMf = null;
+        atMf = false;
         if (lds2 != null) {
             lds2.clearSelection();
         }

@@ -39,6 +39,7 @@ public final class LdsPerso extends DgiStream.Sink {
     private static final byte MODE_AA = 4;
     private static final byte MODE_CA = 5;
     private static final byte MODE_PACE = 6;
+    private static final byte MODE_MF = 7;
 
     private final LdsCatalog catalog;
     private final AaCrypto aa;
@@ -52,6 +53,8 @@ public final class LdsPerso extends DgiStream.Sink {
     private short scratchLen;
     private byte mode;
     private LdsFile currentFile;
+    /** Master-file EF.CardSecurity being streamed (DGI FF05). */
+    private Lds2TransparentFile currentMf;
     private boolean seedSet;
     private boolean dg1Set;
 
@@ -105,6 +108,7 @@ public final class LdsPerso extends DgiStream.Sink {
         mode = MODE_NONE;
         scratchLen = 0;
         currentFile = null;
+        currentMf = null;
     }
 
     public void onBeginDgi(short dgi) {
@@ -117,6 +121,13 @@ public final class LdsPerso extends DgiStream.Sink {
             mode = MODE_CA;
         } else if (dgi == DGI_PACE_SEED) {
             mode = MODE_PACE;
+        } else if (dgi == EmrtdTags.DGI_CARD_SECURITY) {
+            // EF.CardSecurity lives in the master file (Doc 9303-10 §3.11.4),
+            // so it is streamed into the shared LdsMfStore, not the LDS1
+            // catalog (where FID 011D is EF.SOD).
+            mode = MODE_MF;
+            currentMf = LdsMfStore.file(EmrtdTags.FID_CARD_SECURITY);
+            currentMf.beginSet();
         } else {
             LdsFile file = catalog.file(dgi);
             if (file == null) {
@@ -136,6 +147,8 @@ public final class LdsPerso extends DgiStream.Sink {
     public void onData(byte[] buf, short off, short len) {
         if (mode == MODE_FILE) {
             currentFile.append(buf, off, len);
+        } else if (mode == MODE_MF) {
+            currentMf.append(buf, off, len);
         } else if (mode != MODE_IGNORE) {
             if (scratchLen > SCRATCH_SIZE || len > (short) (SCRATCH_SIZE - scratchLen)) {
                 ISOException.throwIt(ISO7816.SW_WRONG_DATA);

@@ -34,7 +34,7 @@ public final class SelectFile {
         if (len == 0) {
             // SELECT MF without a data field (ISO/IEC 7816-4 §7.1.1).
             if (p1 == EmrtdTags.SELECT_P1_BY_FID) {
-                applet.catalog.selectMf();
+                selectMf(applet);
                 return 0;
             }
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
@@ -44,10 +44,30 @@ public final class SelectFile {
         }
         short fid = Util.getShort(data, off);
         if (fid == EmrtdTags.FID_MF) {
-            applet.catalog.selectMf();
+            selectMf(applet);
             return 0;
         }
+        // Master-file EF.CardSecurity (Doc 9303-10 §3.11.4): after SELECT MF,
+        // FID 011D is the MF EF.CardSecurity, not the DF's EF.SOD (which the
+        // LDS1 catalog serves for the same FID).
+        if (applet.atMf && fid == EmrtdTags.FID_CARD_SECURITY) {
+            // EF.CardSecurity read access is PACE (Doc 9303-10 §3.11.4 Table 34).
+            applet.requirePace();
+            applet.atMf = false;
+            applet.catalog.selectMf();
+            applet.selectedMf = LdsMfStore.file(fid);
+            return 0;
+        }
+        applet.atMf = false;
+        applet.selectedMf = null;
         applet.catalog.select(fid);
         return 0;
+    }
+
+    /** SELECT MF: clears the current EF and marks the master-file context. */
+    private static void selectMf(EmrtdApplet applet) {
+        applet.atMf = true;
+        applet.selectedMf = null;
+        applet.catalog.selectMf();
     }
 }

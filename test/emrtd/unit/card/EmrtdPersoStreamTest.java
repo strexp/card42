@@ -207,6 +207,7 @@ final class EmrtdPersoStreamTest {
         byte[] dg2 = pattern(5000);
         byte[] dg15 = Hex.parse("6F00");
         byte[] cardAccess = Hex.parse("3003020100");
+        byte[] cardSecurity = Hex.parse("308103020100A0");
         byte[] sod = Hex.parse("7703616263");
         byte[] aaKey = aaKey();
 
@@ -220,6 +221,7 @@ final class EmrtdPersoStreamTest {
         writeDgi(seq, EmrtdTags.FID_DG2, dg2);
         writeDgi(seq, EmrtdTags.FID_DG15, dg15);
         writeDgi(seq, EmrtdTags.FID_CARD_ACCESS, cardAccess);
+        writeDgi(seq, EmrtdTags.DGI_CARD_SECURITY, cardSecurity);
         writeDgi(seq, EmrtdTags.FID_SOD, sod);
         writeDgi(seq, EmrtdTags.DGI_AA_KEY, aaKey);
         byte[] sequence = seq.toByteArray();
@@ -252,6 +254,14 @@ final class EmrtdPersoStreamTest {
         Asserts.check(aa.isInitialized(), "LDS1 streaming set the AA private key");
         Asserts.check(chipAuth.isInitialized(), "LDS1 streaming set the CA scalar");
         Asserts.eq(20, paceLength[0], "LDS1 streaming set the PACE key seed");
+
+        // DGI FF05 carries the master-file EF.CardSecurity (Doc 9303-10
+        // §3.11.4), which the LDS1 catalog cannot hold (FID 011D is EF.SOD).
+        Lds2TransparentFile mfSecurity = LdsMfStore.file(EmrtdTags.FID_CARD_SECURITY);
+        Asserts.eq(cardSecurity.length, mfSecurity.getLength(),
+                "LDS1 streaming wrote the MF EF.CardSecurity length");
+        sameBytes(cardSecurity, read(mfSecurity, 0, cardSecurity.length),
+                "LDS1 streaming MF EF.CardSecurity content");
 
         // The on-card COM index lists the streamed data groups.
         catalog.select(EmrtdTags.FID_COM);

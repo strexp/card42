@@ -19,13 +19,17 @@
   - **卡侧 `card42-emrtd`**：LDS1 文件系统（`LdsCatalog`/`LdsPerso` 含卡侧 COM 索引）、
     `command/*`、BAC、ISO/IEC 7816-4 SM、AA、GP 个性化；LDS2（Travel/Visa/Additional
     Biometrics、记录/透明 EF、READ/APPEND/SEARCH RECORD、FMM、UPDATE BINARY/ACTIVATE）；
-    EF.CardAccess/CardSecurity（应用级 `011C`）；MF EF.ATR/INFO（2F01）与 EF.DIR（2F00）；
-    LDS2 EF.Certificates 254/64 记录上限；Chip Authentication（FF03 +
-    EF.CardSecurity）；DG3–DG16；PACE 卡侧（ECDH 通用映射 3DES/AES-128、MRZ）。
+    EF.CardAccess/CardSecurity（主文件 `011C`/`011D`）；MF EF.ATR/INFO（2F01）与 EF.DIR（2F00）；
+    LDS2 EF.Certificates 254/64 记录上限；Chip Authentication（FF03 + EF.CardSecurity；LDS1
+    主文件 EF.CardSecurity DGI FF05、读访问 PACE，SELECT MF 后 `011D` 解析）；DG3–DG16；
+    PACE 卡侧（ECDH 通用映射 3DES/AES-128、MRZ）。
+  - **CA 对端点校验修复**：`P256.isLessThanP` 改为显式无符号逐字节比较（不再依赖
+    `Util.arrayCompare` 的平台相关符号性）；修复前某平台会间歇性把合法坐标判为 `>= p` 回
+    `6A80`，导致 LDS2 CA 集成测试随机失败。
   - **主机 `card42.host.emrtd`**：`EmrtdTerminal`/`LdsReader`、DG1/DG2/DG15/COM/SOD、
     `Bac`/`Iso7816Sm`/`Iso7816SmAes`/`ChipAuth`/`Pace`、`CscaKeyStore`/`DscVerifier`/
     `PassiveAuthentication`、AA、`EmrtdPersoExporter`/`SodBuilder`/`Dg2Builder`/
-    `CardSecurityBuilder`/`LdsScript`、CLI（`-pace`、`lds2`）。
+    `CardSecurityBuilder`/`LdsScript`、CLI（`-pace`、`-ca`、`lds2`）。
   - **真卡 / 互操作**：J3R180 安装、个性化与读取（接触、非接触）；项目工具与第三方独立
     主机库（BAC、LDS1 读取、PA、AA、PACE 两 profile、LDS2 CardAccess/CardSecurity）均通过。
   - **真卡堆耗尽修复**：`LdsFile`/`Lds2TransparentFile` 改为惰性按实际长度分配、`persoBuffer`

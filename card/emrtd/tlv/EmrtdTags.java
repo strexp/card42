@@ -79,6 +79,13 @@ public final class EmrtdTags {
     public static final short DGI_CA_KEY = (short) 0xFF03;
     /** PACE key seed SHA-1(MRZ_information) (20 bytes). */
     public static final short DGI_PACE_SEED = (short) 0xFF04;
+    /**
+     * LDS1 master-file EF.CardSecurity (Doc 9303-10 §3.11.4) CMS SignedData.
+     * FID {@code 011D} is already EF.SOD inside the LDS1 DF, so a dedicated
+     * project DGI carries the master-file EF.CardSecurity content (LdsPerso
+     * routes it to {@link LdsMfStore}).
+     */
+    public static final short DGI_CARD_SECURITY = (short) 0xFF05;
 
     // Application/EF outer tags.
     public static final short TAG_COM = (short) 0x60;

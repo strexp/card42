@@ -10,9 +10,13 @@ import card42.host.common.transport.TerminalSession;
 import card42.host.common.util.Args;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.access.Bac;
+import card42.host.emrtd.access.ChipAuth;
 import card42.host.emrtd.access.MrzKeySeed;
 import card42.host.emrtd.access.Pace;
 import card42.host.emrtd.aa.ActiveAuthentication;
+import card42.host.emrtd.lds.CardAccess;
+import card42.host.emrtd.lds.CardSecurity;
+import card42.host.emrtd.lds.ChipAuthenticationPublicKeyInfo;
 import card42.host.emrtd.lds.Com;
 import card42.host.emrtd.lds.Dg1;
 import card42.host.emrtd.lds.Dg15;
@@ -114,7 +118,7 @@ public final class EmrtdCommand {
     private static int read(String[] args, boolean inspectOnly) throws Exception {
         Args parsed = new Args(args,
                 new String[] { "host", "doc", "dob", "doe", "csca", "json" },
-                new String[] { "pace" });
+                new String[] { "pace", "ca" });
         String host = parsed.get("host", "socket:localhost:9025");
         boolean json = "1".equals(parsed.get("json", "0"));
         try (TerminalSession session = TerminalSession.open(host, 0, false, System.out)) {
@@ -138,6 +142,14 @@ public final class EmrtdCommand {
             if (doc == null || dob == null || doe == null) {
                 return CliSupport.fail("read needs -doc, -dob and -doe");
             }
+            boolean ca = parsed.has("ca");
+            if (ca && !parsed.has("pace")) {
+                // EF.CardSecurity has read access PACE (Doc 9303-10 §3.11.4
+                // Table 34), so the LDS1 EF.CardSecurity cannot be read after
+                // BAC alone.
+                return CliSupport.fail(
+                        "read -ca requires -pace (EF.CardSecurity read access is PACE)");
+            }
             // Active Authentication needs the DG15 public key and is run in the
             // clear (a 256-byte RSA signature does not fit an SM short APDU).
             // DG15 is read before BAC only when the passport leaves it public;
@@ -155,12 +167,17 @@ public final class EmrtdCommand {
 
             if (parsed.has("pace")) {
                 // PACE (ECDH generic mapping, 3DES, MRZ) replaces BAC.
-                Pace.authenticate(terminal, doc, dob, doe);
+                Pace.Session pace = Pace.authenticate(terminal, doc, dob, doe);
+                terminal.setSecureMessaging(pace.secureMessaging());
             } else {
                 byte[] seed = MrzKeySeed.seed(doc, dob, doe);
                 Bac.Session bac = Bac.authenticate(terminal, seed);
                 terminal.setSecureMessaging(bac.secureMessaging());
             }
+            // Optional Chip Authentication: re-key the secure messaging with the
+            // chip's static key (Doc 9303-11 §6.2).  EF.CardSecurity requires
+            // PACE (Doc 9303-10 §3.11.4 Table 34).
+            boolean caOk = ca && chipAuthentication(terminal);
             byte[] dg1Bytes = LdsReader.read(terminal, LdsFileUtil.FID_DG1);
             Dg1 dg1 = Dg1.parse(dg1Bytes);
             Com com = Com.parse(LdsReader.read(terminal, LdsFileUtil.FID_COM));
@@ -169,6 +186,9 @@ public final class EmrtdCommand {
             System.out.print(json ? PassportReport.json(dg1, com, clearDg15, dg2)
                     : PassportReport.text(dg1, com, clearDg15, dg2));
             System.out.println("Active Authentication: " + (aa ? "OK" : "not verified"));
+            if (ca) {
+                System.out.println("Chip Authentication: " + (caOk ? "OK" : "not available"));
+            }
             String csca = parsed.get("csca", null);
             if (csca == null) {
                 System.out.println("Passive Authentication: not verified (no -csca)");
@@ -209,6 +229,43 @@ public final class EmrtdCommand {
         return ActiveAuthentication.verify(terminal, dg15, challenge);
     }
 
+    /**
+     * Chip Authentication (ICAO Doc 9303-11 §6.2): read the LDS1 EF.CardAccess,
+     * then the master-file EF.CardSecurity (SELECT MF followed by SELECT 011D;
+     * Doc 9303-10 §3.11.4) and re-key the secure messaging with the chip's
+     * static public key.  Returns false when the card does not advertise a
+     * usable ECDH/3DES Chip Authentication profile.
+     */
+    private static boolean chipAuthentication(EmrtdTerminal terminal) throws Exception {
+        CardAccess cardAccess = CardAccess.parse(
+                LdsReader.read(terminal, LdsFileUtil.FID_CARD_ACCESS));
+        if (cardAccess.chipAuthenticationInfos().isEmpty()) {
+            return false;
+        }
+        CardSecurity cardSecurity = CardSecurity.parse(
+                readMasterFile(terminal, LdsFileUtil.FID_CARD_SECURITY));
+        if (cardSecurity.publicKeyInfos().isEmpty()) {
+            return false;
+        }
+        ChipAuthenticationPublicKeyInfo caKey = cardSecurity.publicKeyInfos().get(0);
+        byte[] chipPublicKeyW = caKey.rawPoint();
+        if (chipPublicKeyW == null) {
+            return false;
+        }
+        ChipAuth.authenticate(terminal, chipPublicKeyW,
+                cardAccess.chipAuthenticationInfos().get(0));
+        return true;
+    }
+
+    /** Reads a master-file EF: SELECT MF then SELECT FILE by FID (Doc 9303-10 §3.11). */
+    private static byte[] readMasterFile(EmrtdTerminal terminal, int fid) throws Exception {
+        ResponseAPDU mf = terminal.selectMf();
+        if (mf.getSW() != 0x9000) {
+            throw new IllegalStateException("SELECT MF -> " + Checks(mf.getSW()));
+        }
+        return LdsReader.read(terminal, fid);
+    }
+
     private static int apdu(String[] args) throws Exception {
         Args parsed = new Args(args, new String[] { "host", "apdu" }, new String[0]);
         String host = parsed.get("host", "socket:localhost:9025");
@@ -232,7 +289,7 @@ public final class EmrtdCommand {
 
     public static void usage(PrintStream out) {
         out.println("usage: Main terminal emrtd <read|inspect|lds2|apdu> [options]");
-        out.println("  read    -host=... -doc=... -dob=YYMMDD -doe=YYMMDD [-pace] [-csca=<cert>] [-json=1]");
+        out.println("  read    -host=... -doc=... -dob=YYMMDD -doe=YYMMDD [-pace] [-ca] [-csca=<cert>] [-json=1]");
         out.println("  inspect -host=... [-json=1]");
         out.println("  lds2    -host=... [-app=travel|visa|biometrics] [-json=1]");
         out.println("  apdu    -host=... -apdu=<hex>");

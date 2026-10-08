@@ -33,6 +33,11 @@ LDS1 应用是一组以 2 字节 FID 寻址的透明基本文件（ICAO Doc 9303
 | EF.SOD | `011D` | 2048 |
 | EF.COM | `011E` | 64 |
 
+EF.CardSecurity 也是主文件 EF（`011D`，Doc 9303-10 §3.11.4），与 DF 内的 EF.SOD 同 FID：
+LDS1 实例在 `SELECT MF` 后用 `SELECT FILE 011D` 选主文件 EF.CardSecurity（`LdsMfStore`），
+普通 `SELECT 011D` 仍指向本 DF 的 EF.SOD；读访问为 PACE（Table 34）。它由 DGI `FF05`
+个性化（§8），与 LDS2 应用共享同一主文件文件（每张卡一个 EF.CardSecurity）。
+
 `SELECT FILE`（P1=02，P2=0C）按 FID 选 EF；`READ BINARY`（`B0`）读窗口。READ BINARY 接受
 ISO/IEC 7816-4 §6.1.1 的两种寻址形式：P1 b8=0 时 P1P2 为所选 EF 的 15 位偏移
 （Doc 9303-10 §3.6.3.1 Table 4）；P1 b8=1 时 P1 的 b5..b1 为短 EF 标识、P2 为 8 位偏移，
@@ -189,6 +194,7 @@ DGI 编号即目标 FID；两个项目 DGI 承载 BAC 与 AA 密钥材料：
 | `FF02` | AA 私钥：`modLen(2) ‖ modulus ‖ expLen(2) ‖ exponent` |
 | `FF03` | Chip Authentication 静态私钥标量（P-256，32 字节） |
 | `FF04` | PACE 密钥种子 SHA-1(MRZ_information)（20 字节） |
+| `FF05` | LDS1 主文件 EF.CardSecurity CMS SignedData（DGI 专用：DF 的 `011D` 已是 EF.SOD） |
 | `<FID>` | EF 内容（DG1 `0101`、DG2 `0102`、DG15 `010F`、COM `011E`、SOD `011D`、EF.CardAccess `011C` 等） |
 
 对 LDS2 角色，DGI 编号是透明 EF 的 FID；EF.CardAccess `011C` 与 EF.CardSecurity `011D`
@@ -236,7 +242,8 @@ host/emrtd/
   LDS1/LDS2 逐块（1–13 B）个性化，含 5000 B DG2。
 - `make test-emrtd` — 模拟器端到端：SELECT LDS1、AA、BAC、SM 读 DG1/DG2/COM/DG15/SOD、
   PA（DSC 链 + 签名 + DG 哈希）、LDS2 Travel Records DF（CardAccess + READ/APPEND RECORD）、
-  PACE（3DES/AES-128）；样例 DG2 约 8 KB（>4096），覆盖流式个性化 + 分页 EF + 大 DG 读回。
+  PACE（3DES/AES-128）、LDS1 Chip Authentication（PACE → 主文件 EF.CardSecurity → CA →
+  新 SM 下读 DG1）；样例 DG2 约 8 KB（>4096），覆盖流式个性化 + 分页 EF + 大 DG 读回。
 - `make test` — both 矩阵（EMV 生产 + eMRTD LDS1/LDS2 共存）。
 
 ## 11. LDS2 应用 (Doc 9303-10 §5)
@@ -282,7 +289,7 @@ EF.CardAccess 是公开 DER `SET OF SecurityInfo`；EF.CardSecurity 是 CMS Sign
 eContent 为同一 `SET OF SecurityInfo` 加芯片静态 Chip Authentication 公钥。与 EF.SOD 不同，
 EF.CardSecurity 存为纯 RFC 3369 SignedData ContentInfo（无外层 `77` 标签，Doc 9303-10
 §3.11.4）。EF.CardAccess 属于主文件（Doc 9303-10 §3.11.3）；LDS1 实例在 `011C` 提供它，
-每个 LDS2 DF 也各带自己的 `011C`/`011D`。
+LDS2 实例读同一主文件 `LdsMfStore`（见下）。
 
 主机 `SecurityInfo` 层次解析基础 OID 及 profile 字段：`PaceInfo`（version、parameter id）、
 `ChipAuthenticationInfo`（version、key id）、`ChipAuthenticationPublicKeyInfo`
@@ -291,6 +298,13 @@ EF.CardSecurity 存为纯 RFC 3369 SignedData ContentInfo（无外层 `77` 标�
 `ChipAuthenticationPublicKeyInfo.rawPoint()` 给出用于自包含 ECDH 的未压缩 P-256 点。
 EF.CardAccess 与 EF.CardSecurity 由个性化作为透明 EF 存储（DGI = FID）并原样提供；
 卡侧无需解析。
+
+EF.CardAccess/EF.CardSecurity 均属主文件（Doc 9303-10 §3.11.3/§3.11.4）。LDS1 把
+EF.CardAccess `011C` 放在其 DF catalog（无同 FID 冲突），EF.CardSecurity 用 DGI `FF05`
+写入主文件 `LdsMfStore`（`011D`，读访问 PACE）；LDS2 用 DGI `011C`/`011D` 写同一主文件
+store，所有实例共享一份 EF.CardAccess/EF.CardSecurity。EF.CardSecurity 必须包含
+EF.CardAccess 的 SecurityInfos 与 CA 公钥，故示例中 LDS1 与 LDS2 使用同一 CA 密钥对与
+同一份 EF.CardSecurity。
 
 ## 13. Chip Authentication (Doc 9303-11 §6.2, BSI TR-03110-3 A.4/B.2)
 
@@ -301,9 +315,17 @@ ephemeral_pub)`。新的安全报文密钥为 `Ks_enc = KDF(Z, 1)`、`Ks_mac = K
 发送序列计数器归零，复用现有 `Iso7816Sm`。
 
 卡只有在 `MSE:SET KAT` 的响应用旧密钥封装后才应用新密钥，故终端可在下一条命令切换 SM。
-CA 私钥标量用 DGI `FF03` 个性化。ECDH + KDF + SM 往返在纯 JVM 中用独立 JCE 密钥对验证
-（`EmrtdLds2Test`）；真卡部署依赖其 ECC/`KeyAgreement` 支持（与 PACE 同一门控，
-见 [risks.md](../common/risks.md)）。
+卡在处理前对终端的临时公钥做结构校验（长度、`0x04` 前缀、两坐标 `< p`，BSI TR-03110-3
+A.3.4.1）：`P256.isLessThanP` 用**显式无符号逐字节比较**，不使用 `Util.arrayCompare`——部分
+Java Card 平台（含 J3R180/nextgen）按有符号字节比较，会间歇性把合法坐标判为 `>= p` 而回
+`6A80`（回归由 `EmrtdChipAuthIntegrationTest`/`EmrtdLds1ChipAuthIntegrationTest` 覆盖）。
+CA 私钥标量用 DGI `FF03` 个性化；LDS1 的 EF.CardSecurity 用 DGI `FF05` 写入主文件（§8）。
+LDS1 与 LDS2 角色共用同一 CA 实现：LDS1 在 `SELECT MF` 后于主文件 `011D` 读
+EF.CardSecurity（读访问 PACE，Doc 9303-10 §3.11.4 Table 34），LDS2 读共享的 MF `011D`。
+ECDH + KDF + SM 往返在纯 JVM 中用独立 JCE 密钥对验证（`EmrtdLds2Test`、
+`EmrtdPersoStreamTest`），端到端由 `EmrtdChipAuthIntegrationTest`（LDS2）与
+`EmrtdLds1ChipAuthIntegrationTest`（LDS1）覆盖；真卡部署依赖其 ECC/`KeyAgreement` 支持
+（与 PACE 同一门控，见 [risks.md](../common/risks.md)）。
 
 ## 14. DG3–DG16 (Doc 9303-10 §4.7.3–4.7.16)
 
@@ -317,7 +339,7 @@ CA 私钥标量用 DGI `FF03` 个性化。ECDH + KDF + SM 往返在纯 JVM 中�
 `card42.host.emrtd.cli.Main`（`card42-emrtd.jar` 入口）：
 
 ```
-Main terminal emrtd read    -host=<spec> -doc=<no> -dob=YYMMDD -doe=YYMMDD [-pace] [-json=1]
+Main terminal emrtd read    -host=<spec> -doc=<no> -dob=YYMMDD -doe=YYMMDD [-pace] [-ca] [-json=1]
 Main terminal emrtd inspect -host=<spec> [-json=1]
 Main terminal emrtd lds2    -host=<spec> [-app=travel|visa|biometrics] [-json=1]
 Main terminal emrtd apdu    -host=<spec> -apdu=<hex>
@@ -326,7 +348,8 @@ Main version | help
 
 - `<spec>` 为 `pcsc[:<reader-index>]` 或 `socket:<host>:<port>`。
 - `read` 跑 AA（明文）、BAC（或 `-pace` 时的 PACE）与 SM，读 DG1/DG2/COM/DG15/SOD，并对照
-  `perso/emrtd/` 下的 CSCA 文件验证 PA；输出文本报告，`-json=1` 时输出 JSON 对象（证件号、
+  `perso/emrtd/` 下的 CSCA 文件验证 PA；`-ca` 时在 SM 建立后读 EF.CardAccess/EF.CardSecurity
+  执行 Chip Authentication 再读数据组；输出文本报告，`-json=1` 时输出 JSON 对象（证件号、
   姓名、日期、LDS/Unicode 版本、AA 模长位数）。
 - `inspect` 无 BAC 读 COM/DG15，报告公开数据。
 - `lds2` SELECT 一个 LDS2 DF，读 EF.CardAccess 与记录 EF 的每条记录，打印 SecurityInfo 与

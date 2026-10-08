@@ -39,7 +39,13 @@ public final class ReadBinary {
         short p2 = (short) (apduBuffer[ISO7816.OFFSET_P2] & 0xFF);
         LdsFile file;
         short offset;
+        if ((p1 & EmrtdTags.READ_P1_SFI) == 0 && applet.selectedMf != null) {
+            return readSelectedMf(applet, p1, p2, le);
+        }
         if ((p1 & EmrtdTags.READ_P1_SFI) != 0) {
+            // A valid SFI sets that EF as the current EF, so a master-file EF
+            // selected earlier is no longer current.
+            applet.selectedMf = null;
             // A valid SFI also sets that EF as the current EF (ISO/IEC 7816-4
             // §6.1.2), so the offset READ BINARYs that follow the SFI prefix
             // reads of a large EF need no SELECT.
@@ -77,6 +83,27 @@ public final class ReadBinary {
         }
         short n = want < available ? want : available;
         file.read(offset, n, applet.response, (short) 0);
+        return n;
+    }
+
+    /**
+     * Reads a window of the master-file EF.CardSecurity selected in an LDS1
+     * session (Doc 9303-10 §3.11.4).  Read access is PACE (Table 34), so the
+     * command is refused with 6982 until PACE has completed.
+     */
+    private static short readSelectedMf(EmrtdApplet applet, short p1, short p2, short le) {
+        applet.requirePace();
+        short offset = (short) (((p1 & 0x7F) << 8) | p2);
+        short want = le <= 0 ? (short) 256 : le;
+        if (want > SM_RESPONSE_MAX) {
+            want = SM_RESPONSE_MAX;
+        }
+        short available = (short) (applet.selectedMf.getLength() - offset);
+        if (available < 0) {
+            ISOException.throwIt(ISO7816.SW_WRONG_P1P2);
+        }
+        short n = want < available ? want : available;
+        applet.selectedMf.read(offset, n, applet.response, (short) 0);
         return n;
     }
 

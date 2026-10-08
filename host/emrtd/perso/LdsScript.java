@@ -22,6 +22,7 @@ import card42.host.common.util.Hex;
  *   @sod &lt;hex&gt;                  EF.SOD content
  *   @aa &lt;hex&gt;                   AA private key (modLen || modulus || expLen || exponent)
  *   @ca &lt;hex&gt;                   Chip Authentication P-256 private scalar (DGI FF03)
+ *   @cardsecurity &lt;hex&gt;         LDS1 master-file EF.CardSecurity SignedData (DGI FF05)
  *   @lds2 &lt;role&gt;               lds2 role: travel | visa | biometrics
  *   @record &lt;fid-hex&gt; &lt;hex&gt;     append one record to an LDS2 record EF
  *   @transparent &lt;fid-hex&gt; &lt;hex&gt;  set one LDS2 transparent EF (e.g. 0201)
