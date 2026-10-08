@@ -6,7 +6,8 @@
 # (`make -C test` will not work, by design).
 
 .PHONY: test test-emv test-emrtd test-emv-sim test-emv-sim-run \
-        test-emv-sim-block test-emv-card test-emv-card-all test-unit
+        test-emv-sim-block test-emv-card test-emv-card-all test-unit \
+        test-emrtd-card test-emrtd-card-run
 
 # Deployment matrix: EMV-only, eMRTD-only, or both.  The
 # suites are grouped per business module; eMRTD integration suites are added
@@ -99,6 +100,33 @@ test-emv-card-all: $(HOST_STAMP)
 	  echo ">>> $$s"; \
 	  $(HOST_JAVA) card42.test.$$s -host=$(CARD_HOST) || exit 1; \
 	done
+
+# Runs the eMRTD integration matrix against a real card over PC/SC, e.g.
+# `make test-emrtd-card CARD_HOST=pcsc:1` (the reader index defaults to 0, which
+# is the SAM slot on the ACR1581; the card is on the PICC reader, index 1).  The
+# CAP must already be installed and personalized (`make card-emrtd-install` /
+# `make card-emrtd-perso`).  The suites are media-neutral; unlike test-emv-card
+# they read the PA CSCA fixture relative to the repo root, so they must run from
+# here rather than from $(HOST_CLASSES).
+#
+#   make test-emrtd-card                 # all EMRTD_SUITES (reader 0)
+#   make test-emrtd-card CARD_HOST=pcsc:1
+#   make test-emrtd-card-run S=EmrtdBacTest CARD_HOST=pcsc:1   # one suite
+test-emrtd-card: $(HOST_STAMP)
+	@for s in $(EMRTD_SUITES); do \
+	  echo ">>> $$s"; \
+	  $(JAVA) -p $(JC_SIM_CLIENT)/COMService --add-modules ALL-MODULE-PATH \
+	    -cp $(HOST_CLASSES) card42.test.$$s -host=$(CARD_HOST) || exit 1; \
+	done
+
+test-emrtd-card-run: $(HOST_STAMP)
+	@case " $(EMRTD_SUITES) " in \
+	  *" $(S) "*) ;; \
+	  *) echo "test-emrtd-card-run: $(S) is not an eMRTD suite;"; \
+	     echo "choose one of: $(EMRTD_SUITES)"; exit 1;; \
+	esac
+	$(JAVA) -p $(JC_SIM_CLIENT)/COMService --add-modules ALL-MODULE-PATH \
+	  -cp $(HOST_CLASSES) card42.test.$(S) -host=$(CARD_HOST)
 
 # One-command end-to-end verification (docs/specs/common/toolchain.md §6): build,
 # configure and start the simulator, deploy every instance in DEPLOY_ALL_CONF,

@@ -275,7 +275,10 @@ eMRTD 真卡：`card-emrtd-install` 创建的 LDS1 实例带 GP `CardReset` 权�
     `EmrtdLds2AppsIntegrationTest`（LDS2 Visa/Additional Biometrics）、`EmrtdPaceIntegrationTest`
     （PACE 3DES/AES-128）、`EmrtdChipAuthIntegrationTest`（Chip Authentication ECDH）。
   - suite 与介质无关：`-host=socket:...` 打模拟器（`make test-emv-sim` / `test-emv-sim-run` /
-    `test-emrtd` / `test`），`-host=pcsc` 打 PC/SC 真卡（`make test-emv-card S=<Suite>`）。
+    `test-emrtd` / `test`），`-host=pcsc` 打 PC/SC 真卡（`make test-emv-card S=<Suite>`）；
+    eMRTD 真卡用 `make test-emrtd-card`（全部 `EMRTD_SUITES`）或
+    `make test-emrtd-card-run S=<Suite>`，读卡器序号用 `CARD_HOST=pcsc:<idx>`（如 ACR1581 的
+    PICC 口是 `pcsc:1`；默认 0 是 SAM 槽）。
     真卡并非全部 suite 可移植：`LogTest` 依赖测试实例 `06`；`ContactlessTest` 需非接触读卡器
     且断言 AIP `0x6900`/DDA/CDA（对 SDA-only 卡不可移植）；`CardBlockTest` 有不可逆副作用。
 - **纯 JVM 单测**（package `card42.test`）：`make test-unit` 无需模拟器。
@@ -340,7 +343,10 @@ make test-emv              # EMV 矩阵（test-emv-sim + test-emv-sim-block）
 make test-emrtd            # eMRTD 矩阵
 make test-emv-sim              # 部署 + 个性化 + 跑全部 EMV 集成 suite
 make test-emv-sim-run S=AesFlowTest # 起模拟器并只跑一个 EMV suite
-make test-emv-card S=EmvFlowTest    # 对真卡（PC/SC）跑一个 suite
+make test-emv-card S=EmvFlowTest    # 对真卡（PC/SC）跑一个 EMV suite
+make test-emrtd-card           # 对真卡（PC/SC）跑全部 eMRTD suite
+make test-emrtd-card CARD_HOST=pcsc:1         # 指定读卡器序号（PICC=1）
+make test-emrtd-card-run S=EmrtdBacTest       # 对真卡只跑一个 eMRTD suite
 make sim-stop              # 停止模拟器
 make card-install              # 真卡安装 both（common+emv+emrtd，deploy.conf 生产实例）
 make card-emv-install          # 真卡安装 EMV（含 04/06/08 测试实例）
