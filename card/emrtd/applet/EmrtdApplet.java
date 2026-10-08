@@ -499,8 +499,9 @@ public final class EmrtdApplet extends AppletBase
             requirePace();
         }
         short want = le <= 0 ? (short) 256 : le;
-        if (want > ReadBinary.SM_RESPONSE_MAX) {
-            want = ReadBinary.SM_RESPONSE_MAX;
+        short cap = sm.maxResponseData();
+        if (want > cap) {
+            want = cap;
         }
         short available = (short) (file.getLength() - offset);
         if (available < 0) {

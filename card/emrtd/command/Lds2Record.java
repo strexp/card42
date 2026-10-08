@@ -68,6 +68,12 @@ public final class Lds2Record {
         if (max > RESPONSE_MAX) {
             max = RESPONSE_MAX;
         }
+        // The record is a window of the EF, but the SM envelope of the active
+        // profile still bounds one response (AES is tighter than 3DES).
+        short cap = applet.sm.maxResponseData();
+        if (max > cap) {
+            max = cap;
+        }
         if ((p2 & 0x03) == 0x01) {
             return file.readRecords(number, applet.response, (short) 0, max);
         }

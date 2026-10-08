@@ -199,7 +199,8 @@ context 共享）。因此"把照片放进内存"的正确目标是**持久**且
   真实 DSC 夹具即产生 1938 B 的 EF.CardSecurity 与 2005 B 的 EF.SOD），AA 私钥 516 B。
   DG2 的取值上限受两条约束：DGI 长度字段（CPS 编到 16 位）与 READ
   BINARY 的 15 位偏移，故任何 EF 实际 **≤32767 B**。
-- **读路径本来就是流式的**：`READ BINARY` 每包明文 ≤`0xE7`，卡侧一次只搬一块到 `response`
+- **读路径本来就是流式的**：`READ BINARY` 每包明文受活动 SM profile 限制（3DES `0xE7`，AES
+  `0xDF`；见 [emrtd.md](../emrtd/emrtd.md) §6），卡侧一次只搬一块到 `response`
    (256 B) 再经 `SmScratch` 封装，瞬态占用是常数，与 EF 大小无关；照片变大只增加往返次数。
 - **个性化曾是瓶颈**：SD 逐条转发 STORE DATA（数据域 ≤231 B），旧实现把整段 DGI 序列攒进
   4096 B 的 `persoBuffer`，于是 DG2 一大就 `6700`，且缓冲区按包共享占持久内存。逐 DGI

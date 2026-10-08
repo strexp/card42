@@ -38,12 +38,52 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
     /** Le of the last unwrapped command, or -1 when absent. */
     private short le;
 
-    protected AbstractSecureMessaging(Key key) {
+    /**
+     * Largest plaintext response whose SM envelope fits a 256-byte APDU,
+     * computed once from the profile's block size (see {@link #maxResponseData}).
+     */
+    private final short maxResponseData;
+
+    protected AbstractSecureMessaging(Key key, short blockSize) {
         this.key = key;
+        this.maxResponseData = computeMaxResponseData(blockSize);
     }
 
     public final short getLe() {
         return le;
+    }
+
+    public final short maxResponseData() {
+        return maxResponseData;
+    }
+
+    /**
+     * The wrapped response is DO87 (tag + length + indicator + padded data) +
+     * DO99 (4) + DO8E (10); pick the largest window whose envelope is at most
+     * 256 bytes.
+     */
+    private static short computeMaxResponseData(short blockSize) {
+        short p = (short) 256;
+        while (p > 0) {
+            short rem = (short) (p % blockSize);
+            short padded = (short) (p + (short) (blockSize - rem));
+            short lengthValue = (short) (padded + 1);
+            short lengthField;
+            if (lengthValue <= (short) 0x7F) {
+                lengthField = (short) 1;
+            } else if (lengthValue <= (short) 0xFF) {
+                lengthField = (short) 2;
+            } else {
+                lengthField = (short) 3;
+            }
+            short envelope = (short) (padded + lengthField);
+            envelope = (short) (envelope + 16);
+            if (envelope <= (short) 256) {
+                return p;
+            }
+            p--;
+        }
+        return 0;
     }
 
     public final void reset() {

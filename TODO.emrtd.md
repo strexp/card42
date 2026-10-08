@@ -54,7 +54,9 @@
     `ALG_DES_MAC8_ISO9797_M2`/`ALG_DES_MAC8_NOPAD` + 两次单 DES 终变换），平台不支持时自动回退
     到逐块手工构造，单测两条路径同向量；SM 的 1 KB scratch 改为包级共享 `SmScratch`（瞬态优先、
     持久回退）、每实例省 ~1 KB 且不再随实例数倍增瞬态需求；会话密钥仅在变化时 `setKey`；
-    单次 `READ BINARY` 明文上限 `0xE0`→`0xE7`（主机 `LdsReader.CHUNK` 同步）；PACE/CA/AA/BAC
+    单次 `READ BINARY`/`READ RECORD` 明文上限按活动 SM profile 的块大小计算
+    （`SecureMessaging.maxResponseData()`：3DES `0xE7`、AES `0xDF`），超限回车侧 `6700`；主机
+    `LdsReader` 请求 `0xE7` 但以位移越过 EF 末尾判 EOF（不能以「短块」判，AES 会合法回 223）；PACE/CA/AA/BAC
     等慢命令前调用 `APDU.waitExtension()`（`READ BINARY` 不调用，避免每包多一次 WTX）。
     纯 JVM 单测与 jcsl 集成矩阵（BAC/LDS2/PACE/CA）全绿。
   - **大照片（DG2）支持**：个性化改为**逐 DGI 流式落盘**（`DgiStream` + `LdsPerso`/`Lds2Perso`，

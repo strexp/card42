@@ -86,9 +86,10 @@ public final class LdsReader {
             }
             out.write(data, 0, data.length);
             offset += data.length;
-            if (data.length < CHUNK) {
-                break;
-            }
+            // Do NOT stop on a short chunk: the card caps a window to the active
+            // SM profile (AES returns at most 223 B, under the requested 0xE7),
+            // so only the offset reaching the EF end (0 bytes / 6B00 / 6A82)
+            // means the file is complete.
         }
         return out.toByteArray();
     }

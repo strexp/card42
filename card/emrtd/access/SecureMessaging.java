@@ -21,6 +21,16 @@ public interface SecureMessaging {
     short getLe();
 
     /**
+     * The largest plaintext response data field this profile can wrap so the
+     * secure-messaging envelope still fits a 256-byte short APDU.  Depends on
+     * the block size: a 231-byte window is the 3DES maximum (8-byte blocks,
+     * envelope 250 B) while AES (16-byte blocks) tops out at 223 B
+     * (envelope 242 B); a 232/224-byte window would jump to 258 B and the
+     * transport refuses the response with 6700.
+     */
+    short maxResponseData();
+
+    /**
      * Releases the cached session key when the secure-messaging session ends
      * (application selection), so the cipher does not keep the previous session
      * key material beyond its lifetime.

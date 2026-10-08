@@ -32,7 +32,7 @@ public final class Iso7816SmAes extends AbstractSecureMessaging {
 
     public Iso7816SmAes() {
         super(KeyBuilder.buildKey(KeyBuilder.TYPE_AES,
-                KeyBuilder.LENGTH_AES_128, false));
+                KeyBuilder.LENGTH_AES_128, false), (short) 16);
         aesCbc = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_CBC_NOPAD, false);
         aesEcb = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, false);
         aesMac = new AesCmac();

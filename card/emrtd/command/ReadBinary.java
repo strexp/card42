@@ -22,15 +22,6 @@ import javacard.framework.ISOException;
 
 public final class ReadBinary {
 
-    /**
-     * Largest plaintext READ BINARY window whose secure-messaging envelope fits
-     * a 256-byte short APDU: 0x87 (tag + 0x81 length + indicator + M2-padded
-     * data) + 0x99 (4) + 0x8E (10) &lt;= 256.  With 231 (0xE7) bytes of plaintext
-     * the padded block is 232 and the envelope is 250 bytes; 232 would already
-     * need 258.  The old 0xE0 cap wasted 7 bytes on every read of a large EF.
-     */
-    static final short SM_RESPONSE_MAX = (short) 0xE7;
-
     private ReadBinary() {
     }
 
@@ -65,10 +56,11 @@ public final class ReadBinary {
 
         boolean smActive = smProtected(applet, apduBuffer);
         short want = le <= 0 ? (short) 256 : le;
-        if (want > SM_RESPONSE_MAX) {
+        short cap = applet.sm.maxResponseData();
+        if (want > cap) {
             // The SM envelope (or, in the clear, the short response buffer) is
             // bounded by the 256-byte APDU, so never hand read() a larger window.
-            want = SM_RESPONSE_MAX;
+            want = cap;
         }
         if (!isPublic(file.getFid()) && !smActive) {
             // DG1/DG2/.../DG16 and EF.SOD are only served inside secure
@@ -95,8 +87,9 @@ public final class ReadBinary {
         applet.requirePace();
         short offset = (short) (((p1 & 0x7F) << 8) | p2);
         short want = le <= 0 ? (short) 256 : le;
-        if (want > SM_RESPONSE_MAX) {
-            want = SM_RESPONSE_MAX;
+        short cap = applet.sm.maxResponseData();
+        if (want > cap) {
+            want = cap;
         }
         short available = (short) (applet.selectedMf.getLength() - offset);
         if (available < 0) {

@@ -42,6 +42,7 @@ final class EmrtdCryptoTest {
         ldsCatalogComIndex();
         activeAuthentication();
         secureMessaging();
+        smResponseWindow();
         chipAuthPeerValidation();
     }
 
@@ -122,6 +123,38 @@ final class EmrtdCryptoTest {
         Asserts.eq(2, parsed.dataGroupTags.length, "COM index data group count");
         Asserts.eq(0x61, parsed.dataGroupTags[0], "COM index DG1 tag");
         Asserts.eq(0x6F, parsed.dataGroupTags[1], "COM index DG15 tag");
+    }
+
+    /**
+     * The plaintext READ BINARY window must depend on the SM block size: an
+     * AES envelope is larger than a 3DES one, so a single 0xE7 cap made the
+     * card return 6700 on a large DG read under AES PACE (found with JMRTD).
+     */
+    private static void smResponseWindow() throws Exception {
+        byte[] ksEnc = Hex.parse("AB94FDECF2674FDFB9B391F85D7F76F2");
+        byte[] ksMac = Hex.parse("7962D9ECE03D1ACD4C76089DCE131543");
+
+        card42.emrtd.Iso7816Sm sm3 = new card42.emrtd.Iso7816Sm();
+        Asserts.eq(231, sm3.maxResponseData(), "3DES SM plaintext window is 0xE7");
+        Asserts.check(envelope(sm3, ksEnc, ksMac, sm3.maxResponseData()) <= 256,
+                "3DES SM envelope fits a 256-byte APDU");
+        Asserts.check(envelope(sm3, ksEnc, ksMac, (short) (sm3.maxResponseData() + 1)) > 256,
+                "3DES window + 1 overflows a 256-byte APDU");
+
+        card42.emrtd.Iso7816SmAes aes = new card42.emrtd.Iso7816SmAes();
+        Asserts.eq(223, aes.maxResponseData(), "AES SM plaintext window is 0xDF");
+        Asserts.check(envelope(aes, ksEnc, ksMac, aes.maxResponseData()) <= 256,
+                "AES SM envelope fits a 256-byte APDU");
+        Asserts.check(envelope(aes, ksEnc, ksMac, (short) (aes.maxResponseData() + 1)) > 256,
+                "AES window + 1 overflows a 256-byte APDU");
+    }
+
+    /** The wrapped-response length for a plaintext window of {@code len} bytes. */
+    private static int envelope(card42.emrtd.SecureMessaging sm, byte[] ksEnc, byte[] ksMac,
+                                short len) {
+        byte[] resp = new byte[len];
+        byte[] out = new byte[512];
+        return sm.wrap(ksEnc, ksMac, new byte[8], resp, len, (short) 0x9000, out, (short) 0);
     }
 
     /**

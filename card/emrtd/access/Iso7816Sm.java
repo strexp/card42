@@ -30,7 +30,7 @@ public final class Iso7816Sm extends AbstractSecureMessaging {
 
     public Iso7816Sm() {
         super(KeyBuilder.buildKey(KeyBuilder.TYPE_DES,
-                KeyBuilder.LENGTH_DES3_2KEY, false));
+                KeyBuilder.LENGTH_DES3_2KEY, false), (short) 8);
         des3 = Cipher.getInstance(Cipher.ALG_DES_CBC_NOPAD, false);
         retailMac = new RetailMac();
     }

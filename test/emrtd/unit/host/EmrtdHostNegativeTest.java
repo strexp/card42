@@ -166,10 +166,33 @@ final class EmrtdHostNegativeTest {
         retry.add(0x9000, new byte[0]);          // SELECT FILE
         retry.add(0x6C10, new byte[0]);          // READ BINARY wrong Le -> 6C 10
         retry.add(0x9000, exact);                // retry with Le = 0x10
+        retry.add(0x9000, new byte[0]);          // next offset: EF end (0 bytes)
         Asserts.bytes(exact, LdsReader.read(new EmrtdTerminal(retry), 0x0101),
                 "READ BINARY retries 6CXX with the exact length");
         Asserts.eq(0x10, retry.commands.get(2).getNe(),
                 "READ BINARY 6CXX retry uses Le = SW2");
+
+        // A short window must NOT be treated as EOF: under AES secure messaging
+        // the card caps a window at 223 B although the reader requested 0xE7, so
+        // the reader continues until the offset passes the EF end.
+        ScriptedTerminal shortWindow = new ScriptedTerminal();
+        byte[] first = new byte[100];
+        byte[] second = new byte[50];
+        for (int i = 0; i < first.length; i++) {
+            first[i] = (byte) i;
+        }
+        for (int i = 0; i < second.length; i++) {
+            second[i] = (byte) (i + 100);
+        }
+        shortWindow.add(0x9000, new byte[0]);    // SELECT FILE
+        shortWindow.add(0x9000, first);          // short window (< CHUNK)
+        shortWindow.add(0x9000, second);         // more data
+        shortWindow.add(0x9000, new byte[0]);    // EF end
+        byte[] joined = new byte[first.length + second.length];
+        System.arraycopy(first, 0, joined, 0, first.length);
+        System.arraycopy(second, 0, joined, first.length, second.length);
+        Asserts.bytes(joined, LdsReader.read(new EmrtdTerminal(shortWindow), 0x0101),
+                "a short window does not end the read");
 
         // 6B00: offset beyond the end of the EF ends the read.
         ScriptedTerminal endB = new ScriptedTerminal();

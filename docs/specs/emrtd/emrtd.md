@@ -130,10 +130,13 @@ response: pad(SSC ‖ [DO87|DO85] ‖ DO99)
 ```
 
 SSC 是 64 位大端计数器，每次 MAC 前自增。DO87 用 BER 短/长形式长度；会超过 256 字节短
-APDU 缓冲的响应由终端分块。单次 `READ BINARY` 的明文窗口上限是
-`ReadBinary.SM_RESPONSE_MAX = 0xE7`（231 B：DO87 的 `0x81` 长度 + 232 B M2 填充 + DO99/DO8E
-共 250 B，刚好装进 256 B 短响应；232 B 明文会到 258 B 超限）；主机 `LdsReader.CHUNK = 0xE7`
-与之一致。AES-128 的 PACE SM 用 `Iso7816SmAes`（§16）。
+APDU 缓冲的响应由终端分块。单次 `READ BINARY`/`READ RECORD` 的明文窗口上限由**活动 SM
+profile 的块大小**决定（`SecureMessaging.maxResponseData()`，构造期算一次）：3DES（8 B 块）
+为 231（`0xE7`，DO87 的 `0x81` 长度 + 232 B M2 填充 + DO99/DO8E 共 250 B）；AES-128（16 B 块）
+为 223（`0xDF`，填充后到 224 B，包络 242 B）。232/224 B 明文会分别到 258 B 超限，真卡表现为
+`6700`（JMRTD 用 AES PACE 读大 DG 时暴露）。主机 `LdsReader` 请求 `CHUNK = 0xE7`，但**不得**
+以「返回块 < 请求块」判 EOF——AES 下卡会合法地只回 223 B，须读到位移越过 EF 末尾（0 字节 /
+`6B00`/`6A82`）才算完整。AES-128 的 PACE SM 用 `Iso7816SmAes`（§16）。
 
 **MAC 实现**：ISO/IEC 9797-1 Algorithm 3 的 CBC 段优先用平台 MAC 引擎
 （`Signature.ALG_DES_MAC8_ISO9797_M2` 处理需 M2 填充的消息，`ALG_DES_MAC8_NOPAD` 处理
