@@ -55,7 +55,8 @@ public final class EmrtdPersoExporter {
 
     /**
      * The complete DGI sequence for the demo passport and AA key.  The SOD is
-     * built from the SHA-256 hashes of DG1, DG2 and DG15 and signed by the DSC.
+     * built from the SHA-256 hashes of DG1, DG2, DG11, DG12, DG14 and DG15 and
+     * signed by the DSC.
      */
     public static byte[] dgiSequence(KeyPair aaKey, X509Certificate dscCertificate,
                                      PrivateKey dscKey, File portrait) throws Exception {
@@ -68,23 +69,27 @@ public final class EmrtdPersoExporter {
         byte[] dg12 = dg12();
         byte[] dg15 = dg15(modulus);
 
+        // Chip Authentication: the static P-256 scalar (DGI FF03) and the
+        // matching master-file EF.CardSecurity (DGI FF05).  EF.CardSecurity
+        // contains the EF.CardAccess SecurityInfos plus the CA public key
+        // (Doc 9303-10 §3.11.4); EF.DG14 carries the same SecurityInfos
+        // (Doc 9303-10 §4.7.14).
+        KeyPair caKeyPair = generateP256Key();
+        byte[] caScalar = unsigned(((ECPrivateKey) caKeyPair.getPrivate()).getS());
+        byte[] cardAccess = cardAccessInfos();
+        byte[] securityInfos = CardSecurityBuilder.securityInfos(
+                caKeyPair.getPublic().getEncoded(), 1, cardAccess);
+        byte[] dg14 = dg14(securityInfos);
+        byte[] cardSecurity = CardSecurityBuilder.build(securityInfos, dscKey, dscCertificate);
+
         Map<Integer, byte[]> hashes = new LinkedHashMap<Integer, byte[]>();
         hashes.put(1, sha256(dg1));
         hashes.put(2, sha256(dg2));
         hashes.put(11, sha256(dg11));
         hashes.put(12, sha256(dg12));
+        hashes.put(14, sha256(dg14));
         hashes.put(15, sha256(dg15));
         byte[] sod = SodBuilder.build(hashes, dscKey, dscCertificate);
-
-        // Chip Authentication: the static P-256 scalar (DGI FF03) and the
-        // matching master-file EF.CardSecurity (DGI FF05).  EF.CardSecurity
-        // contains the EF.CardAccess SecurityInfos plus the CA public key
-        // (Doc 9303-10 §3.11.4).
-        KeyPair caKeyPair = generateP256Key();
-        byte[] caScalar = unsigned(((ECPrivateKey) caKeyPair.getPrivate()).getS());
-        byte[] cardAccess = cardAccessInfos();
-        byte[] cardSecurity = CardSecurityBuilder.build(
-                caKeyPair.getPublic().getEncoded(), 1, cardAccess, dscKey, dscCertificate);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writeDgi(out, 0xFF01,
@@ -94,6 +99,7 @@ public final class EmrtdPersoExporter {
         writeDgi(out, LdsFileUtil.FID_DG2, dg2);
         writeDgi(out, LdsFileUtil.FID_DG11, dg11);
         writeDgi(out, LdsFileUtil.FID_DG12, dg12);
+        writeDgi(out, LdsFileUtil.FID_DG14, dg14);
         writeDgi(out, LdsFileUtil.FID_DG15, dg15);
         // EF.CardAccess in the master file (Doc 9303-10 §3.11.3): the LDS1
         // instance advertises PACE and Chip Authentication.
@@ -204,11 +210,25 @@ public final class EmrtdPersoExporter {
         byte[] dg11 = dg11();
         byte[] dg12 = dg12();
         byte[] dg15 = dg15(modulus);
+
+        // One Chip Authentication key pair and its SecurityInfos are shared by
+        // EF.DG14, the LDS1 EF.CardSecurity and the LDS2 Travel application:
+        // EF.CardAccess and EF.CardSecurity live in the master file (Doc 9303-10
+        // §3.11.3/§3.11.4), so a card hosts a single EF.CardSecurity.
+        KeyPair caKeyPair = generateP256Key();
+        byte[] caScalar = unsigned(((ECPrivateKey) caKeyPair.getPrivate()).getS());
+        byte[] cardAccessInfos = cardAccessInfos();
+        byte[] securityInfos = CardSecurityBuilder.securityInfos(
+                caKeyPair.getPublic().getEncoded(), 1, cardAccessInfos);
+        byte[] dg14 = dg14(securityInfos);
+        byte[] caCardSecurity = CardSecurityBuilder.build(securityInfos, dscKey, dscCertificate);
+
         Map<Integer, byte[]> hashes = new LinkedHashMap<Integer, byte[]>();
         hashes.put(1, sha256(dg1));
         hashes.put(2, sha256(dg2));
         hashes.put(11, sha256(dg11));
         hashes.put(12, sha256(dg12));
+        hashes.put(14, sha256(dg14));
         hashes.put(15, sha256(dg15));
         byte[] sod = SodBuilder.build(hashes, dscKey, dscCertificate);
 
@@ -241,6 +261,7 @@ public final class EmrtdPersoExporter {
         sb.append("@dg 2 ").append(Hex.format(dg2)).append('\n');
         sb.append("@dg 11 ").append(Hex.format(dg11)).append('\n');
         sb.append("@dg 12 ").append(Hex.format(dg12)).append('\n');
+        sb.append("@dg 14 ").append(Hex.format(dg14)).append('\n');
         sb.append("@dg 15 ").append(Hex.format(dg15)).append('\n');
         sb.append("@sod ").append(Hex.format(sod)).append('\n');
         sb.append("@aa ").append(Hex.format(aaPrivateKey(modulus, privateExponent))).append('\n');
@@ -250,12 +271,7 @@ public final class EmrtdPersoExporter {
         // EF.CardSecurity live in the master file (Doc 9303-10 §3.11.3/§3.11.4),
         // so a card hosts a single EF.CardSecurity.  The private scalar is
         // personalized as DGI FF03 and the public key published in
-        // EF.CardSecurity (DGI FF05 for LDS1, FID 011D for LDS2).
-        KeyPair caKeyPair = generateP256Key();
-        byte[] caScalar = unsigned(((ECPrivateKey) caKeyPair.getPrivate()).getS());
-        byte[] cardAccessInfos = cardAccessInfos();
-        byte[] caCardSecurity = CardSecurityBuilder.build(
-                caKeyPair.getPublic().getEncoded(), 1, cardAccessInfos, dscKey, dscCertificate);
+        // EF.CardSecurity (DGI FF05 for LDS1, FID 011D for LDS2) and EF.DG14.
         sb.append("@cardaccess ").append(Hex.format(cardAccessInfos)).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@cardsecurity ").append(Hex.format(caCardSecurity)).append('\n');
@@ -436,6 +452,16 @@ public final class EmrtdPersoExporter {
         ascii(inner, 0x5F55, "20260101120000");
         ascii(inner, 0x5F56, "card42");
         return tlv(0x6C, inner.toByteArray());
+    }
+
+    /**
+     * DG14 = {@code 6E { SecurityInfos }} (ICAO Doc 9303-10 §4.7.14): the same
+     * DER {@code SET OF SecurityInfo} that EF.CardSecurity signs, i.e. the
+     * EF.CardAccess SecurityInfos plus the chip's Chip Authentication public
+     * key.  The value is supplied by {@link CardSecurityBuilder#securityInfos}.
+     */
+    private static byte[] dg14(byte[] securityInfos) {
+        return tlv(0x6E, securityInfos);
     }
 
     /** Appends {@code tag || len || US-ASCII(value)} to {@code out}. */

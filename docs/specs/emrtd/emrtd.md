@@ -202,7 +202,7 @@ DGI 编号即目标 FID；两个项目 DGI 承载 BAC 与 AA 密钥材料：
 | `FF03` | Chip Authentication 静态私钥标量（P-256，32 字节） |
 | `FF04` | PACE 密钥种子 SHA-1(MRZ_information)（20 字节） |
 | `FF05` | LDS1 主文件 EF.CardSecurity CMS SignedData（DGI 专用：DF 的 `011D` 已是 EF.SOD） |
-| `<FID>` | EF 内容（DG1 `0101`、DG2 `0102`、DG15 `010F`、COM `011E`、SOD `011D`、EF.CardAccess `011C` 等） |
+| `<FID>` | EF 内容（DG1 `0101`、DG2 `0102`、DG14 `010E`、DG15 `010F`、COM `011E`、SOD `011D`、EF.CardAccess `011C` 等） |
 
 对 LDS2 角色，DGI 编号是透明 EF 的 FID；EF.CardAccess `011C` 与 EF.CardSecurity `011D`
 写入主文件存储 `LdsMfStore`（不在 DF 内），`0x7000 | FID` 则向记录 EF（EF.Certificates
@@ -216,9 +216,12 @@ DGI 序列。DG1 与 DG15 内联构造；DG2 由 `Dg2Builder` 构造成 CBEFF/IS
 （`75 { 7F61 { 7F60 { A1 SBH, 5F2E } } }`），内含一个 ISO/IEC 19794-5 Basic Facial
 Image Record。头像来自输入图片（默认 `perso/emrtd/portrait.png`，可用 `-face=<path>` 覆盖），
 按 4:5 居中裁切并把最长边缩到 512 px（`Dg2Builder.MAX_SIDE`）后编码为 JPEG（DG2 约 8 KB）；
-图片缺失或不可读即报错，host 不再合成占位图。SOD 覆盖 DG1、DG2、DG11、DG12、DG15 的
+图片缺失或不可读即报错，host 不再合成占位图。SOD 覆盖 DG1、DG2、DG11、DG12、DG14、DG15 的
 SHA-256 哈希（A3）。DG11/DG12 由 `EmrtdPersoExporter.dg11/dg12` 按 Doc 9303-10 §4.7.11/§4.7.12
-构造（DG11 姓名/出生地/住址/电话，DG12 签发机关/签发日期/个性化时间/个性化系统序列号）。
+构造（DG11 姓名/出生地/住址/电话，DG12 签发机关/签发日期/个性化时间/个性化系统序列号）；
+DG14 由 `dg14` 按 §4.7.14 构造为 `6E { SecurityInfos }`，复用
+`CardSecurityBuilder.securityInfos` 生成的 `SET OF SecurityInfo`——EF.CardAccess 的 SecurityInfos
+加芯片静态 CA 公钥，与 EF.CardSecurity 的 eContent 同源。
 `LdsScript` 是人类可读输入格式；`perso/emrtd/sample.perso` 是演示集，
 `EmrtdPersoExporter -script=<path>` 个性化每个 `@instance` 段（`-emit` 打印内置样例脚本；
 无 `-script` 时用内置样例，头像取自 `-face=<path>`，默认 `perso/emrtd/portrait.png`）。
@@ -345,7 +348,8 @@ ECDH + KDF + SM 往返在纯 JVM 中用独立 JCE 密钥对验证（`EmrtdLds2Te
 `LdsFileUtil` 把每个数据组编号映射到 FID 与外层标签（`63`、`76`、`65`–`6E`、`6F`、`70`）。
 `Dg` 是通用解析器/生成器：识别外层标签，保留 EF 原始字节，并按标签暴露嵌套值
 （`value`/`values`），`Dg.wrap` 从内层 TLV 列表构造数据组。报告消费的组（DG1/DG2/DG15）
-保留专用解析器。
+保留专用解析器。DG14（`6E`，Security Options）由个性化构造为标准
+`6E { SET OF SecurityInfo }`，与 EF.CardSecurity 的 eContent 同源（见 §8、§12）。
 
 ## 15. 主机 CLI
 

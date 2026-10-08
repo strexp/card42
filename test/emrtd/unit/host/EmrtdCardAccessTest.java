@@ -136,7 +136,7 @@ final class EmrtdCardAccessTest {
                 "unknown SecurityInfo described");
     }
 
-    private static void genericDataGroups() {
+    private static void genericDataGroups() throws Exception {
         byte[] inner = tlv(0x5F0E, "ERIKSSON".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
         byte[] dg11 = Dg.wrap(11, inner);
         Dg parsed = Dg.parse(dg11);
@@ -146,6 +146,24 @@ final class EmrtdCardAccessTest {
                 java.nio.charset.StandardCharsets.US_ASCII), "DG11 inner value");
         Asserts.eq(0x6C, card42.host.emrtd.lds.LdsFileUtil.dgTag(12), "DG12 tag");
         Asserts.eq(12, card42.host.emrtd.lds.LdsFileUtil.dgForTag(0x6C), "DG tag -> number");
+
+        // DG14 = 6E { SET OF SecurityInfo } (Doc 9303-10 §4.7.14): the generic
+        // parser sees the outer 6E tag, and the SecurityInfos set it wraps is
+        // the same one EF.CardSecurity signs, so the host SecurityInfo layer
+        // recovers the chip's static CA public key.
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
+        generator.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
+        KeyPair ca = generator.generateKeyPair();
+        byte[] securityInfos = card42.host.emrtd.perso.CardSecurityBuilder.securityInfos(
+                ca.getPublic().getEncoded(), 1, null);
+        Dg dg14 = Dg.parse(Dg.wrap(14, securityInfos));
+        Asserts.eq(14, dg14.number, "DG14 number");
+        Asserts.eq(0x6E, dg14.outerTag, "DG14 outer tag");
+        Asserts.eq(0x010E, card42.host.emrtd.lds.LdsFileUtil.FID_DG14, "DG14 FID");
+        java.util.List<SecurityInfo> infos = SecurityInfo.parseList(securityInfos);
+        Asserts.eq(1, infos.size(), "DG14 SecurityInfo count");
+        Asserts.check(infos.get(0) instanceof ChipAuthenticationPublicKeyInfo,
+                "DG14 CA public key info");
     }
 
     private static void passiveAuthenticationTamper() throws Exception {

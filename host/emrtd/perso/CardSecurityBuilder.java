@@ -21,6 +21,8 @@ import card42.host.emrtd.lds.SecurityInfo;
  *
  * <p>The chip's public key is the RFC 5280 SubjectPublicKeyInfo produced by the
  * JCE for the matching P-256 private scalar personalized with DGI {@code FF03}.
+ * The same SecurityInfos set is exposed by {@link #securityInfos} and reused
+ * verbatim as EF.DG14 (ICAO Doc 9303-10 §4.7.14).
  */
 public final class CardSecurityBuilder {
 
@@ -42,20 +44,40 @@ public final class CardSecurityBuilder {
      */
     public static byte[] build(byte[] subjectPublicKeyInfo, int keyId, byte[] cardAccess,
                                PrivateKey dscKey, X509Certificate dscCertificate) throws Exception {
+        return build(securityInfos(subjectPublicKeyInfo, keyId, cardAccess), dscKey,
+                dscCertificate);
+    }
+
+    /**
+     * The EF.CardSecurity eContent (and EF.DG14, Doc 9303-10 §4.7.14): a DER
+     * {@code SET OF SecurityInfo} that repeats the EF.CardAccess SecurityInfos
+     * and adds the chip's static Chip Authentication public key.
+     *
+     * @param subjectPublicKeyInfo the DER SubjectPublicKeyInfo of the chip key
+     * @param keyId the Chip Authentication key id (matches EF.CardAccess)
+     * @param cardAccess the EF.CardAccess DER SET OF SecurityInfo, or null
+     */
+    public static byte[] securityInfos(byte[] subjectPublicKeyInfo, int keyId, byte[] cardAccess) {
         byte[] caPublicKeyInfo = DerWriter.sequence(
                 DerWriter.oid(SecurityInfo.ID_PK_ECDH),
                 subjectPublicKeyInfo,
                 DerWriter.integer(keyId));
-        byte[] securityInfos;
         if (cardAccess != null && cardAccess.length > 0) {
             // Repeat the CardAccess SecurityInfos (ICAO 9303-10 §3.11.4) and add
             // the CA public key info.
             Der.Tlv set = Der.read(cardAccess, 0);
-            securityInfos = DerWriter.tlv(0x31,
+            return DerWriter.tlv(0x31,
                     DerWriter.concat(Der.value(cardAccess, set), caPublicKeyInfo));
-        } else {
-            securityInfos = DerWriter.set(caPublicKeyInfo);
         }
+        return DerWriter.set(caPublicKeyInfo);
+    }
+
+    /**
+     * EF.CardSecurity CMS SignedData over a pre-built SecurityInfos set.  Lets a
+     * caller reuse the same set as EF.DG14 instead of rebuilding it.
+     */
+    public static byte[] build(byte[] securityInfos, PrivateKey dscKey,
+                               X509Certificate dscCertificate) throws Exception {
         return SodBuilder.buildCms(OID_SECURITY_OBJECT, securityInfos, dscKey, dscCertificate);
     }
 }

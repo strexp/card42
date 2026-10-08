@@ -12,6 +12,7 @@ public final class LdsFileUtil {
     public static final int FID_DG2 = 0x0102;
     public static final int FID_DG11 = 0x010B;
     public static final int FID_DG12 = 0x010C;
+    public static final int FID_DG14 = 0x010E;
     public static final int FID_DG15 = 0x010F;
     public static final int FID_CVCA = 0x011C;
     public static final int FID_SOD = 0x011D;
