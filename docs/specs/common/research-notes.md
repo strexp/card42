@@ -214,7 +214,9 @@ context 共享）。因此"把照片放进内存"的正确目标是**持久**且
   T5.2 实测。
 
 据此，卡侧实现为：`DgiStream`（增量 DGI 帧）+ `LdsPerso`/`Lds2Perso`（逐 DGI 路由到
-`LdsFile`/`Lds2TransparentFile`/`Lds2RecordFile`）+ 分页 EF；DG2 预算
-`LdsFileSystem.DG2_CAPACITY` = 16384。DG2 由输入头像生成（默认 `perso/emrtd/portrait.png`），
+`LdsFile`/`Lds2TransparentFile`/`Lds2RecordFile`）+ 分页 EF；透明 EF 不设按文件写死的容量，
+由 DGI 头声明的长度驱动增长、上限为协议上限 `EmrtdTags.MAX_EF_BYTES` = 32767（DGI 长度字段
+与 READ BINARY 15 位偏移；记录 EF 仍按规范的记录数/记录长预留池）。DG2 由输入头像生成
+（默认 `perso/emrtd/portrait.png`），
 裁到 4:5、最长边缩到 512 px 后编码（约 8 KB），足以覆盖流式/分页路径又不挤占与 EMV 共存的
 jcsl 预算（见 [../emrtd/emrtd.md](../emrtd/emrtd.md) §2/§8/§11）。

@@ -40,7 +40,7 @@ public final class DgiStream {
         }
 
         /** A DGI header was parsed; its value is {@code valueLength} bytes. */
-        public abstract void onBeginDgi(short dgi);
+        public abstract void onBeginDgi(short dgi, short valueLength);
 
         /** The next run of the current value. */
         public abstract void onData(byte[] buf, short off, short len);
@@ -54,7 +54,7 @@ public final class DgiStream {
     }
 
     /** Largest accepted DGI value (15-bit READ BINARY offset / signed short). */
-    public static final short MAX_VALUE = (short) 32767;
+    public static final short MAX_VALUE = EmrtdTags.MAX_EF_BYTES;
 
     private static final byte STATE_HEADER = 0;
     private static final byte STATE_VALUE = 1;
@@ -137,13 +137,13 @@ public final class DgiStream {
         }
         headerLen = 0;
         if (valueLength == 0) {
-            sink.onBeginDgi(dgi);
+            sink.onBeginDgi(dgi, (short) 0);
             sink.onEndDgi();
             state = STATE_HEADER;
             return;
         }
         remaining = valueLength;
         state = STATE_VALUE;
-        sink.onBeginDgi(dgi);
+        sink.onBeginDgi(dgi, valueLength);
     }
 }

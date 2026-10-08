@@ -30,17 +30,6 @@ public final class LdsMfStore {
         (byte) 0x47, 0x03, (byte) 0x8C, 0x01, (byte) 0xE0,
         0x7F, 0x66, 0x08, 0x02, 0x02, 0x10, 0x00, 0x02, 0x02, 0x10, 0x00 };
 
-    /**
-     * EF.CardSecurity personalization budget.  EF.CardSecurity is a CMS
-     * SignedData that embeds the Document Signer certificate (and its chain)
-     * next to the CA public key and the signature; a real DSC certificate alone
-     * is ~1-2 KB, so the original 1792-byte budget overflowed and STORE DATA
-     * failed with 6A84 (not enough memory space).  The store is paged and
-     * allocated on first write, so this upper bound costs nothing until the
-     * file is actually personalized.
-     */
-    private static final short CARD_SECURITY_CAPACITY = (short) 4096;
-
     private static Lds2TransparentFile cardAccess;
     private static Lds2TransparentFile cardSecurity;
     private static Lds2TransparentFile atrInfo;
@@ -54,18 +43,20 @@ public final class LdsMfStore {
 
     private static void init() {
         if (cardAccess == null) {
-            cardAccess = new Lds2TransparentFile(EmrtdTags.FID_CARD_ACCESS, (short) 256);
+            cardAccess = new Lds2TransparentFile(EmrtdTags.FID_CARD_ACCESS);
         }
         if (cardSecurity == null) {
-            cardSecurity = new Lds2TransparentFile(EmrtdTags.FID_CARD_SECURITY,
-                    CARD_SECURITY_CAPACITY);
+            // EF.CardSecurity embeds the DSC certificate chain; its size is
+            // taken from the DGI header at personalization time rather than a
+            // fixed budget (docs/specs/emrtd/emrtd.md §2/§8).
+            cardSecurity = new Lds2TransparentFile(EmrtdTags.FID_CARD_SECURITY);
         }
         if (atrInfo == null) {
-            atrInfo = new Lds2TransparentFile(EmrtdTags.FID_ATR_INFO, (short) 64);
+            atrInfo = new Lds2TransparentFile(EmrtdTags.FID_ATR_INFO);
             atrInfo.set(ATR_INFO, (short) 0, (short) ATR_INFO.length);
         }
         if (dir == null) {
-            dir = new Lds2TransparentFile(EmrtdTags.FID_DIR, (short) 128);
+            dir = new Lds2TransparentFile(EmrtdTags.FID_DIR);
         }
     }
 

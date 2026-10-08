@@ -13,8 +13,9 @@ import javacard.framework.ISOException;
  * record EF.  EF.CardAccess/EF.CardSecurity are master-file files, not part of
  * a DF: they live in {@link LdsMfStore} and are shared by every application.
  *
- * The capacities are the personalization budgets; a write past them is refused
- * with 6A84.
+ * The files carry no fixed per-file budget: each grows on demand up to the
+ * protocol maximum {@link EmrtdTags#MAX_EF_BYTES}, so a write past that is
+ * refused with 6A84.
  *
  * @author card42
  */
@@ -65,7 +66,7 @@ public final class Lds2FileSystem {
         Lds2TransparentFile[] files = new Lds2TransparentFile[64];
         for (short i = 0; i < (short) 64; i++) {
             files[i] = new Lds2TransparentFile(
-                    (short) (EmrtdTags.FID_BIOMETRICS + i), (short) 1024, false);
+                    (short) (EmrtdTags.FID_BIOMETRICS + i), false);
         }
         return new Lds2FileSystem(files,
                 new Lds2RecordFile[] {

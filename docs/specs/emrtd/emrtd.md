@@ -24,14 +24,13 @@ LDS1 应用是一组以 2 字节 FID 寻址的透明基本文件（ICAO Doc 9303
 
 | 文件 | FID | 容量 |
 |------|-----|------|
-| DG1 | `0101` | 128 |
-| DG2 | `0102` | 16384 |
-| DG3–DG14 | `0103`–`010E` | 256 |
-| DG15 | `010F` | 512 |
-| DG16 | `0110` | 256 |
-| EF.CardAccess | `011C` | 256 |
-| EF.SOD | `011D` | 4096 |
-| EF.COM | `011E` | 64 |
+| DG1–DG16 | `0101`–`0110` | 无固定预算，按 DGI 声明长度增长 |
+| EF.CardAccess | `011C` | 同上 |
+| EF.SOD | `011D` | 同上 |
+| EF.COM | `011E` | 同上 |
+
+所有 EF 的上限只有协议上限 **32767**（15 位 READ BINARY 偏移 / DGI 长度字段，
+`EmrtdTags.MAX_EF_BYTES`）；不存在按文件写死的预算。
 
 EF.CardSecurity 也是主文件 EF（`011D`，Doc 9303-10 §3.11.4），与 DF 内的 EF.SOD 同 FID：
 LDS1 实例在 `SELECT MF` 后用 `SELECT FILE 011D` 选主文件 EF.CardSecurity（`LdsMfStore`），
@@ -47,11 +46,11 @@ ISO/IEC 7816-4 §6.1.1 的两种寻址形式：P1 b8=0 时 P1P2 为所选 EF 的
 无需 SELECT（Doc 9303-10 §3.6.3.2 Table 5）。合法 SFI 同时把该 EF 设为当前 EF
 （ISO/IEC 7816-4 §6.1.2），故大 EF 在 SFI 前缀读取后可直接按偏移续读、无需再 SELECT——
 这正是读卡器读取大于 256 B 的 EF 的方式。SFI 形式对 eMRTD 是**强制**的；SFI 为 FID 的低
-5 位。FID 或 SFI 缺失回 `6A82`；无当前 EF 的偏移读取回 `6986`。容量是受限卡持久内存的
-个性化预算（上限）；每个 EF 的后备存储是 **256 B 分页**（`LdsFile`，页在首次写入时按需分配、
-跨写复用），所以未用或很小的 EF 几乎不占空间，而一个多 KB 的 DG2 只花它实际写入的字节，
-不需要一整块连续 EEPROM，也不会在增大时复制旧内容（见 §8；J3R180 内存预算见
-[../common/research-notes.md](../common/research-notes.md) §14）。
+5 位。FID 或 SFI 缺失回 `6A82`；无当前 EF 的偏移读取回 `6986`。每个 EF 没有按文件写死的
+容量：它在个性化时按 DGI 声明长度增长、上限为 32767（见 §8）；后备存储是 **256 B 分页**
+（`LdsFile`，页在首次写入时按需分配、跨写复用），所以未用或很小的 EF 几乎不占空间，而一个
+多 KB 的 DG2 只花它实际写入的字节，不需要一整块连续 EEPROM，也不会在增大时复制旧内容
+（J3R180 内存预算见 [../common/research-notes.md](../common/research-notes.md) §14）。
 
 EF.CardAccess（`011C`，与 EAC 的 EF.CVCA 同 FID）作为透明 EF 提供，使 LDS1 实例宣告 PACE
 （Doc 9303-10 §3.11.3）。该文件属于主文件，故 applet 也服务 SELECT FILE 的 MF 形式
@@ -181,7 +180,9 @@ EF.SOD 是外层 `77` 标签内的 CMS SignedData（RFC 5652）（Doc 9303-10 §
 applet 实现 GP `Personalization.processData`。SD 把**每条** STORE DATA 命令（短 APDU，数据域
 ≤231 B）原样转发，applet **逐块增量应用**：`DgiStream` 解析 DGI 头（`dgi(2) ‖ len(1 | 0xFF len(2))`，
 CPS §3.2；头最多 5 B 可跨块）并把值字节直接交给目标（文件/记录/密钥 sink），DGI 值可任意跨块
-（上限 32767，受 15 位 READ BINARY 偏移与有符号 short 约束）。因此**不再有整段重组缓冲**
+（上限 32767，受 15 位 READ BINARY 偏移与有符号 short 约束）。DGI 头在值到达前给出长度，
+sink 据此一次性把目标 EF 的页表建到最终大小（`LdsFile`/`Lds2TransparentFile.ensureCapacity`），
+不再逐页增长、也不会丢弃旧页表。因此**不再有整段重组缓冲**
 （此前的 4096 B `persoBuffer` 已移除）：峰值 RAM 只与一条 STORE DATA 命令有关，与照片大小无关；
 文件值经分页 EF 落盘（§2），记录值直接写入记录池（`Lds2RecordFile.beginRecord/appendChunk/endRecord`）。
 只有小密钥 DGI（AA 私钥 ≤516 B、CA 标量 32 B、PACE 种子 20 B、BAC 种子 16 B）暂存于固定
@@ -260,11 +261,12 @@ INSTALL 时由实例 AID 决定（`EmrtdInstallParameters.role()`）：
 | Visa Records | `A0 00 00 02 47 20 02` | EF.Certificates `011A`/`1A`、EF.VisaRecords `0103`/`03` | — |
 | Additional Biometrics | `A0 00 00 02 47 20 03` | EF.Certificates `011A`/`1A` | EF.Biometrics1 `0201`（SFI N/A） |
 
-每个 LDS2 DF 拥有一个 `Lds2FileSystem`：少量 `Lds2TransparentFile`（容量为上限；内容为
-256 B 分页，按需分配、跨写复用，可选 ACTIVATE 锁）与 `Lds2RecordFile`（扁平池中的线性变长
-记录，带并行偏移/长度数组；记录可由 `beginRecord/appendChunk/endRecord` 逐块写入，池字节先写、
-`used`/`count` 到 `endRecord` 才提交）。LDS2 文件的短 EF 标识为其 FID 的低字节（`0x01 || SFI`，
-Doc 9303-10 §5.1）。
+每个 LDS2 DF 拥有一个 `Lds2FileSystem`：少量 `Lds2TransparentFile`（无固定预算，按 DGI 声明
+长度或 UPDATE BINARY 的 File Size DO `'C0'` 增长、上限 32767；内容为 256 B 分页，按需分配、
+跨写复用，可选 ACTIVATE 锁）与 `Lds2RecordFile`（受规范记录数/记录长约束的扁平池：Certificates
+254/64、记录 900/256 字节，池容量仍是预留的内存预算；记录由 `beginRecord/appendChunk/endRecord`
+逐块写入，池字节先写、`used`/`count` 到 `endRecord` 才提交）。LDS2 文件的短 EF 标识为其 FID
+的低字节（`0x01 || SFI`，Doc 9303-10 §5.1）。
 
 EF.CardAccess `011C` 与 EF.CardSecurity `011D` 属**主文件**（`LdsMfStore`，包内静态、跨
 实例共享），不在任何 LDS2 DF 内（Doc 9303-10 §3.11.3/§3.11.4）。EF.CardAccess 恒可
@@ -282,7 +284,7 @@ SM 建立（BAC/PACE/CA）后收到明文 APDU 即中止会话并回 `6982`（Do
 | `E2` | APPEND RECORD | P2 b8-b4 = SFI；满时 `6A84`，记录超 EF 上限时 `6700` |
 | `A2` | SEARCH RECORD | 记录处理 DO `7F76`；响应 `7F76 { 51, 02… }`；无匹配时 `6282` |
 | `5F` | FILE AND MEMORY MANAGEMENT | P2 选总字节/剩余/已有记录数，在 `7F78` 返回 |
-| `D7` | UPDATE BINARY（奇数 INS） | 偏移 DO `54` + 数据 DO `53`；激活后 `6982` |
+| `D7` | UPDATE BINARY（奇数 INS） | 偏移 DO `54` + 数据 DO `53`（可选 File Size DO `C0` 用于一次分配）；激活后 `6982` |
 | `44` | ACTIVATE | 冻结所选的 Additional Biometrics 透明 EF |
 | `22`/`86` | MSE:SET KAT / GENERAL AUTHENTICATE | Chip Authentication（§13）、PACE（§16） |
 

@@ -111,7 +111,7 @@ public final class LdsPerso extends DgiStream.Sink {
         currentMf = null;
     }
 
-    public void onBeginDgi(short dgi) {
+    public void onBeginDgi(short dgi, short valueLength) {
         scratchLen = 0;
         if (dgi == DGI_SEED) {
             mode = MODE_SEED;
@@ -127,6 +127,7 @@ public final class LdsPerso extends DgiStream.Sink {
             // catalog (where FID 011D is EF.SOD).
             mode = MODE_MF;
             currentMf = LdsMfStore.file(EmrtdTags.FID_CARD_SECURITY);
+            currentMf.ensureCapacity(valueLength);
             currentMf.beginSet();
         } else {
             LdsFile file = catalog.file(dgi);
@@ -135,6 +136,10 @@ public final class LdsPerso extends DgiStream.Sink {
             } else {
                 mode = MODE_FILE;
                 currentFile = file;
+                // The DGI header gave the value length up front, so the file
+                // lays out its final page table once (docs/specs/emrtd/
+                // emrtd.md §8).
+                file.ensureCapacity(valueLength);
                 file.beginSet();
                 catalog.markPresent(dgi);
                 if (dgi == EmrtdTags.FID_DG1) {

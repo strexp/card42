@@ -39,6 +39,7 @@ public final class Lds2Record {
     private static final short[] TERMINATION = new short[2];
     private static final short[] OFFSET_DO = new short[2];
     private static final short[] VALUE_DO = new short[2];
+    private static final short[] SIZE_DO = new short[2];
     private static final byte[] FMM_BODY = new byte[16];
     private static final byte[] SEARCH_BODY = new byte[64];
 
@@ -264,8 +265,17 @@ public final class Lds2Record {
         if (!find(data, off, len, EmrtdTags.DO_DISCRETIONARY, valueDo)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
-        // The optional File Size DO'C0' is accepted and ignored: the EF memory is
-        // allocated statically, so the size hint is not needed (§3.8 Note 1).
+        // The optional File Size DO'C0' (Doc 9303-10 §3.8.1 Note 1) reserves the
+        // EF's final size up front so its page table is allocated once; without
+        // it the store simply grows as the writes arrive.
+        short[] sizeDo = SIZE_DO;
+        if (find(data, off, len, EmrtdTags.DO_FILE_SIZE, sizeDo)) {
+            if (sizeDo[1] == 1) {
+                file.ensureCapacity((short) (data[sizeDo[0]] & 0xFF));
+            } else if (sizeDo[1] >= 2) {
+                file.ensureCapacity(Util.getShort(data, sizeDo[0]));
+            }
+        }
         file.update(offset, data, valueDo[0], valueDo[1]);
         return 0;
     }

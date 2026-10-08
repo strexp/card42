@@ -91,7 +91,7 @@ public final class Lds2Perso extends DgiStream.Sink {
         currentRecord = null;
     }
 
-    public void onBeginDgi(short dgi) {
+    public void onBeginDgi(short dgi, short valueLength) {
         scratchLen = 0;
         if (dgi == EmrtdTags.DGI_CA_KEY) {
             mode = MODE_CA;
@@ -112,6 +112,7 @@ public final class Lds2Perso extends DgiStream.Sink {
             // §3.11.3/§3.11.4).
             mode = MODE_MF;
             currentFile = LdsMfStore.file(dgi);
+            currentFile.ensureCapacity(valueLength);
             currentFile.beginSet();
         } else {
             Lds2TransparentFile file = files.transparent(dgi);
@@ -120,6 +121,7 @@ public final class Lds2Perso extends DgiStream.Sink {
             }
             mode = MODE_TRANSPARENT;
             currentFile = file;
+            file.ensureCapacity(valueLength);
             file.beginSet();
         }
     }

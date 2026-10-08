@@ -290,14 +290,18 @@ final class EmrtdCommandTest {
                 () -> Lds2Record.updateBinary(fresh, gap, (short) 0, (short) gap.length),
                 "first UPDATE BINARY at offset != 0 -> 6A80");
 
-        // The optional DO'C0' is accepted and ignored (§3.8 Note 1).
+        // The optional DO'C0' File Size is now a hint that reserves the EF's
+        // final size up front (§3.8.1 Note 1) without changing the current
+        // length; the store also grows on its own without it.
         EmrtdApplet withSize = biometricsApplet();
         fs(withSize).select(EmrtdTags.FID_BIOMETRICS);
         byte[] sized = cat(tlv(0x54, new byte[] { 0x00 }), tlv(0xC0, new byte[] { 0x04, 0x00 }),
                 tlv(0x53, Hex.parse("AA")));
         n = Lds2Record.updateBinary(withSize, sized, (short) 0, (short) sized.length);
-        Asserts.eq(0, n, "UPDATE BINARY accepts and ignores DO'C0'");
+        Asserts.eq(0, n, "UPDATE BINARY accepts DO'C0'");
         Asserts.eq(1, selected(withSize).getLength(), "DO'C0' does not change the length");
+        Asserts.eq(1024, selected(withSize).getCapacity(),
+                "DO'C0' reserves the declared file size");
 
         // DO'54' / DO'53' are mandatory.
         byte[] noOffset = tlv(0x53, new byte[] { 0x01 });

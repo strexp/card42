@@ -151,6 +151,15 @@ public final class EmrtdTags {
     public static final short DO_CA_PUBLIC_KEY = (short) 0x91;
     public static final short DO_KEY_ID = (short) 0x84;
 
+    /**
+     * Largest EF the card can serve.  {@code READ BINARY} addresses a 15-bit
+     * offset and the personalization DGI length field is 15-bit (Doc 9303-10
+     * §3.6.3.1), so a file cannot exceed 32767 bytes.  This is the sole
+     * per-file bound once the fixed budgets are replaced by length-driven
+     * growth (docs/specs/emrtd/emrtd.md §2).
+     */
+    public static final short MAX_EF_BYTES = (short) 32767;
+
     /** Master file identifier (ISO/IEC 7816-4 §7.1.1): 3F00. */
     public static final short FID_MF = (short) 0x3F00;
     /** EF.DIR in the master file (Doc 9303-10 §3.11.2): 2F00, SFI 1E. */

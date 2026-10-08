@@ -39,6 +39,7 @@ final class EmrtdPersoStreamTest {
         System.out.println("EmrtdPersoStream");
         pagedFile();
         pagedTransparentFile();
+        maxEfBound();
         recordStreaming();
         dgiStreamFraming();
         lds1PersonalizationStreaming();
@@ -50,8 +51,8 @@ final class EmrtdPersoStreamTest {
 
     private static void pagedFile() {
         byte[] src = pattern(5000);
-        LdsFile file = new LdsFile(EmrtdTags.FID_DG2, (short) 5000);
-        Asserts.eq(5000, file.getCapacity(), "paged EF capacity is the budget");
+        LdsFile file = new LdsFile(EmrtdTags.FID_DG2);
+        Asserts.eq(0, file.getCapacity(), "a fresh paged EF declares no fixed budget");
 
         // Append in 7-byte chunks so every page boundary is crossed mid-chunk.
         int off = 0;
@@ -61,6 +62,7 @@ final class EmrtdPersoStreamTest {
             off += n;
         }
         Asserts.eq(5000, file.getLength(), "paged append length");
+        Asserts.eq(5000, file.getCapacity(), "paged append grows the capacity to the content");
 
         sameBytes(slice(src, 200, 300), read(file, 200, 300),
                 "paged read spans a page boundary");
@@ -69,8 +71,6 @@ final class EmrtdPersoStreamTest {
         sameBytes(slice(src, 4999, 1), read(file, 4999, 1),
                 "paged read of the last byte");
 
-        Asserts.sw((short) 0x6700, () -> file.append(new byte[1], (short) 0, (short) 1),
-                "paged append past capacity -> 6700");
         Asserts.sw((short) 0x6700,
                 () -> file.read((short) 4999, (short) 2, new byte[2], (short) 0),
                 "paged read past the end -> 6700");
@@ -86,7 +86,7 @@ final class EmrtdPersoStreamTest {
 
     private static void pagedTransparentFile() {
         byte[] src = pattern(1000);
-        Lds2TransparentFile file = new Lds2TransparentFile((short) 0x0201, (short) 1000, false);
+        Lds2TransparentFile file = new Lds2TransparentFile((short) 0x0201, false);
 
         file.append(src, (short) 0, (short) 10);
         Asserts.eq(10, file.getLength(), "LDS2 append length");
@@ -104,11 +104,31 @@ final class EmrtdPersoStreamTest {
         Asserts.sw((short) 0x6982,
                 () -> file.update((short) 0, src, (short) 0, (short) 1),
                 "LDS2 write after ACTIVATE -> 6982");
+    }
 
-        Lds2TransparentFile full = new Lds2TransparentFile((short) 0x0201, (short) 300, false);
-        full.append(pattern(300), (short) 0, (short) 300);
-        Asserts.sw((short) 0x6A84, () -> full.append(new byte[1], (short) 0, (short) 1),
-                "LDS2 append past capacity -> 6A84");
+    /**
+     * The only per-file bound left is the protocol maximum: a 15-bit READ
+     * BINARY offset / DGI length (32767).  A write past it is refused with
+     * 6700 (LDS1) / 6A84 (LDS2); the old fixed budgets are gone.
+     */
+    private static void maxEfBound() {
+        byte[] max = pattern(EmrtdTags.MAX_EF_BYTES);
+
+        LdsFile lds1 = new LdsFile(EmrtdTags.FID_DG16);
+        lds1.append(max, (short) 0, EmrtdTags.MAX_EF_BYTES);
+        Asserts.eq(EmrtdTags.MAX_EF_BYTES, lds1.getLength(), "LDS1 EF fills to MAX_EF");
+        Asserts.sw((short) 0x6700, () -> lds1.append(new byte[1], (short) 0, (short) 1),
+                "LDS1 append past MAX_EF -> 6700");
+        Asserts.sw((short) 0x6700, () -> lds1.ensureCapacity((short) 32768),
+                "LDS1 ensureCapacity past MAX_EF -> 6700");
+
+        Lds2TransparentFile lds2 = new Lds2TransparentFile((short) 0x0201, false);
+        lds2.append(max, (short) 0, EmrtdTags.MAX_EF_BYTES);
+        Asserts.eq(EmrtdTags.MAX_EF_BYTES, lds2.getLength(), "LDS2 EF fills to MAX_EF");
+        Asserts.sw((short) 0x6A84, () -> lds2.append(new byte[1], (short) 0, (short) 1),
+                "LDS2 append past MAX_EF -> 6A84");
+        Asserts.sw((short) 0x6A84, () -> lds2.ensureCapacity((short) 32768),
+                "LDS2 ensureCapacity past MAX_EF -> 6A84");
     }
 
     // --- Streaming record EF (Lds2RecordFile) --------------------------------
@@ -390,7 +410,7 @@ final class EmrtdPersoStreamTest {
         public void onReset() {
         }
 
-        public void onBeginDgi(short dgi) {
+        public void onBeginDgi(short dgi, short valueLength) {
             currentDgi = dgi;
             current = new ByteArrayOutputStream();
         }

@@ -9,57 +9,42 @@ import javacard.framework.ISOException;
  * by FID with SELECT FILE (P1=02, P2=0C) and read with READ BINARY.  Only one
  * EF is selected at a time; READ BINARY always reads the selected file.
  *
- * The capacities are the personalization budgets; a file only occupies the
- * bytes actually written (the backing pages are allocated on first use), so an
- * unused or small EF costs almost nothing.  A larger DG2 is bounded by
- * {@link #DG2_CAPACITY}; a write past a capacity is refused at personalization
- * time.
+ * The files carry no fixed per-file budget: each grows on demand up to the
+ * protocol maximum {@link EmrtdTags#MAX_EF_BYTES} and only occupies the bytes
+ * actually written (the backing pages are allocated on first use), so an unused
+ * or small EF costs nothing.  The streaming personalizer declares each file's
+ * final size from its DGI length before the value arrives (docs/specs/emrtd/
+ * emrtd.md §2/§8).
  *
  * @author card42
  */
 
 public final class LdsFileSystem {
 
-    /**
-     * DG2 (encoded face) personalization capacity.  The face image is the only
-     * LDS1 file that is realistically large (Doc 9303-10 §4.7.2, Doc 9303-5); it
-     * is streamed into a paged store, so this is a budget, not an allocation.
-     * The 15-bit READ BINARY offset bounds any EF at 32767.
-     */
-    public static final short DG2_CAPACITY = (short) 16384;
-
-    /**
-     * EF.SOD personalization capacity.  EF.SOD embeds the Document Signer
-     * certificate (and its chain), so a larger DSC certificate can push the
-     * file well past the original 2048-byte budget; it is paged, so this is an
-     * upper bound that costs nothing until written.
-     */
-    public static final short SOD_CAPACITY = (short) 4096;
-
     private final LdsFile[] files;
     private LdsFile selected;
 
     public LdsFileSystem() {
         files = new LdsFile[] {
-                new LdsFile(EmrtdTags.FID_DG1, (short) 128),
-                new LdsFile(EmrtdTags.FID_DG2, DG2_CAPACITY),
-                new LdsFile(EmrtdTags.FID_DG3, (short) 256),
-                new LdsFile(EmrtdTags.FID_DG4, (short) 256),
-                new LdsFile(EmrtdTags.FID_DG5, (short) 256),
-                new LdsFile(EmrtdTags.FID_DG6, (short) 256),
-                new LdsFile(EmrtdTags.FID_DG7, (short) 256),
-                new LdsFile(EmrtdTags.FID_DG8, (short) 256),
-                new LdsFile(EmrtdTags.FID_DG9, (short) 256),
-                new LdsFile(EmrtdTags.FID_DG10, (short) 256),
-                new LdsFile(EmrtdTags.FID_DG11, (short) 256),
-                new LdsFile(EmrtdTags.FID_DG12, (short) 256),
-                new LdsFile(EmrtdTags.FID_DG13, (short) 256),
-                new LdsFile(EmrtdTags.FID_DG14, (short) 256),
-                new LdsFile(EmrtdTags.FID_DG15, (short) 512),
-                new LdsFile(EmrtdTags.FID_DG16, (short) 256),
-                new LdsFile(EmrtdTags.FID_CARD_ACCESS, (short) 256),
-                new LdsFile(EmrtdTags.FID_SOD, SOD_CAPACITY),
-                new LdsFile(EmrtdTags.FID_COM, (short) 64),
+                new LdsFile(EmrtdTags.FID_DG1),
+                new LdsFile(EmrtdTags.FID_DG2),
+                new LdsFile(EmrtdTags.FID_DG3),
+                new LdsFile(EmrtdTags.FID_DG4),
+                new LdsFile(EmrtdTags.FID_DG5),
+                new LdsFile(EmrtdTags.FID_DG6),
+                new LdsFile(EmrtdTags.FID_DG7),
+                new LdsFile(EmrtdTags.FID_DG8),
+                new LdsFile(EmrtdTags.FID_DG9),
+                new LdsFile(EmrtdTags.FID_DG10),
+                new LdsFile(EmrtdTags.FID_DG11),
+                new LdsFile(EmrtdTags.FID_DG12),
+                new LdsFile(EmrtdTags.FID_DG13),
+                new LdsFile(EmrtdTags.FID_DG14),
+                new LdsFile(EmrtdTags.FID_DG15),
+                new LdsFile(EmrtdTags.FID_DG16),
+                new LdsFile(EmrtdTags.FID_CARD_ACCESS),
+                new LdsFile(EmrtdTags.FID_SOD),
+                new LdsFile(EmrtdTags.FID_COM),
         };
         selected = null;
     }
