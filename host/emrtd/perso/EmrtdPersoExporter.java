@@ -22,9 +22,12 @@ import card42.host.emrtd.lds.SecurityInfo;
 
 /**
  * Builds the GP STORE DATA DGI sequence that personalizes a card42-emrtd LDS1
- * instance (H5.2/H5.4).  The DGI number is the target FID, with two project
- * DGIs: {@code FF01} = BAC K_seed and {@code FF02} = the AA private key
- * (modulus length || modulus || exponent length || exponent).  The card's
+ * instance (H5.2/H5.4).  The DGI number is the target FID; the project DGIs
+ * carry the key material: {@code FF01} = BAC K_seed, {@code FF02} = the AA
+ * private key (modulus length || modulus || exponent length || exponent),
+ * {@code FF03} = the Chip Authentication P-256 scalar, {@code FF04} =
+ * SHA-1(MRZ_information) and {@code FF06} = SHA-1(CAN) PACE key seeds, and
+ * {@code FF05} = the master-file EF.CardSecurity.  The card's
  * {@code EmrtdApplet.applyPerso} consumes exactly this sequence.
  *
  * <p>{@code main} emits {@code <AID> <hex>} lines for GPPro
@@ -41,6 +44,8 @@ public final class EmrtdPersoExporter {
     public static final String DOCUMENT_NUMBER = "L898902C<";
     public static final String DATE_OF_BIRTH = "690806";
     public static final String DATE_OF_EXPIRY = "940623";
+    /** Demo Card Access Number for PACE with password reference 0x02. */
+    public static final String CARD_ACCESS_NUMBER = "123456";
 
     private static final String DEFAULT_DSC = "perso/emrtd/dsc.crt";
     private static final String DEFAULT_DSC_KEY = "perso/emrtd/dsc.key";
@@ -49,6 +54,8 @@ public final class EmrtdPersoExporter {
     private static final int DGI_CA_KEY = 0xFF03;
     /** LDS1 project DGI: master-file EF.CardSecurity CMS SignedData. */
     private static final int DGI_CARD_SECURITY = 0xFF05;
+    /** LDS1 project DGI: PACE key seed SHA-1(CAN) (password reference 0x02). */
+    private static final int DGI_PACE_CAN_SEED = 0xFF06;
 
     private EmrtdPersoExporter() {
     }
@@ -95,6 +102,7 @@ public final class EmrtdPersoExporter {
         writeDgi(out, 0xFF01,
                 MrzKeySeed.seed(DOCUMENT_NUMBER, DATE_OF_BIRTH, DATE_OF_EXPIRY));
         writeDgi(out, 0xFF04, paceSeed(DOCUMENT_NUMBER, DATE_OF_BIRTH, DATE_OF_EXPIRY));
+        writeDgi(out, DGI_PACE_CAN_SEED, canSeed(CARD_ACCESS_NUMBER));
         writeDgi(out, LdsFileUtil.FID_DG1, dg1);
         writeDgi(out, LdsFileUtil.FID_DG2, dg2);
         writeDgi(out, LdsFileUtil.FID_DG11, dg11);
@@ -133,6 +141,9 @@ public final class EmrtdPersoExporter {
                 MrzKeySeed.seed(entry.documentNumber, entry.dateOfBirth, entry.dateOfExpiry));
         writeDgi(out, 0xFF04, paceSeed(entry.documentNumber, entry.dateOfBirth,
                 entry.dateOfExpiry));
+        if (entry.can != null) {
+            writeDgi(out, DGI_PACE_CAN_SEED, canSeed(entry.can));
+        }
         for (Map.Entry<Integer, byte[]> dg : entry.dataGroups.entrySet()) {
             writeDgi(out, LdsFileUtil.dgFid(dg.getKey()), dg.getValue());
         }
@@ -177,6 +188,10 @@ public final class EmrtdPersoExporter {
             // DGI FF04 = PACE key seed SHA-1(MRZ_information) (card LdsPerso).
             writeDgi(out, 0xFF04,
                     paceSeed(entry.documentNumber, entry.dateOfBirth, entry.dateOfExpiry));
+        }
+        if (entry.can != null) {
+            // DGI FF06 = PACE key seed SHA-1(CAN) (password reference 0x02).
+            writeDgi(out, 0xFF06, canSeed(entry.can));
         }
         if (entry.caKey != null) {
             // DGI FF03 = Chip Authentication static P-256 private scalar.
@@ -242,6 +257,7 @@ public final class EmrtdPersoExporter {
         sb.append("#   @doc <MRZ document number>   BAC document number\n");
         sb.append("#   @dob <YYMMDD>                BAC date of birth\n");
         sb.append("#   @doe <YYMMDD>                BAC date of expiry\n");
+        sb.append("#   @can <6 digits>              Card Access Number for PACE (password ref 0x02)\n");
         sb.append("#   @dg <n> <hex>                EF.DG<n> content (DG1 mandatory)\n");
         sb.append("#   @sod <hex>                   EF.SOD content (built from the DG hashes when absent)\n");
         sb.append("#   @aa <hex>                    AA private key (modLen || modulus || expLen || exponent)\n");
@@ -257,6 +273,7 @@ public final class EmrtdPersoExporter {
         sb.append("@doc ").append(DOCUMENT_NUMBER).append('\n');
         sb.append("@dob ").append(DATE_OF_BIRTH).append('\n');
         sb.append("@doe ").append(DATE_OF_EXPIRY).append('\n');
+        sb.append("@can ").append(CARD_ACCESS_NUMBER).append('\n');
         sb.append("@dg 1 ").append(Hex.format(dg1)).append('\n');
         sb.append("@dg 2 ").append(Hex.format(dg2)).append('\n');
         sb.append("@dg 11 ").append(Hex.format(dg11)).append('\n');
@@ -496,6 +513,15 @@ public final class EmrtdPersoExporter {
                                    String dateOfExpiry) throws Exception {
         return java.security.MessageDigest.getInstance("SHA-1").digest(
                 MrzKeySeed.mrzInformation(documentNumber, dateOfBirth, dateOfExpiry));
+    }
+
+    /**
+     * The 20-byte PACE key seed {@code SHA-1(CAN)} (DGI FF06, password
+     * reference 0x02, BSI TR-03110-3 A.2.3): the 6-digit CAN encoded as ASCII.
+     */
+    private static byte[] canSeed(String can) throws Exception {
+        return java.security.MessageDigest.getInstance("SHA-1").digest(
+                can.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
     }
 
     private static void writeDgi(ByteArrayOutputStream out, int dgi, byte[] value) {

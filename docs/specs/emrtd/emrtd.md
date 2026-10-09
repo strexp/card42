@@ -2,7 +2,7 @@
 
 > eMRTD 实现的当前设计：LDS1 + BAC + ISO/IEC 7816-4 安全报文 + Passive Authentication +
 > Active Authentication，以及 LDS2 应用、EF.CardAccess/SecurityInfo 解析、Chip
-> Authentication（ECDH）与 PACE（ECDH 通用映射，3DES/AES-128）。EAC 1.11 仍为可选待办
+> Authentication（ECDH）与 PACE（ECDH 通用映射，3DES/AES-128，MRZ 与 CAN）。EAC 1.11 仍为可选待办
 > （[`TODO.emrtd.md`](../../../TODO.emrtd.md)）。
 
 ## 1. 范围与 AID
@@ -200,14 +200,15 @@ DGI 编号即目标 FID；两个项目 DGI 承载 BAC 与 AA 密钥材料：
 | `FF01` | BAC K_seed（16 字节） |
 | `FF02` | AA 私钥：`modLen(2) ‖ modulus ‖ expLen(2) ‖ exponent` |
 | `FF03` | Chip Authentication 静态私钥标量（P-256，32 字节） |
-| `FF04` | PACE 密钥种子 SHA-1(MRZ_information)（20 字节） |
+| `FF04` | PACE 密钥种子 SHA-1(MRZ_information)（20 字节，口令引用 `01`） |
 | `FF05` | LDS1 主文件 EF.CardSecurity CMS SignedData（DGI 专用：DF 的 `011D` 已是 EF.SOD） |
+| `FF06` | PACE 密钥种子 SHA-1(CAN)（20 字节，口令引用 `02`） |
 | `<FID>` | EF 内容（DG1 `0101`、DG2 `0102`、DG14 `010E`、DG15 `010F`、COM `011E`、SOD `011D`、EF.CardAccess `011C` 等） |
 
 对 LDS2 角色，DGI 编号是透明 EF 的 FID；EF.CardAccess `011C` 与 EF.CardSecurity `011D`
 写入主文件存储 `LdsMfStore`（不在 DF 内），`0x7000 | FID` 则向记录 EF（EF.Certificates
 `011A`、Entry/Visa `0101`/`0103`、Exit `0102`）追加一条记录。`Lds2Perso` 同样消费
-`FF03`/`FF04`，故 LDS2 EF.CardAccess 宣告的 Chip Authentication 与 PACE 实际可用。`CardSecurityBuilder` 围绕匹配密钥的 `ChipAuthenticationPublicKeyInfo`
+`FF03`/`FF04`/`FF06`，故 LDS2 EF.CardAccess 宣告的 Chip Authentication 与 PACE 实际可用。`CardSecurityBuilder` 围绕匹配密钥的 `ChipAuthenticationPublicKeyInfo`
 构造 EF.CardSecurity CMS SignedData（`id-SecurityObject` `0.4.0.127.0.7.3.2.1`）。
 
 `EmrtdPersoExporter` 用新的 RSA-2048 AA 密钥和由 DSC 夹具
@@ -254,7 +255,7 @@ host/emrtd/
   LDS1/LDS2 逐块（1–13 B）个性化，含 5000 B DG2。
 - `make test-emrtd` — 模拟器端到端：SELECT LDS1、AA、BAC、SM 读 DG1/DG2/COM/DG15/SOD、
   PA（DSC 链 + 签名 + DG 哈希）、LDS2 Travel Records DF（CardAccess + READ/APPEND RECORD）、
-  PACE（3DES/AES-128）、LDS1 Chip Authentication（PACE → 主文件 EF.CardSecurity → CA →
+  PACE（3DES/AES-128，MRZ 与 CAN）、LDS1 Chip Authentication（PACE → 主文件 EF.CardSecurity → CA →
   新 SM 下读 DG1）；样例 DG2 约 8 KB（>4096），覆盖流式个性化 + 分页 EF + 大 DG 读回。
 - `make test` — both 矩阵（EMV 生产 + eMRTD LDS1/LDS2 共存）。
 
@@ -356,7 +357,7 @@ ECDH + KDF + SM 往返在纯 JVM 中用独立 JCE 密钥对验证（`EmrtdLds2Te
 `card42.host.emrtd.cli.Main`（`card42-emrtd.jar` 入口）：
 
 ```
-Main terminal emrtd read    -host=<spec> -doc=<no> -dob=YYMMDD -doe=YYMMDD [-pace] [-ca] [-json=1]
+Main terminal emrtd read    -host=<spec> -doc=<no> -dob=YYMMDD -doe=YYMMDD [-pace] [-can=<6 digits>] [-ca] [-json=1]
 Main terminal emrtd inspect -host=<spec> [-json=1]
 Main terminal emrtd lds2    -host=<spec> [-app=travel|visa|biometrics] [-json=1]
 Main terminal emrtd apdu    -host=<spec> -apdu=<hex>
@@ -364,10 +365,11 @@ Main version | help
 ```
 
 - `<spec>` 为 `pcsc[:<reader-index>]` 或 `socket:<host>:<port>`。
-- `read` 跑 AA（明文）、BAC（或 `-pace` 时的 PACE）与 SM，读 DG1/DG2/COM/DG15/SOD，并对照
+- `read` 跑 AA（明文）、BAC（或 `-pace`/`-can` 时的 PACE）与 SM，读 DG1/DG2/COM/DG15/SOD，并对照
   `perso/emrtd/` 下的 CSCA 文件验证 PA；`-ca` 时在 SM 建立后读 EF.CardAccess/EF.CardSecurity
   执行 Chip Authentication 再读数据组；输出文本报告，`-json=1` 时输出 JSON 对象（证件号、
-  姓名、日期、LDS/Unicode 版本、AA 模长位数）。
+  姓名、日期、LDS/Unicode 版本、AA 模长位数）。`-can` 用 CAN 口令（`DO'83'=02`、
+  `SHA-1(CAN)` 种子）跑 PACE-CAN，此时可省略 `-doc/-dob/-doe`。
 - `inspect` 无 BAC 读 COM/DG15，报告公开数据。
 - `lds2` SELECT 一个 LDS2 DF，读 EF.CardAccess 与记录 EF 的每条记录，打印 SecurityInfo 与
   记录（文本或 JSON）。
@@ -378,19 +380,20 @@ Main version | help
 
 PACE（Password Authenticated Connection Establishment）为在 EF.CardAccess 中宣告它的应用
 替代 BAC。卡实现 **ECDH 通用映射（generic mapping）** profile，支持 **3DES** 或 **AES-128**
-安全报文与 **MRZ** 口令：`id-PACE-ECDH-GM-3DES-CBC-CBC`
+安全报文与 **MRZ**（`DO'83'=01`）或 **CAN**（`DO'83'=02`）口令：`id-PACE-ECDH-GM-3DES-CBC-CBC`
 （`0.4.0.127.0.7.2.2.4.2.1`）与 `id-PACE-ECDH-GM-AES-CBC-CMAC-128`
 （`0.4.0.127.0.7.2.2.4.2.2`），P-256（标准化域参数 id 12）。MSE:Set AT 的 OID 末字节选择
 profile。
 
 LDS1 EF.CardAccess 在 `011C` 提供；LDS1 实例带 GP `CardReset`（Default Selected）时可在选
 应用前于 MF 层读，选择后始终可读。LDS2 DF 在自己的 EF.CardAccess 中宣告 PACE/CA，并以
-PACE 密钥种子（FF04）个性化，CA 另有静态 P-256 标量（FF03）与 EF.CardSecurity。
+PACE 密钥种子（FF04/FF06）个性化，CA 另有静态 P-256 标量（FF03）与 EF.CardSecurity。
 
-- 20 字节 PACE 密钥种子 `SHA-1(MRZ_information)` 用 DGI `FF04` 个性化；卡派生
+- 20 字节 PACE 密钥种子 `SHA-1(MRZ_information)` 用 DGI `FF04` 个性化、`SHA-1(CAN)`
+  （CAN 为 6 位 ASCII）用 DGI `FF06` 个性化；卡按 `DO'83'` 选择，派生
   `K_pi = KDF(seed, 3)`（基于 SHA-1；仅 3DES 调整 DES 奇偶校验，BSI TR-03110-3 §A.2.3）。
 - `MSE:Set AT`（P1=41 或 C1，P2=A4）携带 `DO'80'`（PACE OID）与 `DO'83'`（口令引用
-  `01` = MRZ）。
+  `01` = MRZ、`02` = CAN；缺省为 MRZ）。
 - 四步 `GENERAL AUTHENTICATE`（BSI TR-03110-3 B.1）：`DO'80'` 加密 nonce `E(K_pi, s)`、
   `DO'81'`/`DO'82'` 映射公钥、`DO'83'`/`DO'84'` 临时公钥、`DO'85'`/`DO'86'` 认证令牌。
   第 1–3 步用命令链（`CLA=0x10`），第 4 步明文。

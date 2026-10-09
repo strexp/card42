@@ -175,7 +175,16 @@ final class EmrtdLds2Test {
         Lds2FileSystem travel = Lds2FileSystem.travel();
         card42.emrtd.ChipAuth chipAuth = new card42.emrtd.ChipAuth();
         final int[] paceSeedLength = new int[1];
-        card42.emrtd.PaceSeedSink pace = (src, off, len) -> paceSeedLength[0] = len;
+        final int[] paceCanSeedLength = new int[1];
+        card42.emrtd.PaceSeedSink pace = new card42.emrtd.PaceSeedSink() {
+            public void setSeed(byte[] src, short off, short len) {
+                paceSeedLength[0] = len;
+            }
+
+            public void setCanSeed(byte[] src, short off, short len) {
+                paceCanSeedLength[0] = len;
+            }
+        };
         Lds2Perso perso = new Lds2Perso(travel, chipAuth, pace);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writeDgi(out, EmrtdTags.FID_CARD_ACCESS, Hex.parse("30 03 0201 00"));
@@ -189,6 +198,7 @@ final class EmrtdLds2Test {
         byte[] caScalar = unsigned(((ECPrivateKey) ca.getPrivate()).getS());
         writeDgi(out, EmrtdTags.DGI_CA_KEY, caScalar);
         writeDgi(out, EmrtdTags.DGI_PACE_SEED, new byte[20]);
+        writeDgi(out, EmrtdTags.DGI_PACE_CAN_SEED, new byte[20]);
         perso.apply(out.toByteArray(), (short) 0, (short) out.size());
 
         // EF.CardAccess is a master-file file shared by every application, not
@@ -202,6 +212,7 @@ final class EmrtdLds2Test {
         Asserts.eq(4, entry.recordLength((short) 1), "LDS2 perso record length");
         Asserts.check(chipAuth.isInitialized(), "LDS2 perso set the CA static key");
         Asserts.eq(20, paceSeedLength[0], "LDS2 perso set the PACE key seed");
+        Asserts.eq(20, paceCanSeedLength[0], "LDS2 perso set the CAN PACE key seed");
     }
 
     private static void chipAuthentication() throws Exception {

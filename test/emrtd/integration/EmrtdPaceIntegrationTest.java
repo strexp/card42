@@ -47,6 +47,12 @@ public final class EmrtdPaceIntegrationTest {
             Checks.check("re-SELECT before AES PACE", terminal.selectLds1().getSW(), 0x9000);
             runProfile(terminal, seed, Pace.OID_AES_128, "AES-128");
 
+            // CAN password (password reference 0x02): the card uses the
+            // SHA-1(CAN) seed personalised as DGI FF06 (BSI TR-03110-3 A.2.3).
+            terminal.setSecureMessaging(null);
+            Checks.check("re-SELECT before CAN PACE", terminal.selectLds1().getSW(), 0x9000);
+            runCanProfile(terminal, EmrtdPersoExporter.CARD_ACCESS_NUMBER);
+
             // Regression: repeated PACE must not exhaust the card's persistent
             // heap.  The PACE EC keys are reused across sessions; allocating a
             // fresh KeyPair per session made the card answer 6F00 after ~9 runs.
@@ -92,5 +98,19 @@ public final class EmrtdPaceIntegrationTest {
         ResponseAPDU plain = terminal.base().transmit(
                 new CommandAPDU(0x00, 0xB0, 0x00, 0x00, 1));
         Checks.check("plaintext APDU after PACE -> 6982", plain.getSW(), 0x6982);
+    }
+
+    /** Runs PACE with the CAN password and reads DG1 under its secure messaging. */
+    private static void runCanProfile(EmrtdTerminal terminal, String can) throws Exception {
+        Pace.Session session = Pace.authenticateCan(terminal, can);
+        Checks.check("PACE ECDH-GM CAN established", true);
+        terminal.setSecureMessaging(session.secureMessaging());
+        Dg1 parsed = Dg1.parse(LdsReader.read(terminal, LdsFileUtil.FID_DG1));
+        Checks.check("DG1 document number under PACE CAN",
+                EmrtdPersoExporter.DOCUMENT_NUMBER.equals(parsed.documentNumber));
+
+        ResponseAPDU plain = terminal.base().transmit(
+                new CommandAPDU(0x00, 0xB0, 0x00, 0x00, 1));
+        Checks.check("plaintext APDU after PACE CAN -> 6982", plain.getSW(), 0x6982);
     }
 }

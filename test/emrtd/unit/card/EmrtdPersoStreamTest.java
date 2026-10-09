@@ -224,6 +224,7 @@ final class EmrtdPersoStreamTest {
     private static void lds1PersonalizationStreaming() throws Exception {
         byte[] seed = pattern(16);
         byte[] paceSeed = pattern(20);
+        byte[] paceCanSeed = pattern(20);
         byte[] dg1 = Hex.parse("615B5F1F58504C383938393032433C");
         byte[] dg2 = pattern(5000);
         byte[] dg15 = Hex.parse("6F00");
@@ -235,6 +236,7 @@ final class EmrtdPersoStreamTest {
         ByteArrayOutputStream seq = new ByteArrayOutputStream();
         writeDgi(seq, EmrtdTags.DGI_BAC_SEED, seed);
         writeDgi(seq, EmrtdTags.DGI_PACE_SEED, paceSeed);
+        writeDgi(seq, EmrtdTags.DGI_PACE_CAN_SEED, paceCanSeed);
         byte[] scalar = new byte[32];
         scalar[31] = 1;
         writeDgi(seq, EmrtdTags.DGI_CA_KEY, scalar);
@@ -251,7 +253,16 @@ final class EmrtdPersoStreamTest {
         AaCrypto aa = new AaCrypto((short) 2048, AaCrypto.AA_SHA1);
         ChipAuth chipAuth = new ChipAuth();
         final int[] paceLength = new int[1];
-        PaceSeedSink pace = (src, off, len) -> paceLength[0] = len;
+        final int[] paceCanLength = new int[1];
+        PaceSeedSink pace = new PaceSeedSink() {
+            public void setSeed(byte[] src, short off, short len) {
+                paceLength[0] = len;
+            }
+
+            public void setCanSeed(byte[] src, short off, short len) {
+                paceCanLength[0] = len;
+            }
+        };
         LdsPerso perso = new LdsPerso(catalog, aa, chipAuth, pace);
 
         // Feed in 13-byte chunks: the DGI headers and 5000-byte DG2 straddle
@@ -275,6 +286,7 @@ final class EmrtdPersoStreamTest {
         Asserts.check(aa.isInitialized(), "LDS1 streaming set the AA private key");
         Asserts.check(chipAuth.isInitialized(), "LDS1 streaming set the CA scalar");
         Asserts.eq(20, paceLength[0], "LDS1 streaming set the PACE key seed");
+        Asserts.eq(20, paceCanLength[0], "LDS1 streaming set the CAN PACE key seed");
 
         // DGI FF05 carries the master-file EF.CardSecurity (Doc 9303-10
         // §3.11.4), which the LDS1 catalog cannot hold (FID 011D is EF.SOD).
@@ -304,7 +316,13 @@ final class EmrtdPersoStreamTest {
         LdsCatalog otherCatalog = new LdsCatalog();
         final LdsPerso other = new LdsPerso(otherCatalog,
                 new AaCrypto((short) 2048, AaCrypto.AA_SHA1), new ChipAuth(),
-                (src, off, len) -> { });
+                new PaceSeedSink() {
+                    public void setSeed(byte[] src, short off, short len) {
+                    }
+
+                    public void setCanSeed(byte[] src, short off, short len) {
+                    }
+                });
         Asserts.sw((short) 0x6A80,
                 () -> other.apply(missingDg1, (short) 0, (short) missingDg1.length),
                 "LDS1 sequence without DG1 -> 6A80");
@@ -335,7 +353,13 @@ final class EmrtdPersoStreamTest {
         LdsCatalog catalog = new LdsCatalog();
         LdsPerso perso = new LdsPerso(catalog,
                 new AaCrypto((short) 2048, AaCrypto.AA_SHA1), new ChipAuth(),
-                (src, off, len) -> { });
+                new PaceSeedSink() {
+                    public void setSeed(byte[] src, short off, short len) {
+                    }
+
+                    public void setCanSeed(byte[] src, short off, short len) {
+                    }
+                });
         perso.apply(sequence, (short) 0, (short) sequence.length);
 
         Lds2TransparentFile mfSecurity = LdsMfStore.file(EmrtdTags.FID_CARD_SECURITY);
@@ -355,7 +379,14 @@ final class EmrtdPersoStreamTest {
         Lds2FileSystem travel = Lds2FileSystem.travel();
         ChipAuth chipAuth = new ChipAuth();
         final int[] paceLength = new int[1];
-        PaceSeedSink pace = (src, off, len) -> paceLength[0] = len;
+        PaceSeedSink pace = new PaceSeedSink() {
+            public void setSeed(byte[] src, short off, short len) {
+                paceLength[0] = len;
+            }
+
+            public void setCanSeed(byte[] src, short off, short len) {
+            }
+        };
         Lds2Perso perso = new Lds2Perso(travel, chipAuth, pace);
 
         byte[] cardAccess = Hex.parse("3003020100");
@@ -389,7 +420,13 @@ final class EmrtdPersoStreamTest {
 
         // A transparent biometric EF larger than one block.
         Lds2FileSystem biometrics = Lds2FileSystem.biometrics();
-        Lds2Perso bioPerso = new Lds2Perso(biometrics, new ChipAuth(), (src, off, len) -> { });
+        Lds2Perso bioPerso = new Lds2Perso(biometrics, new ChipAuth(), new PaceSeedSink() {
+            public void setSeed(byte[] src, short off, short len) {
+            }
+
+            public void setCanSeed(byte[] src, short off, short len) {
+            }
+        });
         byte[] biometric = pattern(1000);
         ByteArrayOutputStream bioSeq = new ByteArrayOutputStream();
         writeDgi(bioSeq, Lds2FileSystem.FID_BIOMETRIC, biometric);

@@ -28,6 +28,8 @@ public final class LdsPerso extends DgiStream.Sink {
     public static final short DGI_CA_KEY = EmrtdTags.DGI_CA_KEY;
     /** DGI carrying the PACE key seed SHA-1(MRZ_info) (20 bytes). */
     public static final short DGI_PACE_SEED = EmrtdTags.DGI_PACE_SEED;
+    /** DGI carrying the PACE key seed SHA-1(CAN) (20 bytes, ref 0x02). */
+    public static final short DGI_PACE_CAN_SEED = EmrtdTags.DGI_PACE_CAN_SEED;
 
     /** Largest key-DGI value: modLen(2) + 256 + expLen(2) + 256. */
     private static final short SCRATCH_SIZE = (short) 520;
@@ -40,6 +42,7 @@ public final class LdsPerso extends DgiStream.Sink {
     private static final byte MODE_CA = 5;
     private static final byte MODE_PACE = 6;
     private static final byte MODE_MF = 7;
+    private static final byte MODE_PACE_CAN = 8;
 
     private final LdsCatalog catalog;
     private final AaCrypto aa;
@@ -121,6 +124,8 @@ public final class LdsPerso extends DgiStream.Sink {
             mode = MODE_CA;
         } else if (dgi == DGI_PACE_SEED) {
             mode = MODE_PACE;
+        } else if (dgi == DGI_PACE_CAN_SEED) {
+            mode = MODE_PACE_CAN;
         } else if (dgi == EmrtdTags.DGI_CARD_SECURITY) {
             // EF.CardSecurity lives in the master file (Doc 9303-10 §3.11.4),
             // so it is streamed into the shared LdsMfStore, not the LDS1
@@ -176,6 +181,8 @@ public final class LdsPerso extends DgiStream.Sink {
             chipAuth.setPrivateKey(scratch, (short) 0, scratchLen);
         } else if (mode == MODE_PACE) {
             pace.setSeed(scratch, (short) 0, scratchLen);
+        } else if (mode == MODE_PACE_CAN) {
+            pace.setCanSeed(scratch, (short) 0, scratchLen);
         }
         mode = MODE_NONE;
         scratchLen = 0;

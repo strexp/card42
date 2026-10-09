@@ -77,7 +77,7 @@ public final class EmrtdTags {
     public static final short DGI_AA_KEY = (short) 0xFF02;
     /** Chip Authentication static P-256 private scalar (32 bytes). */
     public static final short DGI_CA_KEY = (short) 0xFF03;
-    /** PACE key seed SHA-1(MRZ_information) (20 bytes). */
+    /** PACE key seed SHA-1(MRZ_information) (20 bytes), password reference 0x01. */
     public static final short DGI_PACE_SEED = (short) 0xFF04;
     /**
      * LDS1 master-file EF.CardSecurity (Doc 9303-10 §3.11.4) CMS SignedData.
@@ -86,6 +86,8 @@ public final class EmrtdTags {
      * routes it to {@link LdsMfStore}).
      */
     public static final short DGI_CARD_SECURITY = (short) 0xFF05;
+    /** PACE key seed SHA-1(CAN) (20 bytes), password reference 0x02. */
+    public static final short DGI_PACE_CAN_SEED = (short) 0xFF06;
 
     // Application/EF outer tags.
     public static final short TAG_COM = (short) 0x60;

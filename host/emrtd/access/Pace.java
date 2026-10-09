@@ -16,8 +16,8 @@ import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**
  * Terminal-side PACE, ECDH generic mapping with 3DES or AES-128 secure
- * messaging and the MRZ password (BSI TR-03110-3 A.3/B.1, ICAO Doc 9303-11 §4.4,
- * H7.1).  The mirror of the card's {@code card42.emrtd.Pace}.
+ * messaging and the MRZ or CAN password (BSI TR-03110-3 A.3/B.1, ICAO Doc
+ * 9303-11 §4.4, H7.1).  The mirror of the card's {@code card42.emrtd.Pace}.
  *
  * <p>The generic mapping point {@code G' = [s]G + H} is computed with the
  * self-contained {@link P256} arithmetic.  After step 3 the derived K_enc/K_mac
@@ -32,7 +32,9 @@ public final class Pace {
     public static final byte[] OID_AES_128 = {
         0x04, 0x00, 0x7F, 0x00, 0x07, 0x02, 0x02, 0x04, 0x02, 0x02 };
 
-    private static final byte PASSWORD_MRZ = 0x01;
+    /** PACE password reference DO'83' values (BSI TR-03110-3 A.2.3). */
+    public static final byte PASSWORD_MRZ = 0x01;
+    public static final byte PASSWORD_CAN = 0x02;
     private static final byte PARAM_ID_P256 = 0x0C;
 
     /** The PACE session: Ks_enc, Ks_mac and the initial SSC (0). */
@@ -65,16 +67,41 @@ public final class Pace {
         return MessageDigest.getInstance("SHA-1").digest(mrz);
     }
 
+    /**
+     * Derives the PACE key seed {@code SHA-1(CAN)} (20 bytes, BSI TR-03110-3
+     * A.2.3): the 6-digit Card Access Number encoded as ASCII.  This is the
+     * password reference {@code 0x02} seed, distinct from the MRZ seed.
+     */
+    public static byte[] canKeySeed(String can) throws Exception {
+        return MessageDigest.getInstance("SHA-1").digest(
+                can.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    }
+
     /** Runs PACE with the MRZ password and the 3DES profile. */
     public static Session authenticate(EmrtdTerminal terminal, String documentNumber,
                                        String dateOfBirth, String dateOfExpiry) throws Exception {
-        return authenticate(terminal, keySeed(documentNumber, dateOfBirth, dateOfExpiry),
-                OID_3DES);
+        return authenticate(terminal, PASSWORD_MRZ,
+                keySeed(documentNumber, dateOfBirth, dateOfExpiry), OID_3DES);
     }
 
-    /** Runs PACE from an already derived 20-byte key seed and an explicit OID. */
+    /** Runs PACE with the CAN password and the 3DES profile (password ref 0x02). */
+    public static Session authenticateCan(EmrtdTerminal terminal, String can) throws Exception {
+        return authenticate(terminal, PASSWORD_CAN, canKeySeed(can), OID_3DES);
+    }
+
+    /** Runs PACE from an already derived 20-byte key seed and an explicit OID (MRZ). */
     public static Session authenticate(EmrtdTerminal terminal, byte[] keySeed, byte[] oid)
             throws Exception {
+        return authenticate(terminal, PASSWORD_MRZ, keySeed, oid);
+    }
+
+    /**
+     * Runs PACE from an already derived 20-byte key seed, the DO'83' password
+     * reference ({@link #PASSWORD_MRZ} or {@link #PASSWORD_CAN}) and an explicit
+     * protocol OID.
+     */
+    public static Session authenticate(EmrtdTerminal terminal, byte passwordReference,
+                                       byte[] keySeed, byte[] oid) throws Exception {
         // Validate the protocol OID: only ECDH generic mapping is implemented,
         // with the 3DES or AES-128 secure-messaging profile (BSI TR-03110-3
         // A.3/B.1).  The OID content ends with <mapping>,<cipher>.
@@ -91,9 +118,9 @@ public final class Pace {
         SecureRandom random = new SecureRandom();
         byte[] kpi = kdf(keySeed, 3, aes);
 
-        // MSE:Set AT: DO'80'(OID) || DO'83'(MRZ) || DO'84'(P-256 param id).
+        // MSE:Set AT: DO'80'(OID) || DO'83'(password reference) || DO'84'(P-256 param id).
         byte[] mse = concat(new byte[] { (byte) 0x80, (byte) oid.length }, oid,
-                new byte[] { (byte) 0x83, 0x01, PASSWORD_MRZ,
+                new byte[] { (byte) 0x83, 0x01, passwordReference,
                         (byte) 0x84, 0x01, PARAM_ID_P256 });
         check(terminal.base().transmit(new CommandAPDU(0x00, 0x22, 0xC1, 0xA4, mse)),
                 "PACE MSE:Set AT");

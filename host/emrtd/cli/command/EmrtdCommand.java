@@ -117,7 +117,7 @@ public final class EmrtdCommand {
 
     private static int read(String[] args, boolean inspectOnly) throws Exception {
         Args parsed = new Args(args,
-                new String[] { "host", "doc", "dob", "doe", "csca", "json" },
+                new String[] { "host", "doc", "dob", "doe", "can", "csca", "json" },
                 new String[] { "pace", "ca" });
         String host = parsed.get("host", "socket:localhost:9025");
         boolean json = "1".equals(parsed.get("json", "0"));
@@ -139,11 +139,13 @@ public final class EmrtdCommand {
             String doc = parsed.get("doc", null);
             String dob = parsed.get("dob", null);
             String doe = parsed.get("doe", null);
-            if (doc == null || dob == null || doe == null) {
-                return CliSupport.fail("read needs -doc, -dob and -doe");
+            String can = parsed.get("can", null);
+            if (can == null && (doc == null || dob == null || doe == null)) {
+                return CliSupport.fail("read needs -doc, -dob and -doe (or -can for PACE-CAN)");
             }
+            boolean paceRequired = parsed.has("pace") || can != null;
             boolean ca = parsed.has("ca");
-            if (ca && !parsed.has("pace")) {
+            if (ca && !paceRequired) {
                 // EF.CardSecurity has read access PACE (Doc 9303-10 §3.11.4
                 // Table 34), so the LDS1 EF.CardSecurity cannot be read after
                 // BAC alone.
@@ -165,7 +167,12 @@ public final class EmrtdCommand {
             }
             boolean aa = activeAuthentication(terminal, clearDg15);
 
-            if (parsed.has("pace")) {
+            if (can != null) {
+                // PACE with the Card Access Number (password reference 0x02)
+                // replaces BAC/PACE-MRZ.
+                Pace.Session pace = Pace.authenticateCan(terminal, can);
+                terminal.setSecureMessaging(pace.secureMessaging());
+            } else if (parsed.has("pace")) {
                 // PACE (ECDH generic mapping, 3DES, MRZ) replaces BAC.
                 Pace.Session pace = Pace.authenticate(terminal, doc, dob, doe);
                 terminal.setSecureMessaging(pace.secureMessaging());
@@ -289,7 +296,7 @@ public final class EmrtdCommand {
 
     public static void usage(PrintStream out) {
         out.println("usage: Main terminal emrtd <read|inspect|lds2|apdu> [options]");
-        out.println("  read    -host=... -doc=... -dob=YYMMDD -doe=YYMMDD [-pace] [-ca] [-csca=<cert>] [-json=1]");
+        out.println("  read    -host=... -doc=... -dob=YYMMDD -doe=YYMMDD [-pace] [-can=<6 digits>] [-ca] [-csca=<cert>] [-json=1]");
         out.println("  inspect -host=... [-json=1]");
         out.println("  lds2    -host=... [-app=travel|visa|biometrics] [-json=1]");
         out.println("  apdu    -host=... -apdu=<hex>");

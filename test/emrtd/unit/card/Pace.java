@@ -40,4 +40,8 @@ final class Pace implements PaceSeedSink {
     @Override
     public void setSeed(byte[] src, short off, short len) {
     }
+
+    @Override
+    public void setCanSeed(byte[] src, short off, short len) {
+    }
 }

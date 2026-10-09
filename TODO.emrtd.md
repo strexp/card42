@@ -22,7 +22,7 @@
     EF.CardAccess/CardSecurity（主文件 `011C`/`011D`）；MF EF.ATR/INFO（2F01）与 EF.DIR（2F00）；
     LDS2 EF.Certificates 254/64 记录上限；Chip Authentication（FF03 + EF.CardSecurity；LDS1
     主文件 EF.CardSecurity DGI FF05、读访问 PACE，SELECT MF 后 `011D` 解析）；DG3–DG16；
-    PACE 卡侧（ECDH 通用映射 3DES/AES-128、MRZ）。
+    PACE 卡侧（ECDH 通用映射 3DES/AES-128、MRZ/CAN 口令）。
   - **CA 对端点校验修复**：`P256.isLessThanP` 改为显式无符号逐字节比较（不再依赖
     `Util.arrayCompare` 的平台相关符号性）；修复前某平台会间歇性把合法坐标判为 `>= p` 回
     `6A80`，导致 LDS2 CA 集成测试随机失败。

@@ -18,6 +18,7 @@ import card42.host.common.util.Hex;
  *   @doc &lt;MRZ document number&gt;   BAC document number
  *   @dob &lt;YYMMDD&gt;               BAC date of birth
  *   @doe &lt;YYMMDD&gt;               BAC date of expiry
+ *   @can &lt;6 digits&gt;            Card Access Number for PACE (password ref 0x02)
  *   @dg &lt;n&gt; &lt;hex&gt;               EF.DG&lt;n&gt; content (DG1 mandatory)
  *   @sod &lt;hex&gt;                  EF.SOD content
  *   @aa &lt;hex&gt;                   AA private key (modLen || modulus || expLen || exponent)
@@ -46,6 +47,8 @@ public final class LdsScript {
         public String documentNumber;
         public String dateOfBirth;
         public String dateOfExpiry;
+        /** Card Access Number for PACE with password reference 0x02 (optional). */
+        public String can;
         /** DG number -> raw EF content, in script order. */
         public final Map<Integer, byte[]> dataGroups = new LinkedHashMap<Integer, byte[]>();
         public byte[] sod;
@@ -120,6 +123,9 @@ public final class LdsScript {
                 break;
             case "@doe":
                 current.dateOfExpiry = parts[1];
+                break;
+            case "@can":
+                current.can = parts[1];
                 break;
             case "@dg":
                 current.dataGroups.put(Integer.parseInt(parts[1]), Hex.parse(parts[2]));
