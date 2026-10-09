@@ -22,7 +22,7 @@
     EF.CardAccess/CardSecurity（主文件 `011C`/`011D`）；MF EF.ATR/INFO（2F01）与 EF.DIR（2F00）；
     LDS2 EF.Certificates 254/64 记录上限；Chip Authentication（FF03 + EF.CardSecurity；LDS1
     主文件 EF.CardSecurity DGI FF05、读访问 PACE，SELECT MF 后 `011D` 解析）；DG3–DG16；
-    PACE 卡侧（ECDH 通用映射 3DES/AES-128、MRZ/CAN 口令）。
+    PACE 卡侧（ECDH 通用映射 3DES 宣告 + AES-128 支持、MRZ/CAN 口令）。
   - **CA 对端点校验修复**：`P256.isLessThanP` 改为显式无符号逐字节比较（不再依赖
     `Util.arrayCompare` 的平台相关符号性）；修复前某平台会间歇性把合法坐标判为 `>= p` 回
     `6A80`，导致 LDS2 CA 集成测试随机失败。
@@ -88,6 +88,12 @@
   持久堆余量而非确定性逻辑；`test-emrtd-card` 暂对每个 suite 重试一次。需在真卡定位：
   失败时读 `JCSystem.getAvailableMemory(MEMORY_TYPE_PERSISTENT)`、确认是否与前置 suite 的持久写
   （LDS2 APPEND RECORD）或 PACE 会话次数相关，必要时在 `Pace`/实例初始化处进一步复用/回收对象。
+- [ ] **T5.4 PACE-AES 读性能 / 重新宣告 AES**：真卡 J3R180 上 PACE 协商 AES-128 后每个
+  ~231 B `READ BINARY` 约 1.4 s（3DES 约 0.15 s），ReadID 读 ~8 KB 的 DG2 会丢标签，故
+  EF.CardAccess 暂时**只宣告 3DES**（`EmrtdPersoExporter.cardAccessInfos`；卡仍实现/接受
+  AES-128，`EmrtdPaceIntegrationTest` 显式覆盖）。需定位慢因（`AesCmac` 逐块 `Cipher.doFinal`
+  的每调用开销、AES-CBC、或平台 AES 加速缺失）并优化后再重新宣告；平台
+  `Signature.ALG_AES_CMAC_128` 在 jcsl 上运行期异常/复位，无法在模拟器验证。
 - [ ] **SEARCH RECORD 命令 DO 解析复核（命令级单测发现，待正文复核）**：
   ① 搜索窗口的两个 `DO'02'`（偏移/字节数）由 `Lds2Record.searchRecord` 固定按 2 字节
   `Util.getShort` 读取，未按 BER 长度字段解码；ICAO Doc 9303-10 §3.7.3 Table 17 与

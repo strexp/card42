@@ -340,11 +340,20 @@ public final class EmrtdPersoExporter {
         return generator.generateKeyPair();
     }
 
-    /** EF.CardAccess SecurityInfos: PACE ECDH-GM 3DES + AES-128, CA ECDH 3DES. */
+    /**
+     * EF.CardAccess SecurityInfos: PACE ECDH-GM 3DES, CA ECDH 3DES.
+     *
+     * <p>The card still implements PACE ECDH-GM-AES-128, but it is not
+     * advertised: on the J3R180 the AES secure-messaging profile is roughly an
+     * order of magnitude slower per response than the native-DES retail MAC
+     * (every 231-byte {@code READ BINARY} costs ~1.4 s instead of ~0.15 s), so
+     * a reader that prefers AES (e.g. ReadID) cannot finish the ~8 KB DG2 read
+     * before the NFC session is lost.  Offering only 3DES routes such readers
+     * onto the fast profile (ICAO Doc 9303-11 §4.4 allows 3DES PACE).
+     */
     private static byte[] cardAccessInfos() {
         return DerWriter.set(
                 paceInfo(SecurityInfo.ID_PACE_ECDH_GM_3DES),
-                paceInfo(SecurityInfo.ID_PACE_ECDH_GM_AES_128),
                 caInfo(SecurityInfo.ID_CA_ECDH_3DES));
     }
 

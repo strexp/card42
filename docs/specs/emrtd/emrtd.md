@@ -2,7 +2,7 @@
 
 > eMRTD 实现的当前设计：LDS1 + BAC + ISO/IEC 7816-4 安全报文 + Passive Authentication +
 > Active Authentication，以及 LDS2 应用、EF.CardAccess/SecurityInfo 解析、Chip
-> Authentication（ECDH）与 PACE（ECDH 通用映射，3DES/AES-128，MRZ 与 CAN）。EAC 1.11 仍为可选待办
+> Authentication（ECDH）与 PACE（ECDH 通用映射，3DES 宣告 / AES-128 卡侧支持，MRZ 与 CAN）。EAC 1.11 仍为可选待办
 > （[`TODO.emrtd.md`](../../../TODO.emrtd.md)）。
 
 ## 1. 范围与 AID
@@ -384,6 +384,12 @@ PACE（Password Authenticated Connection Establishment）为在 EF.CardAccess �
 （`0.4.0.127.0.7.2.2.4.2.1`）与 `id-PACE-ECDH-GM-AES-CBC-CMAC-128`
 （`0.4.0.127.0.7.2.2.4.2.2`），P-256（标准化域参数 id 12）。MSE:Set AT 的 OID 末字节选择
 profile。
+
+**EF.CardAccess 只宣告 3DES profile**（`EmrtdPersoExporter.cardAccessInfos`）：卡仍实现并
+接受 AES-128（`EmrtdPaceIntegrationTest` 显式用 AES OID 覆盖），但真卡 J3R180 上 AES 安全报文的
+每包开销约比原生 DES retail MAC 高一个数量级（每 231 B `READ BINARY` 约 1.4 s 对约 0.15 s），
+偏好 AES 的读卡器（如 ReadID）读 ~8 KB 的 DG2 会超时丢标签；只提供 3DES 可把这类读卡器引到快速
+profile（Doc 9303-11 §4.4 允许 3DES PACE）。
 
 LDS1 EF.CardAccess 在 `011C` 提供；LDS1 实例带 GP `CardReset`（Default Selected）时可在选
 应用前于 MF 层读，选择后始终可读。LDS2 DF 在自己的 EF.CardAccess 中宣告 PACE/CA，并以
