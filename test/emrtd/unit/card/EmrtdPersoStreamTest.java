@@ -224,7 +224,7 @@ final class EmrtdPersoStreamTest {
     private static void lds1PersonalizationStreaming() throws Exception {
         byte[] seed = pattern(16);
         byte[] paceSeed = pattern(20);
-        byte[] paceCanSeed = pattern(20);
+        byte[] paceCanSeed = pattern(6);
         byte[] dg1 = Hex.parse("615B5F1F58504C383938393032433C");
         byte[] dg2 = pattern(5000);
         byte[] dg15 = Hex.parse("6F00");
@@ -286,7 +286,7 @@ final class EmrtdPersoStreamTest {
         Asserts.check(aa.isInitialized(), "LDS1 streaming set the AA private key");
         Asserts.check(chipAuth.isInitialized(), "LDS1 streaming set the CA scalar");
         Asserts.eq(20, paceLength[0], "LDS1 streaming set the PACE key seed");
-        Asserts.eq(20, paceCanLength[0], "LDS1 streaming set the CAN PACE key seed");
+        Asserts.eq(6, paceCanLength[0], "LDS1 streaming set the raw CAN password");
 
         // DGI FF05 carries the master-file EF.CardSecurity (Doc 9303-10
         // §3.11.4), which the LDS1 catalog cannot hold (FID 011D is EF.SOD).

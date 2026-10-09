@@ -198,7 +198,7 @@ final class EmrtdLds2Test {
         byte[] caScalar = unsigned(((ECPrivateKey) ca.getPrivate()).getS());
         writeDgi(out, EmrtdTags.DGI_CA_KEY, caScalar);
         writeDgi(out, EmrtdTags.DGI_PACE_SEED, new byte[20]);
-        writeDgi(out, EmrtdTags.DGI_PACE_CAN_SEED, new byte[20]);
+        writeDgi(out, EmrtdTags.DGI_PACE_CAN_SEED, new byte[6]);
         perso.apply(out.toByteArray(), (short) 0, (short) out.size());
 
         // EF.CardAccess is a master-file file shared by every application, not
@@ -212,7 +212,7 @@ final class EmrtdLds2Test {
         Asserts.eq(4, entry.recordLength((short) 1), "LDS2 perso record length");
         Asserts.check(chipAuth.isInitialized(), "LDS2 perso set the CA static key");
         Asserts.eq(20, paceSeedLength[0], "LDS2 perso set the PACE key seed");
-        Asserts.eq(20, paceCanSeedLength[0], "LDS2 perso set the CAN PACE key seed");
+        Asserts.eq(6, paceCanSeedLength[0], "LDS2 perso set the raw CAN password");
     }
 
     private static void chipAuthentication() throws Exception {

@@ -59,8 +59,11 @@ final class EmrtdHostTest {
         byte[] seed = Pace.keySeed("L898902C<", "690806", "940623");
         Asserts.bytes(Hex.parse("239AB9CB282DAF66231DC5A4DF6BFBAEDF477565"), seed,
                 "PACE key seed = SHA-1(MRZ_info)");
-        Asserts.bytes(Hex.parse("7C4A8D09CA3762AF61E59520943DC26494F8941B"),
-                Pace.canKeySeed("123456"), "PACE CAN key seed = SHA-1(CAN)");
+        Asserts.bytes(Hex.parse("313233343536"), Pace.canKeySeed("123456"),
+                "PACE password encoding f(CAN) is the raw ASCII CAN");
+        Asserts.bytes(Hex.parse("591468CDA83D65219CCCB8560233600F"),
+                Pace.kdf(Pace.canKeySeed("123456"), 3, true),
+                "PACE CAN K_pi = SHA-1(CAN || 00 00 00 03)");
         Asserts.bytes(Hex.parse("7CF7B5706BBC94CD58E6D3549D3701C8"),
                 Pace.kdf(seed, 3, false), "PACE K_pi 3DES (parity adjusted)");
         Asserts.bytes(Hex.parse("7DF6B4716ABD95CC58E7D2559D3600C8"),

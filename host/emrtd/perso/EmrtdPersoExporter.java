@@ -26,8 +26,8 @@ import card42.host.emrtd.lds.SecurityInfo;
  * carry the key material: {@code FF01} = BAC K_seed, {@code FF02} = the AA
  * private key (modulus length || modulus || exponent length || exponent),
  * {@code FF03} = the Chip Authentication P-256 scalar, {@code FF04} =
- * SHA-1(MRZ_information) and {@code FF06} = SHA-1(CAN) PACE key seeds, and
- * {@code FF05} = the master-file EF.CardSecurity.  The card's
+ * SHA-1(MRZ_information) and {@code FF06} = raw CAN PACE password encodings,
+ * and {@code FF05} = the master-file EF.CardSecurity.  The card's
  * {@code EmrtdApplet.applyPerso} consumes exactly this sequence.
  *
  * <p>{@code main} emits {@code <AID> <hex>} lines for GPPro
@@ -54,7 +54,7 @@ public final class EmrtdPersoExporter {
     private static final int DGI_CA_KEY = 0xFF03;
     /** LDS1 project DGI: master-file EF.CardSecurity CMS SignedData. */
     private static final int DGI_CARD_SECURITY = 0xFF05;
-    /** LDS1 project DGI: PACE key seed SHA-1(CAN) (password reference 0x02). */
+    /** LDS1 project DGI: PACE password encoding f(CAN) = raw CAN (ref 0x02). */
     private static final int DGI_PACE_CAN_SEED = 0xFF06;
 
     private EmrtdPersoExporter() {
@@ -190,7 +190,7 @@ public final class EmrtdPersoExporter {
                     paceSeed(entry.documentNumber, entry.dateOfBirth, entry.dateOfExpiry));
         }
         if (entry.can != null) {
-            // DGI FF06 = PACE key seed SHA-1(CAN) (password reference 0x02).
+            // DGI FF06 = PACE password encoding f(CAN) = raw CAN (ref 0x02).
             writeDgi(out, 0xFF06, canSeed(entry.can));
         }
         if (entry.caKey != null) {
@@ -516,12 +516,12 @@ public final class EmrtdPersoExporter {
     }
 
     /**
-     * The 20-byte PACE key seed {@code SHA-1(CAN)} (DGI FF06, password
-     * reference 0x02, BSI TR-03110-3 A.2.3): the 6-digit CAN encoded as ASCII.
+     * The PACE password encoding {@code f(CAN)} (DGI FF06, password reference
+     * 0x02, BSI TR-03110-3 A.2.3 Table 5): the raw CAN octets, not a hash.  The
+     * card applies the KDF with counter 3, giving {@code SHA-1(CAN || 00 00 00 03)}.
      */
-    private static byte[] canSeed(String can) throws Exception {
-        return java.security.MessageDigest.getInstance("SHA-1").digest(
-                can.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    private static byte[] canSeed(String can) {
+        return can.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
     }
 
     private static void writeDgi(ByteArrayOutputStream out, int dgi, byte[] value) {

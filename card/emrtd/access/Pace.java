@@ -19,10 +19,11 @@ import javacardx.crypto.Cipher;
 
 /* PACE, ECDH generic mapping, 3DES or AES-128 secure messaging
  * (BSI TR-03110-3 A.3/B.1, ICAO Doc 9303-11 §4.4).  The card holds the
- * PACE key seeds SHA-1(MRZ_info) (DGI FF04, password ref 0x01) and
- * SHA-1(CAN) (DGI FF06, password ref 0x02) and derives K_pi from the seed
- * named by MSE:Set AT DO'83'.  The generic mapping uses the platform
- * KeyAgreement ALG_EC_PACE_GM (verified on the J3R180).
+ * PACE password encodings f(MRZ) = SHA-1(MRZ_info) (DGI FF04, ref 0x01) and
+ * f(CAN) = the raw CAN octets (DGI FF06, ref 0x02) and derives
+ * K_pi = KDF(f(π), 3) from the one named by MSE:Set AT DO'83'.  The generic
+ * mapping uses the platform KeyAgreement ALG_EC_PACE_GM (verified on the
+ * J3R180).
  *
  * GENERAL AUTHENTICATE steps:
  *   1. -> 7C{80: E(K_pi, s)}      (card nonce s; 8 bytes 3DES / 16 bytes AES)
@@ -52,8 +53,13 @@ public final class Pace implements PaceSeedSink {
 
     private final byte[] seed = new byte[20];
     private boolean seedSet;
-    /** PACE key seed SHA-1(CAN) for password reference 0x02 (DGI FF06). */
-    private final byte[] canSeed = new byte[20];
+    /**
+     * PACE password encoding f(CAN) for password reference 0x02 (DGI FF06):
+     * the raw CAN octets, NOT a hash (BSI TR-03110-3 A.2.3 Table 5).  The
+     * KDF is applied to these bytes with counter 3 at MSE:Set AT.
+     */
+    private final byte[] canSeed = new byte[16];
+    private short canSeedLen;
     private boolean canSeedSet;
     private byte stage;
     private boolean aes;
@@ -127,12 +133,13 @@ public final class Pace implements PaceSeedSink {
         return seedSet;
     }
 
-    /** Stores the 20-byte PACE key seed SHA-1(CAN) (perso DGI FF06, ref 0x02). */
+    /** Stores the PACE password encoding f(CAN): the raw CAN octets (DGI FF06). */
     public void setCanSeed(byte[] src, short off, short len) {
-        if (len != (short) 20) {
+        if (len <= 0 || len > canSeed.length) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
-        Util.arrayCopyNonAtomic(src, off, canSeed, (short) 0, (short) 20);
+        Util.arrayCopyNonAtomic(src, off, canSeed, (short) 0, len);
+        canSeedLen = len;
         canSeedSet = true;
     }
 
@@ -164,9 +171,11 @@ public final class Pace implements PaceSeedSink {
         Util.arrayCopyNonAtomic(data, r[0], oid, (short) 0, (short) 10);
 
         // DO'83' password reference (BSI TR-03110-3 A.2.3): 01 = MRZ
-        // (DGI FF04), 02 = CAN (DGI FF06).  An absent DO'83' keeps the MRZ
-        // default so pre-CAN personalizations stay readable.
+        // (f(π) = SHA-1(MRZ_info), DGI FF04), 02 = CAN (f(π) = raw CAN,
+        // DGI FF06).  An absent DO'83' keeps the MRZ default so pre-CAN
+        // personalizations stay readable.
         byte[] active = seed;
+        short activeLen = (short) 20;
         boolean activeSet = seedSet;
         if (Lds2Record.find(data, off, len, EmrtdTags.DO_PACE_PASSWORD_REF, r)) {
             if (r[1] != (short) 1) {
@@ -175,9 +184,11 @@ public final class Pace implements PaceSeedSink {
             byte reference = data[r[0]];
             if (reference == (byte) 0x01) {
                 active = seed;
+                activeLen = (short) 20;
                 activeSet = seedSet;
             } else if (reference == (byte) 0x02) {
                 active = canSeed;
+                activeLen = canSeedLen;
                 activeSet = canSeedSet;
             } else {
                 ISOException.throwIt(ISO7816.SW_WRONG_DATA); // only MRZ (01) / CAN (02)
@@ -186,7 +197,7 @@ public final class Pace implements PaceSeedSink {
         if (!activeSet) {
             ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
         }
-        derive(kpi, (short) 0, active, (short) 0, (short) 20, (byte) 3);
+        derive(kpi, (short) 0, active, (short) 0, activeLen, (byte) 3);
         stage = STAGE_AT;
     }
 

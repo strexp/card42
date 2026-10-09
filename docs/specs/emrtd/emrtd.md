@@ -202,7 +202,7 @@ DGI 编号即目标 FID；两个项目 DGI 承载 BAC 与 AA 密钥材料：
 | `FF03` | Chip Authentication 静态私钥标量（P-256，32 字节） |
 | `FF04` | PACE 密钥种子 SHA-1(MRZ_information)（20 字节，口令引用 `01`） |
 | `FF05` | LDS1 主文件 EF.CardSecurity CMS SignedData（DGI 专用：DF 的 `011D` 已是 EF.SOD） |
-| `FF06` | PACE 密钥种子 SHA-1(CAN)（20 字节，口令引用 `02`） |
+| `FF06` | PACE 口令编码 f(CAN) = 原始 CAN 字符（6 字节，口令引用 `02`） |
 | `<FID>` | EF 内容（DG1 `0101`、DG2 `0102`、DG14 `010E`、DG15 `010F`、COM `011E`、SOD `011D`、EF.CardAccess `011C` 等） |
 
 对 LDS2 角色，DGI 编号是透明 EF 的 FID；EF.CardAccess `011C` 与 EF.CardSecurity `011D`
@@ -369,7 +369,7 @@ Main version | help
   `perso/emrtd/` 下的 CSCA 文件验证 PA；`-ca` 时在 SM 建立后读 EF.CardAccess/EF.CardSecurity
   执行 Chip Authentication 再读数据组；输出文本报告，`-json=1` 时输出 JSON 对象（证件号、
   姓名、日期、LDS/Unicode 版本、AA 模长位数）。`-can` 用 CAN 口令（`DO'83'=02`、
-  `SHA-1(CAN)` 种子）跑 PACE-CAN，此时可省略 `-doc/-dob/-doe`。
+  `f(CAN)` = 原始 CAN 字符）跑 PACE-CAN，此时可省略 `-doc/-dob/-doe`。
 - `inspect` 无 BAC 读 COM/DG15，报告公开数据。
 - `lds2` SELECT 一个 LDS2 DF，读 EF.CardAccess 与记录 EF 的每条记录，打印 SecurityInfo 与
   记录（文本或 JSON）。
@@ -389,9 +389,10 @@ LDS1 EF.CardAccess 在 `011C` 提供；LDS1 实例带 GP `CardReset`（Default S
 应用前于 MF 层读，选择后始终可读。LDS2 DF 在自己的 EF.CardAccess 中宣告 PACE/CA，并以
 PACE 密钥种子（FF04/FF06）个性化，CA 另有静态 P-256 标量（FF03）与 EF.CardSecurity。
 
-- 20 字节 PACE 密钥种子 `SHA-1(MRZ_information)` 用 DGI `FF04` 个性化、`SHA-1(CAN)`
-  （CAN 为 6 位 ASCII）用 DGI `FF06` 个性化；卡按 `DO'83'` 选择，派生
-  `K_pi = KDF(seed, 3)`（基于 SHA-1；仅 3DES 调整 DES 奇偶校验，BSI TR-03110-3 §A.2.3）。
+- PACE 口令编码 f(π)（BSI TR-03110-3 A.2.3 Table 5）：MRZ 为 `SHA-1(MRZ_information)`
+  （DGI `FF04`）、CAN 为**原始 CAN 字符**（DGI `FF06`，不是哈希）；卡按 `DO'83'` 选择，
+  派生 `K_pi = KDF(f(π), 3) = SHA-1(f(π) ‖ 00 00 00 03)`（基于 SHA-1；仅 3DES 调整 DES
+  奇偶校验）。
 - `MSE:Set AT`（P1=41 或 C1，P2=A4）携带 `DO'80'`（PACE OID）与 `DO'83'`（口令引用
   `01` = MRZ、`02` = CAN；缺省为 MRZ）。
 - 四步 `GENERAL AUTHENTICATE`（BSI TR-03110-3 B.1）：`DO'80'` 加密 nonce `E(K_pi, s)`、

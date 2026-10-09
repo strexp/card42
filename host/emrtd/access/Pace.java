@@ -68,13 +68,14 @@ public final class Pace {
     }
 
     /**
-     * Derives the PACE key seed {@code SHA-1(CAN)} (20 bytes, BSI TR-03110-3
-     * A.2.3): the 6-digit Card Access Number encoded as ASCII.  This is the
-     * password reference {@code 0x02} seed, distinct from the MRZ seed.
+     * The PACE password encoding {@code f(CAN)} (BSI TR-03110-3 A.2.3 Table 5):
+     * the raw 6-digit Card Access Number octets, <em>not</em> a hash.  The KDF
+     * is applied to these bytes with counter 3, so
+     * {@code K_pi = SHA-1(CAN || 00 00 00 03)}, the same as every compliant
+     * reader (JMRTD/OpenPACE).  This is password reference {@code 0x02}.
      */
-    public static byte[] canKeySeed(String can) throws Exception {
-        return MessageDigest.getInstance("SHA-1").digest(
-                can.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    public static byte[] canKeySeed(String can) {
+        return can.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
     }
 
     /** Runs PACE with the MRZ password and the 3DES profile. */

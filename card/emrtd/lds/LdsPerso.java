@@ -28,7 +28,7 @@ public final class LdsPerso extends DgiStream.Sink {
     public static final short DGI_CA_KEY = EmrtdTags.DGI_CA_KEY;
     /** DGI carrying the PACE key seed SHA-1(MRZ_info) (20 bytes). */
     public static final short DGI_PACE_SEED = EmrtdTags.DGI_PACE_SEED;
-    /** DGI carrying the PACE key seed SHA-1(CAN) (20 bytes, ref 0x02). */
+    /** DGI carrying the PACE password encoding f(CAN) = raw CAN octets (ref 0x02). */
     public static final short DGI_PACE_CAN_SEED = EmrtdTags.DGI_PACE_CAN_SEED;
 
     /** Largest key-DGI value: modLen(2) + 256 + expLen(2) + 256. */

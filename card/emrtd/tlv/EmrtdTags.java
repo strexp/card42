@@ -86,7 +86,7 @@ public final class EmrtdTags {
      * routes it to {@link LdsMfStore}).
      */
     public static final short DGI_CARD_SECURITY = (short) 0xFF05;
-    /** PACE key seed SHA-1(CAN) (20 bytes), password reference 0x02. */
+    /** PACE password encoding f(CAN) = raw CAN octets, password reference 0x02. */
     public static final short DGI_PACE_CAN_SEED = (short) 0xFF06;
 
     // Application/EF outer tags.

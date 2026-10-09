@@ -47,8 +47,8 @@ public final class EmrtdPaceIntegrationTest {
             Checks.check("re-SELECT before AES PACE", terminal.selectLds1().getSW(), 0x9000);
             runProfile(terminal, seed, Pace.OID_AES_128, "AES-128");
 
-            // CAN password (password reference 0x02): the card uses the
-            // SHA-1(CAN) seed personalised as DGI FF06 (BSI TR-03110-3 A.2.3).
+            // CAN password (reference 0x02): the card uses the raw CAN personalised
+            // as DGI FF06, so K_pi = SHA-1(CAN || 00 00 00 03) (BSI TR-03110-3 A.2.3).
             terminal.setSecureMessaging(null);
             Checks.check("re-SELECT before CAN PACE", terminal.selectLds1().getSW(), 0x9000);
             runCanProfile(terminal, EmrtdPersoExporter.CARD_ACCESS_NUMBER);
