@@ -15,19 +15,19 @@
 ## 2. 构建
 
 ```
-make                 # 三个 CAP + 三个主机 jar
+make                 # 三个 CAP + 五个主机 jar
 make card            # card-common + card-emv + card-emrtd
 make card-common     # 库 CAP card42common.cap/.exp（无 applet）
 make card-emv        # card42-emv.cap（依赖 card42common）
 make card-emrtd      # card42-emrtd.cap（依赖 card42common）
-make host            # host-common + host-emv + host-emrtd
+make host            # host-common + host-emv + host-emrtd + host-emv-cli + host-emrtd-cli
 make verify          # 校验三个 export 文件
 make TEST_CONTACTLESS=1   # 测试构建（EMV）
 make test / test-emv / test-emrtd   # 三矩阵端到端
 make clean           # 清理 build/
 ```
 
-六个交付物：
+交付物（三个 CAP + 五个主机 jar）：
 
 - **库 CAP `card42common`**：`javac` 编译 `card/common` 到 `build/card/common/bin`；converter
   用 `build/card42common.conf`（**无 `-applet`**）生成 `card42common.cap/.exp`。
@@ -36,11 +36,14 @@ make clean           # 清理 build/
   （`-exportpath <GPAPI>/exports23:<common 导出根>`，两个 `-applet`）。
 - **eMRTD CAP `card42-emrtd`**：编译 `card/emrtd` 到 `build/card/emrtd/bin`；converter 用
   `build/card42-emrtd.conf`（一个 `-applet`）。
-- **主机三 jar**：`javac` 只用 JDK 编译 `host/common` → `card42-common.jar`；再编译
-  `host/emv`（cp common）→ `card42-emv.jar`（Main-Class `card42.host.emv.cli.Main`）；再编译
-  `host/emrtd`（cp common）→ `card42-emrtd.jar`（Main-Class `card42.host.emrtd.cli.Main`）。
-  业务 jar 的 Manifest 带 `Class-Path: card42-common.jar`，三 jar 同目录即可
-  `java -jar … <command> <subcommand>`。
+- **主机五 jar**：`javac` 只用 JDK 编译 `host/common` → `card42-common.jar`；编译 `host/emv`
+  中除 `cli/` 外的源码（cp common）→ `card42-emv.jar`（**库**，无 `Main-Class`）；编译
+  `host/emv/cli`（cp common + emv 库）→ `card42-emv-cli.jar`（`Main-Class`
+  `card42.host.emv.cli.Main`）；eMRTD 同法得 `card42-emrtd.jar`（库）与
+  `card42-emrtd-cli.jar`（`Main-Class` `card42.host.emrtd.cli.Main`）。各 jar 的 Manifest 带
+  `Class-Path: card42-common.jar`（CLI jar 另加对应库 jar），五 jar 同目录即可
+  `java -jar card42-emv-cli.jar … <command> <subcommand>`；库 jar 不含 CLI，第三方应用可直接
+  依赖 `card42-common.jar` + `card42-emv.jar` / `card42-emrtd.jar`。
 
 `make verify` 对三个 `.exp` 跑 `verifyexp.sh`；`carddump` 业务 `Import.cap` 可见
 `card42.common` 的 package AID（`43 41 52 44 42 00`）。
@@ -331,9 +334,9 @@ eMRTD 真卡：`card-emrtd-install` 创建的 LDS1 实例带 GP `CardReset` 权�
 ## 7. 命令速查
 
 ```bash
-make                       # 三个 CAP + 三个主机 jar
+make                       # 三个 CAP + 五个主机 jar
 make card / card-common / card-emv / card-emrtd
-make host / host-common / host-emv / host-emrtd
+make host / host-common / host-emv / host-emrtd / host-emv-cli / host-emrtd-cli
 make TEST_CONTACTLESS=1    # 测试构建
 make verify                # 校验三个 export
 make sim-install / sim-emv-install / sim-emrtd-install   # both / EMV / eMRTD：启动 + 安装（加载 CAP + 建实例）
@@ -362,9 +365,9 @@ make clean                 # 清理 build/
 
 ### 7.1 主机 CLI
 
-两个可执行 jar：`card42-emv.jar`（`card42.host.emv.cli.Main`）与 `card42-emrtd.jar`
-（`card42.host.emrtd.cli.Main`），用
-`java -jar build/deliverables/card42-emv.jar <command> <subcommand>` 运行。命令为子命令式：
+两个可执行 jar：`card42-emv-cli.jar`（`card42.host.emv.cli.Main`）与
+`card42-emrtd-cli.jar`（`card42.host.emrtd.cli.Main`），用
+`java -jar build/deliverables/card42-emv-cli.jar <command> <subcommand>` 运行。命令为子命令式：
 
 ```
 # card42-emv
@@ -395,10 +398,10 @@ KCV 与 A1.3 会话密钥。例如：
 
 ```bash
 java -p tools/java_card_devkit_simulator-linux-bin-*/client/COMService \
-     --add-modules ALL-MODULE-PATH -jar build/deliverables/card42-emv.jar \
+     --add-modules ALL-MODULE-PATH -jar build/deliverables/card42-emv-cli.jar \
      terminal pay -iface=contact -host=socket:localhost:9025 \
      -ca-keys=perso/emv/sample.ca.keys -floor=0 -tac-online=0000008000 \
-     -issuer-cmd="java -jar build/deliverables/card42-emv.jar issuer authorize \
+     -issuer-cmd="java -jar build/deliverables/card42-emv-cli.jar issuer authorize \
        -icc-key=343864C2E085AB3E433D2F982945E61F"
 ```
 
@@ -412,7 +415,7 @@ java -p tools/java_card_devkit_simulator-linux-bin-*/client/COMService \
 
 ```bash
 java -p tools/java_card_devkit_simulator-linux-bin-*/client/COMService \
-     --add-modules ALL-MODULE-PATH -jar build/deliverables/card42-emv.jar \
+     --add-modules ALL-MODULE-PATH -jar build/deliverables/card42-emv-cli.jar \
      terminal pay -iface=contact -host=socket:localhost:9025 \
      -ca-keys=perso/emv/sample.ca.keys -pin=1234 -floor=none
 ```

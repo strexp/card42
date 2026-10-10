@@ -4,8 +4,9 @@
 # CI/release artifact uploads:
 #
 #   dist/card  the three CAPs and their export files (written to a card)
-#   dist/host  the three runnable host jars (card42-emv.jar / card42-emrtd.jar
-#              and their card42-common.jar dependency)
+#   dist/host  the five host jars: the card42-common.jar shared library, the
+#              card42-emv.jar / card42-emrtd.jar libraries and the runnable
+#              card42-emv-cli.jar / card42-emrtd-cli.jar CLIs
 #
 # Run after `make`.
 
@@ -22,7 +23,8 @@ cp "$D/card42/emv/javacard/emv.exp"                     dist/card/card42-emv.exp
 cp "$D/card42/emrtd/javacard/emrtd.cap"                 dist/card/card42-emrtd.cap
 cp "$D/card42/emrtd/javacard/emrtd.exp"                 dist/card/card42-emrtd.exp
 
-cp "$D/card42-common.jar" "$D/card42-emv.jar" "$D/card42-emrtd.jar" dist/host/
+cp "$D/card42-common.jar" "$D/card42-emv.jar" "$D/card42-emrtd.jar" \
+   "$D/card42-emv-cli.jar" "$D/card42-emrtd-cli.jar" dist/host/
 
 echo ">>> dist/card"
 ls -l dist/card

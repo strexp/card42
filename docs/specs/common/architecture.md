@@ -10,10 +10,14 @@ eMRTD 详见 [../emrtd/emrtd.md](../emrtd/emrtd.md)）。
 | EMV 卡侧 applet | `card/emv/` | `card42.emv` | `card42-emv.cap` |
 | eMRTD 卡侧 applet | `card/emrtd/` | `card42.emrtd` | `card42-emrtd.cap` |
 | 主机共享库 | `host/common/` | `card42.host.common` | `card42-common.jar` |
-| EMV 主机栈 + 内核 + CLI | `host/emv/` | `card42.host.emv.<sub>` | `card42-emv.jar` |
-| eMRTD 主机栈 + CLI | `host/emrtd/` | `card42.host.emrtd.<sub>` | `card42-emrtd.jar` |
+| EMV 主机库（栈 + 内核） | `host/emv/`（不含 `cli/`） | `card42.host.emv.<sub>` | `card42-emv.jar` |
+| eMRTD 主机库（栈） | `host/emrtd/`（不含 `cli/`） | `card42.host.emrtd.<sub>` | `card42-emrtd.jar` |
+| EMV 主机 CLI | `host/emv/cli/` | `card42.host.emv.cli` | `card42-emv-cli.jar` |
+| eMRTD 主机 CLI | `host/emrtd/cli/` | `card42.host.emrtd.cli` | `card42-emrtd-cli.jar` |
 
-业务 CAP 依赖 `card42common`；业务 jar 依赖 `card42-common.jar`（Manifest `Class-Path`）。
+业务 CAP 依赖 `card42common`；业务 jar 依赖 `card42-common.jar`（Manifest `Class-Path`）。库 jar
+不含 CLI，第三方应用可直接依赖 `card42-common.jar` + `card42-emv.jar` / `card42-emrtd.jar`；
+可执行入口在 `card42-emv-cli.jar` / `card42-emrtd-cli.jar`。
 本文 §1–§8 以 EMV 卡侧（CAP）为主；内核流程见 [../emv/contactless.md](../emv/contactless.md) §6，
 构建与打包见 [toolchain.md](toolchain.md) §2/§6，eMRTD 见 §9。
 
@@ -176,8 +180,9 @@ perso/emrtd/    csca.crt / csca.key / dsc.crt / dsc.key / portrait.png / sample.
                 （样例护照与 PA 夹具）
 ```
 
-卡侧编成三个 CAP；主机侧只用 JDK 编译并打包为 `card42-common.jar` / `card42-emv.jar` /
-`card42-emrtd.jar`，见 [toolchain.md](toolchain.md) §2。
+卡侧编成三个 CAP；主机侧只用 JDK 编译，业务模块各分「库（不含 `cli/`）+ CLI」并打包为五个
+jar：`card42-common.jar` / `card42-emv.jar` / `card42-emrtd.jar` 为库，
+`card42-emv-cli.jar` / `card42-emrtd-cli.jar` 为可执行 CLI，见 [toolchain.md](toolchain.md) §2。
 
 主机侧传输层 `host/common/transport/` 基于 JDK `javax.smartcardio`。EMV v4.4 Book 1 删除了
 Part II（传输协议），T=0/T=1、GET RESPONSE、状态字与 APDU case 属 *EMV Contact Interface
@@ -191,7 +196,9 @@ GET RESPONSE（SunPCSC 会沿用触发命令的 CLA，严格卡以 `6E00` 拒绝
 - `common` 不依赖任何其它 host 模块；
 - `emv.lib → common`；`emv.kernel → {common, emv.lib}`；`emv.report → {…, kernel}`；
   `emv.app`；`emv.cli`（可依赖全部）；
-- `emrtd → common`（业务模块之间互不依赖）。
+- `emrtd.lib → common`；`emrtd.cli → {common, emrtd.lib}`；
+- **库模块不得依赖任何 CLI 模块**（业务模块之间亦互不依赖），从而库 jar 可脱离 CLI jar
+  直接供第三方应用使用。
 
 ### 2.1 内核对外 API
 

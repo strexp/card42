@@ -1,7 +1,8 @@
 # card42
 
 card42 is an EMV + eMRTD toolkit. It ships a shared card-side library CAP, two
-card-side applets and three host modules:
+card-side applets and five host artifacts (a shared library, two business
+libraries and their CLIs):
 
 | Deliverable | Location | Artifact |
 |-------------|----------|----------|
@@ -9,8 +10,10 @@ card-side applets and three host modules:
 | EMV Java Card applet | `card/emv/` | `card42-emv.cap` |
 | eMRTD (ICAO 9303) Java Card applet | `card/emrtd/` | `card42-emrtd.cap` |
 | Host common library (transport/codec/crypto/util) | `host/common/` | `card42-common.jar` |
-| EMV host stack + kernels + CLI | `host/emv/` | `card42-emv.jar` |
-| eMRTD host stack + CLI | `host/emrtd/` | `card42-emrtd.jar` |
+| EMV host library (stack + kernels) | `host/emv/` (not `cli/`) | `card42-emv.jar` |
+| eMRTD host library (stack) | `host/emrtd/` (not `cli/`) | `card42-emrtd.jar` |
+| EMV host CLI | `host/emv/cli/` | `card42-emv-cli.jar` |
+| eMRTD host CLI | `host/emrtd/cli/` | `card42-emrtd-cli.jar` |
 
 The business CAPs and jars depend on the shared library/common module.  All
 class AIDs derive from the shared private RID `CARD42_RID = 43 41 52 44 42`
@@ -55,13 +58,13 @@ Details and tunables: [`docs/specs/common/toolchain.md`](docs/specs/common/toolc
 ## Repository layout
 
 ```
-Makefile      Build (3 CAPs + 3 host jars), verify, simulator and test targets
+Makefile      Build (3 CAPs + 5 host jars), verify, simulator and test targets
 card/common   Shared Java Card library (`card42.common`)
 card/emv      EMV applet (`card42.emv`), depends on card/common
 card/emrtd    eMRTD LDS1/LDS2 applet (`card42.emrtd`), depends on card/common
 host/common   Shared host library (`card42.host.common`)
-host/emv      EMV host stack + kernels + CLI (`card42.host.emv`)
-host/emrtd    eMRTD host stack + CLI (`card42.host.emrtd`)
+host/emv      EMV host library + CLI (`card42.host.emv`; `cli/` = the CLI jar)
+host/emrtd    eMRTD host library + CLI (`card42.host.emrtd`; `cli/` = the CLI jar)
 test/common   Fixtures/stubs shared by the unit and integration builds
 test/emv      EMV unit + integration suites
 test/emrtd    eMRTD unit + integration suites
@@ -83,7 +86,7 @@ The full module, package and source layout is in
 ## Build and test
 
 ```
-make                 # build the three CAPs and the three host jars
+make                 # build the three CAPs and the five host jars
 make verify          # verify the generated export files
 make test-unit       # pure-JVM unit tests (no simulator required)
 make test            # both matrix: EMV + eMRTD coexist (no EMV card-block)
@@ -93,9 +96,11 @@ make TEST_CONTACTLESS=1 test-emv   # contactless flow via the PPSE (test build)
 make clean           # remove the build directory
 ```
 
-`make` produces the CAPs under `build/deliverables/` and the runnable jars
-`card42-emv.jar` / `card42-emrtd.jar` (`java -jar ... <command> <subcommand>`,
-e.g. `perso export`, `terminal pay`, `terminal emrtd read`).  The complete
+`make` produces the CAPs under `build/deliverables/`, the host libraries
+`card42-common.jar` / `card42-emv.jar` / `card42-emrtd.jar` (for third-party
+applications) and the runnable CLIs `card42-emv-cli.jar` / `card42-emrtd-cli.jar`
+(`java -jar ... <command> <subcommand>`, e.g. `perso export`, `terminal pay`,
+`terminal emrtd read`).  The complete
 target list, simulator and real-card workflows, configuration variables and CLI
 usage are in [`docs/specs/common/toolchain.md`](docs/specs/common/toolchain.md).
 

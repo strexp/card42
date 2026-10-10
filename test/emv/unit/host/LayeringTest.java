@@ -10,7 +10,7 @@ import java.util.stream.Stream;
 
 /**
  * Source-layout guard (docs/specs/common/architecture.md §2): enforces
- * the three-module topology and the intra-emv layering.
+ * the host module topology, the intra-emv layering and the library/CLI split.
  *
  * <ul>
  *   <li>{@code common} imports no other host module;</li>
@@ -20,8 +20,13 @@ import java.util.stream.Stream;
  *   <li>{@code emv.report} imports {@code common}/{@code emv.lib}/{@code emv.kernel}/{@code emv.crypto}/{@code emv.oda};</li>
  *   <li>{@code emv.app} imports {@code common}/{@code emv.lib}/{@code emv.kernel}/{@code emv.report}/{@code emv.crypto}/{@code emv.oda};</li>
  *   <li>{@code emv.cli} imports any emv module plus {@code common};</li>
- *   <li>{@code emrtd} imports {@code common} only (plus its own module).</li>
+ *   <li>{@code emrtd.lib} imports {@code common} only;</li>
+ *   <li>{@code emrtd.cli} imports {@code common}/{@code emrtd.lib}.</li>
  * </ul>
+ *
+ * <p>No library module may import a CLI module, so the library jars
+ * ({@code card42-emv.jar} / {@code card42-emrtd.jar}) stay consumable without
+ * the CLI jars (see docs/specs/common/toolchain.md §2).
  *
  * <p>Run from the repository root (as {@code make test-unit} does); the check
  * is skipped when {@code host} is not found.
@@ -100,8 +105,11 @@ final class LayeringTest {
         if (p.startsWith("host/emv/oda/")) {
             return "emv.oda";
         }
+        if (p.startsWith("host/emrtd/cli/")) {
+            return "emrtd.cli";
+        }
         if (p.startsWith("host/emrtd/")) {
-            return "emrtd";
+            return "emrtd.lib";
         }
         return null;
     }
@@ -132,8 +140,11 @@ final class LayeringTest {
         if (pkg.startsWith("card42.host.emv")) {
             return "emv.lib";
         }
+        if (pkg.startsWith("card42.host.emrtd.cli")) {
+            return "emrtd.cli";
+        }
         if (pkg.startsWith("card42.host.emrtd")) {
-            return "emrtd";
+            return "emrtd.lib";
         }
         if (pkg.startsWith("card42.host.common")) {
             return "common";
@@ -162,8 +173,12 @@ final class LayeringTest {
         case "emv.cli":
             return java.util.Arrays.asList("common", "emv.lib", "emv.kernel", "emv.report",
                     "emv.app", "emv.crypto", "emv.oda");
-        default: // emrtd
+        case "emrtd.lib":
             return java.util.Arrays.asList("common");
+        case "emrtd.cli":
+            return java.util.Arrays.asList("common", "emrtd.lib");
+        default:
+            return java.util.Collections.emptyList();
         }
     }
 }

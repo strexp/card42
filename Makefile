@@ -58,13 +58,19 @@ EXP_FILE  := $(EMV_EXP_FILE)
 CONF_FILE := $(EMV_CONF)
 GEN_SRC   := $(GEN_DIR)/card42/emv/BuildConfig.java
 
-# Host three-module deliverables: card42-common.jar is the
-# shared library; card42-emv.jar / card42-emrtd.jar are independently runnable
-# and carry a Class-Path manifest entry pointing at common.
-HOST_COMMON_JAR := $(DELIVERABLES)/card42-common.jar
-HOST_EMV_JAR    := $(DELIVERABLES)/card42-emv.jar
-HOST_EMRTD_JAR  := $(DELIVERABLES)/card42-emrtd.jar
-MAIN_CLASS      ?= card42.host.emv.cli.Main
+# Host five-module deliverables: card42-common.jar is the shared library;
+# card42-emv.jar / card42-emrtd.jar are the EMV / eMRTD libraries (no CLI, so a
+# third-party application can depend on them directly); card42-emv-cli.jar /
+# card42-emrtd-cli.jar are the independently runnable CLIs.  Every jar carries
+# a Class-Path manifest entry pointing at common (the CLI jars also point at
+# their library) so the five jars work from one directory.
+HOST_COMMON_JAR    := $(DELIVERABLES)/card42-common.jar
+HOST_EMV_JAR       := $(DELIVERABLES)/card42-emv.jar
+HOST_EMRTD_JAR     := $(DELIVERABLES)/card42-emrtd.jar
+HOST_EMV_CLI_JAR   := $(DELIVERABLES)/card42-emv-cli.jar
+HOST_EMRTD_CLI_JAR := $(DELIVERABLES)/card42-emrtd-cli.jar
+MAIN_CLASS         ?= card42.host.emv.cli.Main
+EMRTD_MAIN_CLASS   ?= card42.host.emrtd.cli.Main
 
 GPAPI         := $(GPAPI_DIR)/$(GPAPI_VERSION)
 JC_TOOLS_LIB  := $(JC_HOME_TOOLS)/lib
@@ -101,20 +107,30 @@ SIM_PID      := $(SIM_DIR)/simulator.pid
 HOST_CLASSES := $(BUILD_DIR)/host/classes
 HOST_STAMP   := $(HOST_CLASSES)/.compiled
 
-# Host-only compilation (no test facilities), used to build the three jars and
-# to compile the unit tests.
-HOST_COMMON_SRC  := $(shell find host/common -name '*.java')
-HOST_EMV_SRC     := $(shell find host/emv -name '*.java')
-HOST_EMRTD_SRC   := $(shell find host/emrtd -name '*.java' 2>/dev/null)
-HOST_LIB_SRC     := $(HOST_COMMON_SRC) $(HOST_EMV_SRC) $(HOST_EMRTD_SRC)
-HOST_COMMON_CLASSES := $(BUILD_DIR)/host/common-classes
-HOST_EMV_CLASSES    := $(BUILD_DIR)/host/emv-classes
-HOST_EMRTD_CLASSES  := $(BUILD_DIR)/host/emrtd-classes
-HOST_COMMON_STAMP   := $(HOST_COMMON_CLASSES)/.compiled
-HOST_EMV_STAMP      := $(HOST_EMV_CLASSES)/.compiled
-HOST_EMRTD_STAMP    := $(HOST_EMRTD_CLASSES)/.compiled
-HOST_LIB_CLASSES    := $(BUILD_DIR)/host/lib-classes
-HOST_LIB_STAMP      := $(BUILD_DIR)/host/lib.stamp
+# Host-only compilation (no test facilities), used to build the five jars and
+# to compile the unit tests.  Each business module is split into a library
+# source set (everything but host/<mod>/cli) and a CLI source set, so the
+# library jar is consumable without the CLI.
+HOST_COMMON_SRC    := $(shell find host/common -name '*.java')
+HOST_EMV_LIB_SRC   := $(shell find host/emv -name '*.java' -not -path 'host/emv/cli/*')
+HOST_EMV_CLI_SRC   := $(shell find host/emv/cli -name '*.java' 2>/dev/null)
+HOST_EMRTD_LIB_SRC := $(shell find host/emrtd -name '*.java' -not -path 'host/emrtd/cli/*' 2>/dev/null)
+HOST_EMRTD_CLI_SRC := $(shell find host/emrtd/cli -name '*.java' 2>/dev/null)
+HOST_EMV_SRC       := $(HOST_EMV_LIB_SRC) $(HOST_EMV_CLI_SRC)
+HOST_EMRTD_SRC     := $(HOST_EMRTD_LIB_SRC) $(HOST_EMRTD_CLI_SRC)
+HOST_LIB_SRC       := $(HOST_COMMON_SRC) $(HOST_EMV_SRC) $(HOST_EMRTD_SRC)
+HOST_COMMON_CLASSES    := $(BUILD_DIR)/host/common-classes
+HOST_EMV_LIB_CLASSES   := $(BUILD_DIR)/host/emv-lib-classes
+HOST_EMV_CLI_CLASSES   := $(BUILD_DIR)/host/emv-cli-classes
+HOST_EMRTD_LIB_CLASSES := $(BUILD_DIR)/host/emrtd-lib-classes
+HOST_EMRTD_CLI_CLASSES := $(BUILD_DIR)/host/emrtd-cli-classes
+HOST_COMMON_STAMP    := $(HOST_COMMON_CLASSES)/.compiled
+HOST_EMV_LIB_STAMP   := $(HOST_EMV_LIB_CLASSES)/.compiled
+HOST_EMV_CLI_STAMP   := $(HOST_EMV_CLI_CLASSES)/.compiled
+HOST_EMRTD_LIB_STAMP := $(HOST_EMRTD_LIB_CLASSES)/.compiled
+HOST_EMRTD_CLI_STAMP := $(HOST_EMRTD_CLI_CLASSES)/.compiled
+HOST_LIB_CLASSES     := $(BUILD_DIR)/host/lib-classes
+HOST_LIB_STAMP       := $(BUILD_DIR)/host/lib.stamp
 
 # Shared host JVM invocation.  The `cd $(HOST_CLASSES)` is deliberately kept
 # out of this variable: the suite loop below changes directory once and then
@@ -126,7 +142,7 @@ HOST_JAVA := $(JAVA) -p $(JC_SIM_CLIENT)/COMService \
               --add-modules ALL-MODULE-PATH -cp .
 
 .PHONY: all card card-common card-emv card-emrtd cap jar classes convert verify clean \
-        host host-common host-emv host-emrtd \
+        host host-common host-emv host-emrtd host-emv-cli host-emrtd-cli \
         sim-install sim-perso sim-emv-install sim-emv-perso \
         sim-emrtd-install sim-emrtd-perso \
         sim-configure sim-start sim-wait sim-stop \
@@ -253,17 +269,21 @@ verify: card-common card-emv card-emrtd
 	  JAVA_HOME="$(JAVA_HOME)" $(JC_HOME_TOOLS)/bin/verifyexp.sh $(abspath $(EMRTD_EXP_FILE)); \
 	fi
 
-# --- Host three modules ---------------------------------
-# card42-common.jar (library), card42-emv.jar (CLI card42.host.emv.cli.Main) and
-# card42-emrtd.jar (CLI card42.host.emrtd.cli.Main).  The business jars carry a
-# Class-Path manifest entry so `java -jar card42-emv.jar ...` finds common when
-# the three jars sit in the same directory.
+# --- Host five modules ----------------------------------
+# card42-common.jar (library), card42-emv.jar / card42-emrtd.jar (libraries, no
+# CLI; a third-party application can depend on these) and card42-emv-cli.jar /
+# card42-emrtd-cli.jar (runnable CLIs, card42.host.emv.cli.Main /
+# card42.host.emrtd.cli.Main).  Every jar carries a Class-Path manifest entry so
+# `java -jar card42-emv-cli.jar ...` finds common and the EMV library when the
+# five jars sit in the same directory.
 jar: host
-host: host-common host-emv host-emrtd
+host: host-common host-emv host-emrtd host-emv-cli host-emrtd-cli
 
 host-common: $(HOST_COMMON_JAR)
 host-emv: $(HOST_EMV_JAR)
 host-emrtd: $(HOST_EMRTD_JAR)
+host-emv-cli: $(HOST_EMV_CLI_JAR)
+host-emrtd-cli: $(HOST_EMRTD_CLI_JAR)
 
 $(HOST_COMMON_STAMP): $(HOST_COMMON_SRC)
 	@mkdir -p $(HOST_COMMON_CLASSES)
@@ -274,31 +294,61 @@ $(HOST_COMMON_JAR): $(HOST_COMMON_STAMP)
 	@mkdir -p $(dir $@)
 	$(JAR) cf $@ -C $(HOST_COMMON_CLASSES) .
 
-$(HOST_EMV_STAMP): $(HOST_EMV_SRC) $(HOST_COMMON_STAMP)
-	@mkdir -p $(HOST_EMV_CLASSES)
-	$(JAVAC) -cp $(HOST_COMMON_CLASSES) -d $(HOST_EMV_CLASSES) $(HOST_EMV_SRC)
+# EMV library (host/emv minus host/emv/cli).
+$(HOST_EMV_LIB_STAMP): $(HOST_EMV_LIB_SRC) $(HOST_COMMON_STAMP)
+	@mkdir -p $(HOST_EMV_LIB_CLASSES)
+	$(JAVAC) -cp $(HOST_COMMON_CLASSES) -d $(HOST_EMV_LIB_CLASSES) $(HOST_EMV_LIB_SRC)
 	@touch $@
 
-$(HOST_EMV_JAR): $(HOST_EMV_STAMP)
+$(HOST_EMV_JAR): $(HOST_EMV_LIB_STAMP)
 	@mkdir -p $(dir $@)
-	@printf 'Manifest-Version: 1.0\nMain-Class: %s\nClass-Path: card42-common.jar\n\n' \
-	  '$(MAIN_CLASS)' > $(BUILD_DIR)/emv.mf
-	$(JAR) cfm $@ $(BUILD_DIR)/emv.mf -C $(HOST_EMV_CLASSES) .
+	@printf 'Manifest-Version: 1.0\nClass-Path: card42-common.jar\n\n' \
+	  > $(BUILD_DIR)/emv.mf
+	$(JAR) cfm $@ $(BUILD_DIR)/emv.mf -C $(HOST_EMV_LIB_CLASSES) .
 
-# eMRTD host module (built only once host/emrtd exists).
-$(HOST_EMRTD_STAMP): $(HOST_EMRTD_SRC) $(HOST_COMMON_STAMP)
-	@if [ -n "$(HOST_EMRTD_SRC)" ]; then \
-	  mkdir -p $(HOST_EMRTD_CLASSES); \
-	  $(JAVAC) -cp $(HOST_COMMON_CLASSES) -d $(HOST_EMRTD_CLASSES) $(HOST_EMRTD_SRC); \
+# EMV CLI (host/emv/cli), on top of the library.
+$(HOST_EMV_CLI_STAMP): $(HOST_EMV_CLI_SRC) $(HOST_EMV_LIB_STAMP)
+	@mkdir -p $(HOST_EMV_CLI_CLASSES)
+	$(JAVAC) -cp $(HOST_COMMON_CLASSES):$(HOST_EMV_LIB_CLASSES) \
+	  -d $(HOST_EMV_CLI_CLASSES) $(HOST_EMV_CLI_SRC)
+	@touch $@
+
+$(HOST_EMV_CLI_JAR): $(HOST_EMV_CLI_STAMP)
+	@mkdir -p $(dir $@)
+	@printf 'Manifest-Version: 1.0\nMain-Class: %s\nClass-Path: card42-common.jar card42-emv.jar\n\n' \
+	  '$(MAIN_CLASS)' > $(BUILD_DIR)/emv-cli.mf
+	$(JAR) cfm $@ $(BUILD_DIR)/emv-cli.mf -C $(HOST_EMV_CLI_CLASSES) .
+
+# eMRTD library / CLI (built only once host/emrtd exists).
+$(HOST_EMRTD_LIB_STAMP): $(HOST_EMRTD_LIB_SRC) $(HOST_COMMON_STAMP)
+	@if [ -n "$(HOST_EMRTD_LIB_SRC)" ]; then \
+	  mkdir -p $(HOST_EMRTD_LIB_CLASSES); \
+	  $(JAVAC) -cp $(HOST_COMMON_CLASSES) -d $(HOST_EMRTD_LIB_CLASSES) $(HOST_EMRTD_LIB_SRC); \
 	  touch $@; \
 	fi
 
-$(HOST_EMRTD_JAR): $(HOST_EMRTD_STAMP)
-	@if [ -n "$(HOST_EMRTD_SRC)" ]; then \
+$(HOST_EMRTD_JAR): $(HOST_EMRTD_LIB_STAMP)
+	@if [ -n "$(HOST_EMRTD_LIB_SRC)" ]; then \
 	  mkdir -p $(dir $@); \
-	  printf 'Manifest-Version: 1.0\nMain-Class: card42.host.emrtd.cli.Main\nClass-Path: card42-common.jar\n\n' \
+	  printf 'Manifest-Version: 1.0\nClass-Path: card42-common.jar\n\n' \
 	    > $(BUILD_DIR)/emrtd.mf; \
-	  $(JAR) cfm $@ $(BUILD_DIR)/emrtd.mf -C $(HOST_EMRTD_CLASSES) .; \
+	  $(JAR) cfm $@ $(BUILD_DIR)/emrtd.mf -C $(HOST_EMRTD_LIB_CLASSES) .; \
+	fi
+
+$(HOST_EMRTD_CLI_STAMP): $(HOST_EMRTD_CLI_SRC) $(HOST_EMRTD_LIB_STAMP)
+	@if [ -n "$(HOST_EMRTD_CLI_SRC)" ]; then \
+	  mkdir -p $(HOST_EMRTD_CLI_CLASSES); \
+	  $(JAVAC) -cp $(HOST_COMMON_CLASSES):$(HOST_EMRTD_LIB_CLASSES) \
+	    -d $(HOST_EMRTD_CLI_CLASSES) $(HOST_EMRTD_CLI_SRC); \
+	  touch $@; \
+	fi
+
+$(HOST_EMRTD_CLI_JAR): $(HOST_EMRTD_CLI_STAMP)
+	@if [ -n "$(HOST_EMRTD_CLI_SRC)" ]; then \
+	  mkdir -p $(dir $@); \
+	  printf 'Manifest-Version: 1.0\nMain-Class: %s\nClass-Path: card42-common.jar card42-emrtd.jar\n\n' \
+	    '$(EMRTD_MAIN_CLASS)' > $(BUILD_DIR)/emrtd-cli.mf; \
+	  $(JAR) cfm $@ $(BUILD_DIR)/emrtd-cli.mf -C $(HOST_EMRTD_CLI_CLASSES) .; \
 	fi
 
 # Host sources compiled together with the tests (unit + integration).

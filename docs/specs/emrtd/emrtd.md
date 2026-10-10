@@ -354,7 +354,7 @@ ECDH + KDF + SM 往返在纯 JVM 中用独立 JCE 密钥对验证（`EmrtdLds2Te
 
 ## 15. 主机 CLI
 
-`card42.host.emrtd.cli.Main`（`card42-emrtd.jar` 入口）：
+`card42.host.emrtd.cli.Main`（`card42-emrtd-cli.jar` 入口）：
 
 ```
 Main terminal emrtd read    -host=<spec> -doc=<no> -dob=YYMMDD -doe=YYMMDD [-pace] [-can=<6 digits>] [-ca] [-json=1]

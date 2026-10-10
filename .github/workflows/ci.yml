@@ -1,6 +1,6 @@
 name: ci
 
-# Build the three CAPs and the three host jars on every push to the default
+# Build the three CAPs and the five host jars on every push to the default
 # branch and on pull requests, and upload them as two artifacts (card / host).
 # Tag builds are handled by release.yml instead.
 
