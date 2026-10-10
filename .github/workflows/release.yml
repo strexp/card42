@@ -1,0 +1,72 @@
+name: release
+
+# On a version tag, build the CAPs and host jars, upload them as the same two
+# artifacts as ci.yml (card / host) and additionally attach them to a DRAFT
+# GitHub release.  The release is left as a draft so the notes and the -debug
+# CAPs can be reviewed before publishing.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Provision Java Card tools and GlobalPlatform API
+        run: bash .github/scripts/provision-tools.sh
+
+      - name: Build CAPs and host jars
+        run: make
+
+      - name: Verify export files
+        run: make verify
+
+      - name: Unit tests (pure JVM, no simulator)
+        run: make test-unit
+
+      - name: Stage deliverables
+        run: bash .github/scripts/stage-deliverables.sh
+
+      - name: Upload card artifact (CAPs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: card42-card
+          path: dist/card/
+          if-no-files-found: error
+
+      - name: Upload host artifact (jars)
+        uses: actions/upload-artifact@v4
+        with:
+          name: card42-host
+          path: dist/host/
+          if-no-files-found: error
+
+      # Attach the CAPs and jars to a draft release for the pushed tag.  On a
+      # re-run of the same tag the assets are replaced instead of failing.
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" dist/card/* dist/host/* --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --draft \
+              --title "${GITHUB_REF_NAME}" \
+              --generate-notes \
+              dist/card/* dist/host/*
+          fi

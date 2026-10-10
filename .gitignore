@@ -1,5 +1,6 @@
 tools/*
 !tools/README.md
 build/
+dist/
 config/local.mk
 docs/changelogs
