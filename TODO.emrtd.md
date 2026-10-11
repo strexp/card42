@@ -22,7 +22,7 @@
     EF.CardAccess/CardSecurity（主文件 `011C`/`011D`）；MF EF.ATR/INFO（2F01）与 EF.DIR（2F00）；
     LDS2 EF.Certificates 254/64 记录上限；Chip Authentication（FF03 + EF.CardSecurity；LDS1
     主文件 EF.CardSecurity DGI FF05、读访问 PACE，SELECT MF 后 `011D` 解析）；DG3–DG16；
-    PACE 卡侧（ECDH 通用映射 3DES 宣告 + AES-128 支持、MRZ/CAN 口令）。
+    PACE 卡侧（ECDH 通用映射 3DES 与 AES-128 宣告、MRZ/CAN 口令）。
   - **CA 对端点校验修复**：`P256.isLessThanP` 改为显式无符号逐字节比较（不再依赖
     `Util.arrayCompare` 的平台相关符号性）；修复前某平台会间歇性把合法坐标判为 `>= p` 回
     `6A80`，导致 LDS2 CA 集成测试随机失败。
@@ -64,6 +64,15 @@
     `LdsReader` 请求 `0xE7` 但以位移越过 EF 末尾判 EOF（不能以「短块」判，AES 会合法回 223）；PACE/CA/AA/BAC
     等慢命令前调用 `APDU.waitExtension()`（`READ BINARY` 不调用，避免每包多一次 WTX）。
     纯 JVM 单测与 jcsl 集成矩阵（BAC/LDS2/PACE/CA）全绿。
+  - **AES 安全报文提速 / 重新宣告 AES-128（原 T5.4）**：平台无 AES-CMAC `Signature`
+    （`ALG_AES_CMAC_128`/`AES_MAC_128_NOPAD` 实测不可用），`AesCmac` 一次性 MAC 改为用
+    `Cipher.ALG_AES_BLOCK_128_CBC_NOPAD` 批量链式（256 B 分块，只留末块作链值，末块再一次 ECB），
+    352 B 的 SM 消息由 ~22 次 ECB 调用降到 2 次 CBC + 1 次 ECB。**真卡 J3R180 实测**（接触，
+    ACR1581 PICC，DG2 8309 B）：AES-128 每 `READ BINARY` **81 ms**（min 76.9 / max 84.0，3 遍）、
+    3DES 93 ms；~8 KB DG2 全读 AES ~3.1 s / 3DES ~3.3 s（旧实现 AES ~1.4 s/包，约 17× 慢）。
+    `ALG_AES_BLOCK_128_CBC_NOPAD` 在 jcsl 与 J3R180 均确认可用（AES-128 PACE 两侧通过）；
+    因此 `EmrtdPersoExporter.cardAccessInfos` **重新宣告 3DES + AES-128**（`perso/emrtd/sample.perso`
+    的 `@cardaccess` 同步重新生成）。单测（含 >256 B 跨块向量）与 `make test`/`make test-emv` 全绿。
   - **大照片（DG2）支持**：个性化改为**逐 DGI 流式落盘**（`DgiStream` + `LdsPerso`/`Lds2Perso`，
     不再有 4096 B 整段重组缓冲），LDS1/LDS2 透明 EF 与记录分别改为 **256 B 分页**与
     `beginRecord/appendChunk/endRecord` 流式记录（不复制增长、不需连续大数组）；DG2 预算
@@ -93,18 +102,11 @@
   持久堆余量而非确定性逻辑；`test-emrtd-card` 暂对每个 suite 重试一次。需在真卡定位：
   失败时读 `JCSystem.getAvailableMemory(MEMORY_TYPE_PERSISTENT)`、确认是否与前置 suite 的持久写
   （LDS2 APPEND RECORD）或 PACE 会话次数相关，必要时在 `Pace`/实例初始化处进一步复用/回收对象。
-- [~] **T5.4 PACE-AES 读性能 / 重新宣告 AES**：真卡 J3R180 上 PACE 协商 AES-128 后每个
-  ~231 B `READ BINARY` 约 1.4 s（3DES 约 0.15 s），ReadID 读 ~8 KB 的 DG2 会丢标签，故
-  EF.CardAccess 暂时**只宣告 3DES**（`EmrtdPersoExporter.cardAccessInfos`；卡仍实现/接受
-  AES-128，`EmrtdPaceIntegrationTest` 显式覆盖）。**（2026-10-11）根因已定位并改**：平台无
-  AES-CMAC `Signature`（`ALG_AES_CMAC_128`/`AES_MAC_128_NOPAD` 均不可用，探针实测 0），CMAC
-  只能手工构造，旧实现每个 16 B 块一次 ECB `doFinal`（~20 次/包）；现改为用
-  `Cipher.ALG_AES_BLOCK_128_CBC_NOPAD` 批量链式（256 B 分块，只留最后一块作链值），352 B 的
-  SM 消息降到 2 次 CBC + 1 次 ECB。**已确认 jcsl 与 J3R180 均支持
-  `ALG_AES_BLOCK_128_CBC_NOPAD`**（`PACE ECDH-GM AES-128` 在两侧均通过，见 cryptography.md
-  §4.1）。单测（含 >256 B 跨块向量）与模拟器矩阵（`make test`）全绿；**待真卡实测**新的
-  `READ BINARY` 耗时与瞬态余量（`AesCmac` 新增 256 B CBC 暂存/实例），达标后重新在
-  `EF.CardAccess` 宣告 AES-128。
+- [x] **T5.4 PACE-AES 读性能 / 重新宣告 AES（已完成）**：见状态快照「AES 安全报文提速 / 重新
+  宣告 AES-128」。根因为 `AesCmac` 逐块 ECB（平台无 AES-CMAC `Signature`），已改为
+  `ALG_AES_BLOCK_128_CBC_NOPAD` 批量链式；真卡实测 AES-128 每 `READ BINARY` 81 ms（3DES 93 ms），
+  `EF.CardAccess` 已重新宣告 3DES + AES-128。
+
 - [ ] **SEARCH RECORD 命令 DO 解析复核（命令级单测发现，待正文复核）**：
   ① 搜索窗口的两个 `DO'02'`（偏移/字节数）由 `Lds2Record.searchRecord` 固定按 2 字节
   `Util.getShort` 读取，未按 BER 长度字段解码；ICAO Doc 9303-10 §3.7.3 Table 17 与
