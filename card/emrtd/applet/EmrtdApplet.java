@@ -126,6 +126,7 @@ public final class EmrtdApplet extends AppletBase
         EmrtdScratch.init();
         SmScratch.init();
         MacEngines.init();
+        KdfEngines.init();
         EmrtdScratch.initSession();
         EmrtdScratch.initExtended();
         plain = EmrtdScratch.io;
@@ -150,7 +151,7 @@ public final class EmrtdApplet extends AppletBase
                 : role == EmrtdInstallParameters.ROLE_LDS2_VISA ? Lds2FileSystem.visa()
                 : role == EmrtdInstallParameters.ROLE_LDS2_BIOMETRICS ? Lds2FileSystem.biometrics()
                 : null;
-        random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
+        random = KdfEngines.random();
         bac = lds1Role ? new BacCrypto() : null;
         aa = lds1Role ? new AaCrypto((short) 2048, AaCrypto.AA_SHA1) : null;
         sm3des = new Iso7816Sm();

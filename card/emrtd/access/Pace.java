@@ -105,7 +105,7 @@ public final class Pace implements PaceSeedSink {
     private final byte[] zeroIv16 = new byte[16];
 
     public Pace() {
-        kdf = new Sha1Kdf();
+        kdf = KdfEngines.kdf();
         mac = MacEngines.retailMac();
         aesMac = MacEngines.aesCmac();
         des3 = Cipher.getInstance(Cipher.ALG_DES_CBC_NOPAD, false);

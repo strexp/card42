@@ -64,7 +64,7 @@ public class PaymentApplet extends EMVAppletBase {
         // PIN (VERIFY P2=80).
         pin = new OfflinePinState((byte) 3, (byte) 8);
         pin.update(new byte[] { (byte) 0x12, (byte) 0x34 }, (short) 0, (byte) 2);
-        randomData = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
+        randomData = EmvEngines.random();
 
         staticData = new EMVStaticData();
         theCrypto = new EMVCrypto(protocolState, staticData);

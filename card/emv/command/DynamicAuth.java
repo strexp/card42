@@ -51,7 +51,7 @@ public class DynamicAuth implements ISO7816 {
         authMessage = null;
         cdaHeader = EmvScratch.cdaHeader;
         cdaUn = EmvScratch.cdaUn;
-        sha1 = MessageDigest.getInstance(MessageDigest.ALG_SHA, false);
+        sha1 = EmvEngines.sha1();
     }
 
     /**

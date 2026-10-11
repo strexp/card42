@@ -38,7 +38,7 @@ public final class ChipAuth {
     private final byte[] secret = new byte[64];
 
     public ChipAuth() {
-        kdf = new Sha1Kdf();
+        kdf = KdfEngines.kdf();
     }
 
     /** Sets the static private scalar (personalization DGI FF03). */

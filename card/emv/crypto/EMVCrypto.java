@@ -80,12 +80,15 @@ public class EMVCrypto implements ISO7816 {
 		// Package-shared transient buffers, allocated once at install (see
 		// EmvScratch): no command path allocates a transient array.
 		EmvScratch.init();
+		// Package-shared MAC engines and helpers (see EmvEngines): one
+		// RetailMac/AesCmac for the whole package instead of one per instance.
+		EmvEngines.init();
 		sessionkey = EmvScratch.sessionKey;
 		scratch = EmvScratch.acScratch;
 		lastAc = EmvScratch.lastAc;
 
-		retailMac = new RetailMac();
-		aesCmac = new AesCmac();
+		retailMac = EmvEngines.retailMac();
+		aesCmac = EmvEngines.aesCmac();
 		sessionKeyDerivation = new SessionKey();
 
 		mkDes = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES,

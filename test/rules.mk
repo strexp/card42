@@ -185,6 +185,7 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_EMV_DIR)/constants/EMVStatus.java $(CARD_EMV_DIR)/constants/EMVRoles.java \
                  $(CARD_EMV_DIR)/constants/EMVCodes.java \
                  $(CARD_EMV_DIR)/mem/EmvScratch.java \
+                 $(CARD_EMV_DIR)/mem/EmvEngines.java \
                  $(CARD_EMV_DIR)/state/EMVProtocolState.java \
                  $(CARD_EMV_DIR)/data/EMVStaticData.java $(CARD_EMV_DIR)/data/Defaults.java \
                  $(CARD_EMV_DIR)/data/PaymentData.java $(CARD_EMV_DIR)/data/FciBuilder.java \
@@ -216,6 +217,7 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_EMRTD_DIR)/access/AbstractSecureMessaging.java \
                  $(CARD_EMRTD_DIR)/access/SmScratch.java \
                  $(CARD_EMRTD_DIR)/access/MacEngines.java \
+                 $(CARD_EMRTD_DIR)/access/KdfEngines.java \
                  $(CARD_EMRTD_DIR)/crypto/AaCrypto.java \
                  $(CARD_EMRTD_DIR)/lds/LdsFile.java \
                  $(CARD_EMRTD_DIR)/lds/LdsFileSystem.java \

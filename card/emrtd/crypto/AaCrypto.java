@@ -69,7 +69,7 @@ public final class AaCrypto {
         nonce = new byte[nonceLength];
         block = new byte[keyBytes];
         hash = new byte[digestLength];
-        random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
+        random = KdfEngines.random();
     }
 
     /** Sets the AA private key (modulus || exponent) from personalization data. */
