@@ -261,15 +261,17 @@ public final class EmrtdApplet extends AppletBase
         // 5 for a short APDU, 7 for an extended one (the applet implements
         // ExtendedLength so the JCRE delivers extended APDUs).
         short cdataOff = apdu.getOffsetCdata();
-        requestMoreTime(ins);
 
         // Assemble the full command (header + data) into the shared scratch: an
         // extended-length command whose secure-messaging envelope exceeds the
         // JCRE buffer arrives in several chunks.  The 4 header bytes stay at
         // offset 0 (the SM unwrap reads CLA/INS/P1/P2 from there); the data
         // starts at offset 4.
+        // (APDU.waitExtension must come after the last receiveBytes: the J3R180
+        // rejects receiveBytes once a wait-extension has been requested.)
         byte[] raw = receiveCommand(apdu, apduBuffer, cdataOff, incoming);
         short rawLen = apdu.getIncomingLength();
+        requestMoreTime(ins);
 
         byte[] data;
         short dataOff;
