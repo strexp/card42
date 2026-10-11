@@ -76,6 +76,10 @@ GPAPI         := $(GPAPI_DIR)/$(GPAPI_VERSION)
 JC_TOOLS_LIB  := $(JC_HOME_TOOLS)/lib
 JC_SIM_CLIENT := $(JC_HOME_SIMULATOR)/client
 
+# Shared GPPro load/create/perso/delete loop driver (scripts/gp.sh): the same
+# shell loops the simulator and real-card targets used to repeat inline.
+GP_SH         := scripts/gp.sh
+
 # Package AIDs in GPPro's plain hex form (ids.mk uses 0x-prefixed, colon-separated).
 PACKAGE_AID_HEX       := $(subst :,,$(subst 0x,,$(PACKAGE_AID)))
 EMRTD_PACKAGE_AID_HEX := $(subst :,,$(subst 0x,,$(EMRTD_PACKAGE_AID)))
@@ -412,16 +416,11 @@ $(HOST_STAMP): $(HOST_TEST_SOURCES)
 # the package from the applet AID (neither the nextgen nor the classic path, since
 # the applet is not yet in the registry), so it is passed explicitly.
 sim-emv-install: sim-wait card-common card-emv
-	@for cap in $(subst $(comma), ,$(SIM_CAPS)); do \
-	  echo ">>> load $$cap"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_SIM) --load $$cap || exit 1; \
-	done
-	@awk '!/^[[:space:]]*#/ && NF >= 2 { print $$1, $$2 }' $(DEPLOY_ALL_CONF) | \
-	while read -r instance class; do \
-	  echo ">>> create $$instance (applet $$class)"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_SIM) --create $$instance --applet $$class \
-	    --package $(PACKAGE_AID_HEX) || exit 1; \
-	done
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_SIM)" \
+	  $(GP_SH) load $(subst $(comma), ,$(SIM_CAPS))
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_SIM)" \
+	  EMV_PACKAGE=$(PACKAGE_AID_HEX) \
+	  $(GP_SH) create $(DEPLOY_ALL_CONF)
 
 # GP personalization (docs/specs/emv/personalization.md §1) of the instances listed in
 # $(SIM_EMV_PERSO_SCRIPT) (production + test set, since the suites use 04/06/08), via
@@ -431,69 +430,47 @@ sim-emv-install: sim-wait card-common card-emv
 sim-emv-perso: $(HOST_STAMP)
 	@lines=$$($(JAVA) -cp $(HOST_CLASSES) card42.host.emv.cli.Main perso export \
 	    -script=$(abspath $(SIM_EMV_PERSO_SCRIPT)) -keys=$(abspath $(EMV_PERSO_KEYS))) || exit 1; \
-	echo "$$lines" | while read -r aid hex; do \
-	  echo ">>> personalize $$aid ($$(( $${#hex} / 2 )) bytes)"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_SIM) --personalize $$aid --store-data $$hex || exit 1; \
-	done
+	echo "$$lines" | GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_SIM)" \
+	  $(GP_SH) perso
 
 # --- eMRTD simulator ----------------------------------------------------
 # Loads the common library CAP and the eMRTD CAP and creates the LDS1 instance;
 # `sim-emrtd-perso` personalizes it with $(EMRTD_PERSO_SCRIPT)
 # (EmrtdPersoExporter -> GPPro).
 sim-emrtd-install: sim-wait card-common card-emrtd
-	@for cap in $(COMMON_CAP_FILE) $(EMRTD_CAP_FILE); do \
-	  echo ">>> load $$cap"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_SIM) --load $$cap || exit 1; \
-	done
-	@awk '!/^[[:space:]]*#/ && NF >= 2 { print $$1, $$2 }' $(DEPLOY_EMRTD_CONF) | \
-	while read -r instance class; do \
-	  privs=""; \
-	  if [ "$$instance" = "$(EMRTD_LDS1_AID)" ]; then privs="--privs $(EMRTD_LDS1_PRIVS)"; fi; \
-	  echo ">>> create $$instance (applet $$class) $$privs"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_SIM) --create $$instance --applet $$class \
-	    --package $(EMRTD_PACKAGE_AID_HEX) $$privs || exit 1; \
-	done
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_SIM)" \
+	  $(GP_SH) load $(COMMON_CAP_FILE) $(EMRTD_CAP_FILE)
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_SIM)" \
+	  EMV_PACKAGE=$(EMRTD_PACKAGE_AID_HEX) EMRTD_PACKAGE=$(EMRTD_PACKAGE_AID_HEX) \
+	  EMRTD_AID=$(EMRTD_LDS1_AID) EMRTD_PRIVS=$(EMRTD_LDS1_PRIVS) \
+	  $(GP_SH) create $(DEPLOY_EMRTD_CONF)
 
 sim-emrtd-perso: $(HOST_STAMP)
 	@lines=$$($(JAVA) -cp $(HOST_CLASSES) card42.host.emrtd.perso.EmrtdPersoExporter \
 	    -script=$(abspath $(EMRTD_PERSO_SCRIPT))) || exit 1; \
-	echo "$$lines" | while read -r aid hex; do \
-	  echo ">>> personalize $$aid ($$(( $${#hex} / 2 )) bytes)"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_SIM) --personalize $$aid --store-data $$hex || exit 1; \
-	done
+	echo "$$lines" | GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_SIM)" \
+	  $(GP_SH) perso
 
 # --- "both" simulator matrix (EMV + eMRTD coexist) --------------------------
 # Loads all three CAPs and creates the instances of deploy.conf (both,
 # production only); personalization is the separate `sim-perso` step.
 sim-install: sim-wait card-common card-emv card-emrtd
-	@for cap in $(subst $(comma), ,$(SIM_BOTH_CAPS)); do \
-	  echo ">>> load $$cap"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_SIM) --load $$cap || exit 1; \
-	done
-	@awk '!/^[[:space:]]*#/ && NF >= 2 { print $$1, $$2 }' $(DEPLOY_BOTH_CONF) | \
-	while read -r instance class; do \
-	  pkg=$(PACKAGE_AID_HEX); \
-	  case "$$class" in $(EMRTD_PACKAGE_AID_HEX)*) pkg=$(EMRTD_PACKAGE_AID_HEX);; esac; \
-	  privs=""; \
-	  if [ "$$instance" = "$(EMRTD_LDS1_AID)" ]; then privs="--privs $(EMRTD_LDS1_PRIVS)"; fi; \
-	  echo ">>> create $$instance (applet $$class, package $$pkg) $$privs"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_SIM) --create $$instance --applet $$class \
-	    --package $$pkg $$privs || exit 1; \
-	done
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_SIM)" \
+	  $(GP_SH) load $(subst $(comma), ,$(SIM_BOTH_CAPS))
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_SIM)" \
+	  EMV_PACKAGE=$(PACKAGE_AID_HEX) EMRTD_PACKAGE=$(EMRTD_PACKAGE_AID_HEX) \
+	  EMRTD_AID=$(EMRTD_LDS1_AID) EMRTD_PRIVS=$(EMRTD_LDS1_PRIVS) \
+	  $(GP_SH) create $(DEPLOY_BOTH_CONF)
 
 sim-perso: $(HOST_STAMP)
 	@lines=$$($(JAVA) -cp $(HOST_CLASSES) card42.host.emv.cli.Main perso export \
 	    -script=$(abspath $(CARD_EMV_PERSO_SCRIPT)) -keys=$(abspath $(EMV_PERSO_KEYS))) || exit 1; \
-	echo "$$lines" | while read -r aid hex; do \
-	  echo ">>> personalize emv $$aid ($$(( $${#hex} / 2 )) bytes)"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_SIM) --personalize $$aid --store-data $$hex || exit 1; \
-	done
+	echo "$$lines" | GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_SIM)" \
+	  $(GP_SH) perso
 	@lines=$$($(JAVA) -cp $(HOST_CLASSES) card42.host.emrtd.perso.EmrtdPersoExporter \
 	    -script=$(abspath $(EMRTD_PERSO_SCRIPT))) || exit 1; \
-	echo "$$lines" | while read -r aid hex; do \
-	  echo ">>> personalize emrtd $$aid ($$(( $${#hex} / 2 )) bytes)"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_SIM) --personalize $$aid --store-data $$hex || exit 1; \
-	done
+	echo "$$lines" | GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_SIM)" \
+	  $(GP_SH) perso
 
 sim-stop:
 	@if [ -f $(SIM_PID) ]; then \
@@ -518,16 +495,11 @@ sim-stop:
 #   make card-emv-install GP_PERSONALIZE=1           # + INSTALL [for personalization]
 #   make card-emv-install GP_ARGS="--key-enc ... --key-mac ..."
 card-emv-install: card-common card-emv
-	@for cap in $(COMMON_CAP_FILE) $(EMV_CAP_FILE); do \
-	  echo ">>> load $$cap"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_ARGS) --load $(abspath $$cap) || exit 1; \
-	done
-	@awk '!/^[[:space:]]*#/ && NF >= 2 { print $$1, $$2 }' $(DEPLOY_ALL_CONF) | \
-	while read -r instance class; do \
-	  echo ">>> create $$instance (applet $$class)"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_ARGS) --create $$instance --applet $$class \
-	    --package $(PACKAGE_AID_HEX) || exit 1; \
-	done
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_ARGS)" \
+	  $(GP_SH) load $(abspath $(COMMON_CAP_FILE)) $(abspath $(EMV_CAP_FILE))
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_ARGS)" \
+	  EMV_PACKAGE=$(PACKAGE_AID_HEX) \
+	  $(GP_SH) create $(DEPLOY_ALL_CONF)
 	@if [ "$(GP_PERSONALIZE)" = "1" ]; then \
 	  awk '!/^[[:space:]]*#/ && NF >= 1 { print $$1 }' $(DEPLOY_ALL_CONF) | \
 	  while read -r instance; do \
@@ -537,34 +509,21 @@ card-emv-install: card-common card-emv
 	fi
 
 card-emrtd-install: card-common card-emrtd
-	@for cap in $(COMMON_CAP_FILE) $(EMRTD_CAP_FILE); do \
-	  echo ">>> load $$cap"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_ARGS) --load $(abspath $$cap) || exit 1; \
-	done
-	@awk '!/^[[:space:]]*#/ && NF >= 2 { print $$1, $$2 }' $(DEPLOY_EMRTD_CONF) | \
-	while read -r instance class; do \
-	  privs=""; \
-	  if [ "$$instance" = "$(EMRTD_LDS1_AID)" ]; then privs="--privs $(EMRTD_LDS1_PRIVS)"; fi; \
-	  echo ">>> create $$instance (applet $$class) $$privs"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_ARGS) --create $$instance --applet $$class \
-	    --package $(EMRTD_PACKAGE_AID_HEX) $$privs || exit 1; \
-	done
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_ARGS)" \
+	  $(GP_SH) load $(abspath $(COMMON_CAP_FILE)) $(abspath $(EMRTD_CAP_FILE))
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_ARGS)" \
+	  EMV_PACKAGE=$(EMRTD_PACKAGE_AID_HEX) EMRTD_PACKAGE=$(EMRTD_PACKAGE_AID_HEX) \
+	  EMRTD_AID=$(EMRTD_LDS1_AID) EMRTD_PRIVS=$(EMRTD_LDS1_PRIVS) \
+	  $(GP_SH) create $(DEPLOY_EMRTD_CONF)
 
 card-install: card-common card-emv card-emrtd
-	@for cap in $(COMMON_CAP_FILE) $(EMV_CAP_FILE) $(EMRTD_CAP_FILE); do \
-	  echo ">>> load $$cap"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_ARGS) --load $(abspath $$cap) || exit 1; \
-	done
-	@awk '!/^[[:space:]]*#/ && NF >= 2 { print $$1, $$2 }' $(DEPLOY_BOTH_CONF) | \
-	while read -r instance class; do \
-	  pkg=$(PACKAGE_AID_HEX); \
-	  case "$$class" in $(EMRTD_PACKAGE_AID_HEX)*) pkg=$(EMRTD_PACKAGE_AID_HEX);; esac; \
-	  privs=""; \
-	  if [ "$$instance" = "$(EMRTD_LDS1_AID)" ]; then privs="--privs $(EMRTD_LDS1_PRIVS)"; fi; \
-	  echo ">>> create $$instance (applet $$class, package $$pkg) $$privs"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_ARGS) --create $$instance --applet $$class \
-	    --package $$pkg $$privs || exit 1; \
-	done
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_ARGS)" \
+	  $(GP_SH) load $(abspath $(COMMON_CAP_FILE)) $(abspath $(EMV_CAP_FILE)) \
+	    $(abspath $(EMRTD_CAP_FILE))
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_ARGS)" \
+	  EMV_PACKAGE=$(PACKAGE_AID_HEX) EMRTD_PACKAGE=$(EMRTD_PACKAGE_AID_HEX) \
+	  EMRTD_AID=$(EMRTD_LDS1_AID) EMRTD_PRIVS=$(EMRTD_LDS1_PRIVS) \
+	  $(GP_SH) create $(DEPLOY_BOTH_CONF)
 
 # Removes the deployed card42 applets and business packages from a card
 # (destructive).  Java Card does not reclaim deleted objects on its own, so a
@@ -574,14 +533,8 @@ card-install: card-common card-emv card-emrtd
 #
 #   make card-uninstall
 card-uninstall:
-	@for aid in $$(awk '!/^[[:space:]]*#/ && NF >= 1 { print $$1 }' $(DEPLOY_BOTH_CONF)); do \
-	  echo ">>> delete applet $$aid"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_ARGS) --delete $$aid || true; \
-	done
-	@for pkg in $(EMRTD_PACKAGE_AID_HEX) $(PACKAGE_AID_HEX); do \
-	  echo ">>> delete package $$pkg"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_ARGS) --delete $$pkg || true; \
-	done
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_ARGS)" \
+	  $(GP_SH) delete $(DEPLOY_BOTH_CONF) $(EMRTD_PACKAGE_AID_HEX) $(PACKAGE_AID_HEX)
 
 # Personalizes every instance of $(CARD_EMV_PERSO_SCRIPT) (production set by default)
 # on a real card with GPPro's `--personalize <AID> --store-data <hex>`
@@ -598,10 +551,8 @@ card-uninstall:
 card-emv-perso: $(HOST_STAMP)
 	@lines=$$($(JAVA) -cp $(HOST_CLASSES) card42.host.emv.cli.Main perso export \
 	    -script=$(abspath $(CARD_EMV_PERSO_SCRIPT)) -keys=$(abspath $(EMV_PERSO_KEYS))) || exit 1; \
-	echo "$$lines" | while read -r aid hex; do \
-	  echo ">>> personalize $$aid ($$(( $${#hex} / 2 )) bytes)"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_ARGS) --personalize $$aid --store-data $$hex || exit 1; \
-	done
+	echo "$$lines" | GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_ARGS)" \
+	  $(GP_SH) perso
 
 # Personalizes the eMRTD LDS1 instance(s) of $(EMRTD_PERSO_SCRIPT) on a real card
 # (same EmrtdPersoExporter -> GPPro `--store-data` path as the simulator).  Run
@@ -609,10 +560,8 @@ card-emv-perso: $(HOST_STAMP)
 card-emrtd-perso: $(HOST_STAMP)
 	@lines=$$($(JAVA) -cp $(HOST_CLASSES) card42.host.emrtd.perso.EmrtdPersoExporter \
 	    -script=$(abspath $(EMRTD_PERSO_SCRIPT))) || exit 1; \
-	echo "$$lines" | while read -r aid hex; do \
-	  echo ">>> personalize $$aid ($$(( $${#hex} / 2 )) bytes)"; \
-	  $(JAVA) -jar $(GP_JAR) $(GP_ARGS) --personalize $$aid --store-data $$hex || exit 1; \
-	done
+	echo "$$lines" | GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_ARGS)" \
+	  $(GP_SH) perso
 
 # Both modules, in order.
 card-perso: card-emv-perso card-emrtd-perso
