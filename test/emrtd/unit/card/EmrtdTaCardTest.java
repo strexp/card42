@@ -18,8 +18,12 @@ import card42.emrtd.Mse;
 import card42.emrtd.PsoVerifyCertificate;
 import card42.emrtd.TaContext;
 import card42.host.common.crypto.Ecdsa;
+import card42.host.common.crypto.P256;
+import card42.host.emrtd.ta.Chat;
 import card42.host.emrtd.ta.CvCertificate;
+import card42.host.emrtd.ta.CvCertificateBuilder;
 import card42.host.emrtd.ta.CvCertificateCodec;
+import card42.host.emrtd.ta.CvcPrincipal;
 import card42.host.emrtd.ta.TaChain;
 
 /**
@@ -48,6 +52,7 @@ final class EmrtdTaCardTest {
         rejectsBadTerminalSignature();
         rejectsExternalAuthenticateWithoutMseAt();
         travelAuthorization();
+        currentDateMechanism();
     }
 
     private static void verifyChain() throws Exception {
@@ -218,6 +223,73 @@ final class EmrtdTaCardTest {
         byte[] signature = Ecdsa.sign(concat(idIc, challenge, caKeyHash),
                 chain.terminalPrivateScalar, new SecureRandom());
         ExternalAuthenticate.process(applet, signature, (short) 0, (short) signature.length);
+    }
+
+    /**
+     * Current-date mechanism (BSI TR-03110-3 §2.5): the ICC current date is
+     * advanced from a valid certificate's Effective Date, and an expired DV
+     * certificate is rejected.
+     */
+    private static void currentDateMechanism() throws Exception {
+        SecureRandom random = new SecureRandom();
+        java.math.BigInteger cvcaScalar = P256.randomScalar(random);
+        byte[] cvcaW = P256.encode(P256.scalarMult(cvcaScalar, P256.generator()));
+        CvcPrincipal cvcaRef = CvcPrincipal.of("UTCVCA0000000001");
+        CvcPrincipal dvRef = CvcPrincipal.of("UTDV000000000002");
+        java.math.BigInteger dvScalar = P256.randomScalar(random);
+        byte[] dvW = P256.encode(P256.scalarMult(dvScalar, P256.generator()));
+        java.util.Map<String, byte[]> noAuth = new java.util.LinkedHashMap<String, byte[]>();
+
+        CvCertificate valid = CvCertificateBuilder.build(0, cvcaRef, dvRef,
+                Chat.Role.DV_DOMESTIC, new byte[] { (byte) 0x03 }, dvW, "250101", "300101",
+                noAuth, cvcaScalar, random);
+        EmrtdApplet applet = lds1Applet();
+        personalizeLds1Ta(applet, cvcaW, cvcaRef.encode(), "240101");
+        TaContext ta = taOf(applet);
+        byte[] dst = doTag(0x83, valid.certificationAuthorityReference().encode());
+        Mse.process(applet, (byte) 0x81, (byte) 0xB6, dst, (short) 0, (short) dst.length);
+        PsoVerifyCertificate.process(applet, pso(valid), (short) 0, (short) pso(valid).length);
+        Asserts.bytes(new byte[] { 2, 5, 0, 1, 0, 1 },
+                (byte[]) field(TaContext.class, "currentDate").get(ta),
+                "current date advanced to the DV Effective Date 250101");
+
+        CvCertificate expired = CvCertificateBuilder.build(0, cvcaRef, dvRef,
+                Chat.Role.DV_DOMESTIC, new byte[] { (byte) 0x03 }, dvW, "230101", "230201",
+                noAuth, cvcaScalar, random);
+        EmrtdApplet other = lds1Applet();
+        personalizeLds1Ta(other, cvcaW, cvcaRef.encode(), "240101");
+        byte[] dst2 = doTag(0x83, expired.certificationAuthorityReference().encode());
+        byte[] pso2 = pso(expired);
+        Asserts.sw((short) 0x6A80, () -> {
+            Mse.process(other, (byte) 0x81, (byte) 0xB6, dst2, (short) 0, (short) dst2.length);
+            PsoVerifyCertificate.process(other, pso2, (short) 0, (short) pso2.length);
+        }, "an expired DV certificate (before the current date) -> 6A80");
+    }
+
+    /** Personalizes the LDS1 trust point (FF07) and current date (FF08). */
+    private static void personalizeLds1Ta(EmrtdApplet applet, byte[] w, byte[] car,
+                                          String currentDate) throws Exception {
+        ByteArrayOutputStream trustPoint = new ByteArrayOutputStream();
+        trustPoint.write(w, 0, w.length);
+        trustPoint.write(car.length);
+        trustPoint.write(car, 0, car.length);
+
+        ByteArrayOutputStream sequence = new ByteArrayOutputStream();
+        writeDgi(sequence, EmrtdTags.DGI_BAC_SEED, new byte[16]);
+        writeDgi(sequence, EmrtdTags.FID_DG1, new byte[] { 0x61, 0x03, 0x5F, 0x1F, 0x00 });
+        writeDgi(sequence, EmrtdTags.DGI_TA_TRUST_POINT, trustPoint.toByteArray());
+        if (currentDate != null) {
+            byte[] date = new byte[6];
+            for (int i = 0; i < 6; i++) {
+                date[i] = (byte) (currentDate.charAt(i) - '0');
+            }
+            writeDgi(sequence, EmrtdTags.DGI_TA_CURRENT_DATE, date);
+        }
+        byte[] bytes = sequence.toByteArray();
+        Field field = EmrtdApplet.class.getDeclaredField("perso");
+        field.setAccessible(true);
+        LdsPerso perso = (LdsPerso) field.get(applet);
+        perso.apply(bytes, (short) 0, (short) bytes.length);
     }
 
     /** Personalizes the LDS2 trust point (FF07) with the given Travel authorization. */

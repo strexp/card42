@@ -111,7 +111,9 @@
   P0–P4 见上；P5 卡侧 CHAT/扩展有效授权（`TaContext.effectiveAuth`，逐位 AND）、
   `LDS2 EF` 按授权门控（`requireLds2Access`）、DGI `FF07` 扩展（含授权）、EF.CardAccess/DG14
   宣告 `TerminalAuthenticationInfo`、LDS1 个性化注入信任点；卡侧单测
-  `EmrtdTaCardTest` 覆盖全流程与授权正/负。
+  `EmrtdTaCardTest` 覆盖全流程与授权正/负。**时间递进机制已实现**：DGI `FF08` 注入当前
+  日期，`PSO:Verify Certificate` 拒过期 DV/Terminal 证书并把 Effective Date 前移
+  （BSI TR-03110-3 §2.5/§2.6）。
   **剩余**：TA 端到端（jcsl/真卡）**阻塞于扩展长度命令 APDU**（TA 的 `PSO` 数据 SM 封装后
   >255B；真卡支持、jcsl/主机见 `TODO.emv.md` E6）。LDS2 默认个性化暂不注入 FF07（保持
   PACE-only 不回归），LDS2 TA 门控由卡侧单测覆盖；E6 完成后补 jcsl/真卡 TA 端到端。

@@ -93,6 +93,11 @@ public final class EmrtdTags {
      * {@code W(65) || refLen(1) || CAR(refLen)} (BSI TR-03110-3 A.7.2).
      */
     public static final short DGI_TA_TRUST_POINT = (short) 0xFF07;
+    /**
+     * Terminal Authentication current date (6 bytes, unpacked BCD YYMMDD):
+     * the ICC's approximated "current date" (BSI TR-03110-3 §2.5/§2.6).
+     */
+    public static final short DGI_TA_CURRENT_DATE = (short) 0xFF08;
 
     // Application/EF outer tags.
     public static final short TAG_COM = (short) 0x60;
@@ -188,6 +193,9 @@ public final class EmrtdTags {
     public static final short TAG_TA_DISCRETIONARY_TEMPLATE = (short) 0x73;
     /** Certificate extensions (nests 0x73 templates). */
     public static final short TAG_TA_EXTENSIONS = (short) 0x65;
+    /** Certificate effective / expiration date (6F, unpacked BCD YYMMDD). */
+    public static final short TAG_TA_EFFECTIVE = (short) 0x5F25;
+    public static final short TAG_TA_EXPIRATION = (short) 0x5F24;
 
     /**
      * Largest EF the card can serve.  {@code READ BINARY} addresses a 15-bit

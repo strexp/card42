@@ -54,6 +54,10 @@
   ~275 B，SM 封装后 >255，需扩展命令 APDU（J3R180 支持，jcsl/主机侧见 `TODO.emv.md` E6）；
   故 LDS2 默认个性化不注入 FF07（保持既有 PACE-only 套件不回归），LDS2 TA 门控由卡侧单测
   覆盖。真卡/扩展 APDU 到位后再补 jcsl/真卡 TA 端到端。
+- **时间递进机制已实现（BSI TR-03110-3 §2.5/§2.6）**：`TaContext.currentDate`（6 octet 未打包
+  BCD YYMMDD）由个性化 DGI `FF08` 注入；`PSO:Verify Certificate` 对**非 CVCA Link** 证书做
+  过期判断（`Expiration < current` → `6A80`），并把 `Effective Date` 前移当前日期（CVCA/DV，
+  以及由**本国 DV** 签发的 Accurate Terminal 证书）；卡侧单测覆盖"日期前移"与"过期拒绝"。
 
 ## 2. 平台实测（一次性探针，探针已移除）
 

@@ -68,6 +68,25 @@ public final class TaContext {
     /** Session effective authorization: trust-point auth AND each verified certificate. */
     final byte[] effectiveAuth = new byte[4];
 
+    /**
+     * The ICC's approximated current date (BSI TR-03110-3 §2.5): 6 octets,
+     * unpacked BCD YYMMDD.  Set to the personalization date (DGI FF08) and only
+     * ever advanced to the most recent valid CVCA/DV/Accurate-Terminal Effective
+     * Date; it is used to reject expired DV/terminal certificates.
+     */
+    final byte[] currentDate = new byte[6];
+    boolean currentDateValid;
+    /** Role of the certificate whose public key is the current DST target. */
+    private byte dstIssuerRole;
+    /** Role of the most recently imported certificate. */
+    private byte importedRole;
+
+    /* Certificate-holder roles (CHAT bits b8/b7, BSI TR-03110-4 §2.1.3.2). */
+    private static final byte ROLE_IS = 0;
+    private static final byte ROLE_DV_FOREIGN = 1;
+    private static final byte ROLE_DV_DOMESTIC = 2;
+    private static final byte ROLE_CVCA = 3;
+
     /** Application authorization extension OIDs (ICAO Doc 9303-10 §5.4.2). */
     private static final byte[] OID_TRAVEL = {
         0x67, (byte) 0x81, 0x08, 0x01, 0x01, 0x09, 0x01 };
@@ -94,6 +113,8 @@ public final class TaContext {
         challengeValid = false;
         taDone = false;
         terminalSelected = false;
+        importedRole = ROLE_IS;
+        dstIssuerRole = ROLE_IS;
         Util.arrayCopyNonAtomic(trustPointAuth, (short) 0, effectiveAuth, (short) 0, (short) 4);
         Util.arrayFillNonAtomic(idIc, (short) 0, (short) idIc.length, (byte) 0);
         Util.arrayFillNonAtomic(caKeyHash, (short) 0, (short) caKeyHash.length, (byte) 0);
@@ -143,6 +164,24 @@ public final class TaContext {
         }
         Util.arrayCopyNonAtomic(trustPointAuth, (short) 0, effectiveAuth, (short) 0, (short) 4);
         trustPointValid = true;
+    }
+
+    /**
+     * Personalization (DGI FF08): the ICC current date, 6 octets unpacked BCD
+     * YYMMDD (BSI TR-03110-3 §2.6).  A card without it skips the expiration
+     * check but still advances from the first certificate it verifies.
+     */
+    public void setCurrentDate(byte[] src, short off, short len) {
+        if (len != (short) 6) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        for (short i = 0; i < 6; i++) {
+            if (src[(short) (off + i)] > 9) {
+                ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+            }
+        }
+        Util.arrayCopyNonAtomic(src, off, currentDate, (short) 0, (short) 6);
+        currentDateValid = true;
     }
 
     /** MSE:Set DST (P1/P2 = 0x81B6): DO'83' names the key that verifies the next certificate. */
@@ -210,7 +249,7 @@ public final class TaContext {
                 data, signatureOffset, signatureLength)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
-        importCertificate(data, bodyValueOffset, bodyValueLength);
+        importCertificate(data, bodyValueOffset, bodyValueLength, dstIssuerRole);
         dstSet = false;
     }
 
@@ -276,22 +315,30 @@ public final class TaContext {
         taDone = true;
     }
 
-    /** The key referenced by the pending MSE:Set DST, or 6A88. */
+    /** The key referenced by the pending MSE:Set DST, or 6A88.  Sets the issuer role. */
     private byte[] resolveDstKey() {
         if (dstRefLength == trustPointRefLength
                 && Util.arrayCompare(dstRef, (short) 0, trustPointRef, (short) 0, dstRefLength) == 0) {
+            dstIssuerRole = ROLE_CVCA;
             return trustPointW;
         }
         if (importedValid && dstRefLength == importedRefLength
                 && Util.arrayCompare(dstRef, (short) 0, importedRef, (short) 0, dstRefLength) == 0) {
+            dstIssuerRole = importedRole;
             return importedW;
         }
         ISOException.throwIt((short) 0x6A88); // referenced data not found
         return null; // unreachable
     }
 
-    /** Extracts the certificate's EC public point (7F49 -> 86) and holder reference (5F20). */
-    private void importCertificate(byte[] data, short off, short len) {
+    /**
+     * Parses the certificate body, enforces the validity period and imports the
+     * key (BSI TR-03110-3 §2.5.2): a non-CVCA-Link certificate whose expiration
+     * date is before the current date fails; the current date is advanced to the
+     * Effective Date for CVCA/DV and for accurate (domestic-DV-issued) terminal
+     * certificates.
+     */
+    private void importCertificate(byte[] data, short off, short len, byte issuerRole) {
         short p = off;
         short end = (short) (off + len);
         boolean chrFound = false;
@@ -299,6 +346,11 @@ public final class TaContext {
         short chrLength = 0;
         short pointOff = 0;
         boolean pointFound = false;
+        byte role = ROLE_IS;
+        short effectiveOff = 0;
+        boolean effectiveFound = false;
+        short expirationOff = 0;
+        boolean expirationFound = false;
 
         while (p < end) {
             short total = Tlv.totalLength(data, p);
@@ -319,19 +371,78 @@ public final class TaContext {
                 chrLength = valueLength;
                 chrFound = true;
             } else if (tag == EmrtdTags.TAG_TA_CHAT) {
-                andChat(data, valueOff, valueLength);
+                role = andChat(data, valueOff, valueLength);
             } else if (tag == EmrtdTags.TAG_TA_EXTENSIONS) {
                 andExtensions(data, valueOff, valueLength);
+            } else if (tag == EmrtdTags.TAG_TA_EFFECTIVE) {
+                effectiveOff = valueOff;
+                effectiveFound = valueLength == (short) 6;
+            } else if (tag == EmrtdTags.TAG_TA_EXPIRATION) {
+                expirationOff = valueOff;
+                expirationFound = valueLength == (short) 6;
             }
             p = (short) (p + total);
         }
         if (!pointFound || !chrFound) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
+
+        // Expiry: CVCA Link Certificates are exempt; every other certificate
+        // must not have expired relative to the ICC current date (§2.5.1).
+        if (role != ROLE_CVCA && expirationFound && currentDateValid
+                && compare(currentDate, data, expirationOff) > 0) {
+            ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+        }
+
         Util.arrayCopyNonAtomic(data, pointOff, importedW, (short) 0, KEY_LENGTH);
         Util.arrayCopyNonAtomic(data, chrOff, importedRef, (short) 0, chrLength);
         importedRefLength = chrLength;
+        importedRole = role;
         importedValid = true;
+
+        // Advance the current date (§2.5.2 step i).
+        if (effectiveFound && advancesDate(role, issuerRole)) {
+            if (!currentDateValid || compare(currentDate, data, effectiveOff) < 0) {
+                Util.arrayCopyNonAtomic(data, effectiveOff, currentDate, (short) 0, (short) 6);
+                currentDateValid = true;
+            }
+        }
+    }
+
+    /** True for a certificate whose Effective Date may advance the current date. */
+    private static boolean advancesDate(byte role, byte issuerRole) {
+        if (role == ROLE_CVCA || role == ROLE_DV_DOMESTIC || role == ROLE_DV_FOREIGN) {
+            return true;
+        }
+        // A Terminal Certificate is "accurate" only if issued by a domestic DV
+        // (BSI TR-03110-3 §2.5).
+        return issuerRole == ROLE_DV_DOMESTIC;
+    }
+
+    /** Compares the 6-octet BCD date at currentDate with the one at data[off]. */
+    private static short compare(byte[] current, byte[] data, short off) {
+        for (short i = 0; i < 6; i++) {
+            short a = (short) (current[i] & 0xFF);
+            short b = (short) (data[(short) (off + i)] & 0xFF);
+            if (a != b) {
+                return a < b ? (short) -1 : (short) 1;
+            }
+        }
+        return 0;
+    }
+
+    /** The certificate-holder role from the CHAT discretionary byte (b8/b7). */
+    private static byte roleOf(byte discretionary) {
+        switch (discretionary & 0xC0) {
+        case 0xC0:
+            return ROLE_CVCA;
+        case 0x80:
+            return ROLE_DV_DOMESTIC;
+        case 0x40:
+            return ROLE_DV_FOREIGN;
+        default:
+            return ROLE_IS;
+        }
     }
 
     /** The offset of the 65-byte EC public point (tag 86) inside a 7F49 value, or 0. */
@@ -354,12 +465,15 @@ public final class TaContext {
         return 0;
     }
 
-    /** ANDs the certificate's CHAT relative authorization into the effective authorization. */
-    private void andChat(byte[] data, short off, short len) {
+    /** ANDs the CHAT relative authorization and returns the certificate-holder role. */
+    private byte andChat(byte[] data, short off, short len) {
         if (Lds2Record.find(data, off, len, EmrtdTags.TAG_TA_DISCRETIONARY, FIND)
                 && FIND[1] >= 1) {
-            effectiveAuth[0] = (byte) (effectiveAuth[0] & data[FIND[0]]);
+            byte chat = data[FIND[0]];
+            effectiveAuth[0] = (byte) (effectiveAuth[0] & chat);
+            return roleOf(chat);
         }
+        return ROLE_IS;
     }
 
     /** ANDs each application authorization extension into the effective authorization. */

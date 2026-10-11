@@ -64,8 +64,12 @@ public final class Chat {
 
     /** Encodes a {@code 7F4C} CHAT with the {@code id-IS} template OID. */
     public static byte[] encode(Role role, byte[] relativeAuthorization) {
+        byte[] discretionary = relativeAuthorization.length == 0
+                ? new byte[1] : java.util.Arrays.copyOf(relativeAuthorization,
+                        relativeAuthorization.length);
+        discretionary[0] = (byte) ((discretionary[0] & 0x3F) | role.bits);
         return DerWriter.tlv(0x7F4C, DerWriter.concat(
-                DerWriter.oid(OID_ID_IS), DerWriter.tlv(0x53, relativeAuthorization)));
+                DerWriter.oid(OID_ID_IS), DerWriter.tlv(0x53, discretionary)));
     }
 
     /** The role encoded in bits b8/b7 of the discretionary byte. */

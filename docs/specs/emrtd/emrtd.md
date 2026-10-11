@@ -291,6 +291,8 @@ LDS2 EF/记录访问在 PACE 之外还按**有效授权**门控——`TaContext`
 CHAT/应用扩展逐位 AND，`EmrtdApplet.requireLds2Access` 按 Travel/Visa/Biometrics 的
 read(b1)/append(b2) 位放行，否则 `6982`（Doc 9303-10 §5.4 Table 96/97/98）。未注入信任点的
 卡保持 PACE-only（开发配置）；TA 的端到端见 [terminal-authentication.md](terminal-authentication.md)。
+卡还实现**当前日期递进**（BSI TR-03110-3 §2.5）：个性化 DGI `FF08` 给出初始日期，
+`PSO:Verify Certificate` 对非 CVCA Link 证书做过期拒绝（`6A80`）并把 Effective Date 前移。
 SM 建立（BAC/PACE/CA）后收到明文 APDU 即中止会话并回 `6982`（Doc 9303-11 §9.8.3）；
 **当前临时放行所有明文命令（互操作排障，见 `EmrtdApplet.processCommand` 的实验注释）**：
 明文命令在明文下应答且不中止会话（SSC 不推进、会话密钥保留），之后仍可继续 SM 读；逐命令的

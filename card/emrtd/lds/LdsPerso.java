@@ -32,6 +32,8 @@ public final class LdsPerso extends DgiStream.Sink {
     public static final short DGI_PACE_CAN_SEED = EmrtdTags.DGI_PACE_CAN_SEED;
     /** DGI carrying the CVCA trust point W(65) || refLen(1) || CAR (Terminal Authentication). */
     public static final short DGI_TA_TRUST_POINT = EmrtdTags.DGI_TA_TRUST_POINT;
+    /** DGI carrying the Terminal Authentication current date (6 octets, unpacked BCD). */
+    public static final short DGI_TA_CURRENT_DATE = EmrtdTags.DGI_TA_CURRENT_DATE;
 
     /** Largest key-DGI value: modLen(2) + 256 + expLen(2) + 256. */
     private static final short SCRATCH_SIZE = (short) 520;
@@ -46,6 +48,7 @@ public final class LdsPerso extends DgiStream.Sink {
     private static final byte MODE_MF = 7;
     private static final byte MODE_PACE_CAN = 8;
     private static final byte MODE_TA = 9;
+    private static final byte MODE_TA_DATE = 10;
 
     private final LdsCatalog catalog;
     private final AaCrypto aa;
@@ -134,6 +137,8 @@ public final class LdsPerso extends DgiStream.Sink {
             mode = MODE_PACE_CAN;
         } else if (dgi == DGI_TA_TRUST_POINT) {
             mode = MODE_TA;
+        } else if (dgi == DGI_TA_CURRENT_DATE) {
+            mode = MODE_TA_DATE;
         } else if (dgi == EmrtdTags.DGI_CARD_SECURITY) {
             // EF.CardSecurity lives in the master file (Doc 9303-10 §3.11.4),
             // so it is streamed into the shared LdsMfStore, not the LDS1
@@ -193,6 +198,8 @@ public final class LdsPerso extends DgiStream.Sink {
             pace.setCanSeed(scratch, (short) 0, scratchLen);
         } else if (mode == MODE_TA) {
             ta.setTrustPoint(scratch, (short) 0, scratchLen);
+        } else if (mode == MODE_TA_DATE) {
+            ta.setCurrentDate(scratch, (short) 0, scratchLen);
         }
         mode = MODE_NONE;
         scratchLen = 0;
