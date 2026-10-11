@@ -240,8 +240,11 @@
       （`TerminalConfig` 的 `9F1D` 未建模已在 Javadoc 声明，PDOL 请求 `9F1D` 只补零。）
 - [ ] **E5 CPS `0062`：动态创建 EF**（FCP：`62`/`80`/`82`/`88`/`8C`）。当前记录区为静态池，
       暂不实现；若将来支持动态文件结构再启用。
-- [ ] **E6 扩展 APDU（ISO 7816-4；EMV v4.4 Book 1 §11.3.4）**：当前仅短 APDU。如 J3R180/jcsl
-      支持，可评估扩展 APDU 收发，用于 >255 B 记录/响应（当前靠 256 B 服务缓冲与分块规避）。
+- [~] **E6 扩展 APDU（ISO 7816-4；EMV v4.4 Book 1 §11.3.4）**：**EMV 仍为短 APDU**（>255 B
+      记录/响应靠 256 B 服务缓冲与分块规避），EMV applet 的扩展收发待办。**卡侧 eMRTD 已支持
+      扩展长度命令接收**（`EmrtdApplet` 的 `getIncomingLength` + `receiveBytes` 装配进瞬态
+      `EmrtdScratch.raw`、保留 4 字节头供 SM 解包），供 SM 封装后 >255 B 的命令使用
+      （J3R180 支持）。
 - [ ] **E7 `terminal inspect` Entry Point 候选补全**：`terminal entrypoint` 已带 `-spi` 并展示
       `appNotAllowed`；`terminal inspect` 的候选列表仍只输出 AID/label/priority/kernel，可补
       `priorityPresent`/`9F29`/`Contactless Application Not Allowed` 并加 `-spi`；纯诊断可读性，非规范要求。

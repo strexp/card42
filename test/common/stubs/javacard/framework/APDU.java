@@ -64,6 +64,11 @@ public class APDU {
         return lc;
     }
 
+    /** Total command data length (this stub delivers it in a single chunk). */
+    public short getIncomingLength() {
+        return lc;
+    }
+
     /** Remaining bytes of an already-received data field: nothing to pull. */
     public short receiveBytes(short off) {
         return 0;

@@ -40,6 +40,14 @@ final class EmrtdScratch {
     /** Plaintext response built by a command handler (max 256 bytes). */
     static byte[] response;
 
+    /**
+     * Raw incoming command assembled when the APDU is longer than the JCRE
+     * buffer (an extended-length command whose secure-messaging envelope
+     * exceeds 255 bytes).  Distinct from {@link #io}, which holds the unwrapped
+     * plaintext.
+     */
+    static byte[] raw;
+
     private static boolean initialized;
 
     private EmrtdScratch() {
@@ -52,6 +60,7 @@ final class EmrtdScratch {
         }
         io = TransientBuffers.makeByteArray((short) 320);
         response = TransientBuffers.makeByteArray((short) 256);
+        raw = TransientBuffers.makeByteArray((short) 320);
         initialized = true;
     }
 }
