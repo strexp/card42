@@ -54,8 +54,13 @@ public final class TaContext {
     final byte[] challenge = new byte[8];
     boolean challengeValid;
     boolean taDone;
+    /** True after MSE:Set AT selected the terminal key (awaiting EXTERNAL AUTHENTICATE). */
+    boolean terminalSelected;
     final byte[] idIc = new byte[32];
     final byte[] caKeyHash = new byte[32];
+
+    /** ID_IC || rIC || Comp(PKDH,IFD) (32 + 8 + 32). */
+    private final byte[] signatureInput = new byte[72];
 
     private ECPublicKey ecKey;
     private Signature ecSig;
@@ -71,6 +76,7 @@ public final class TaContext {
         dstRefLength = 0;
         challengeValid = false;
         taDone = false;
+        terminalSelected = false;
         Util.arrayFillNonAtomic(idIc, (short) 0, (short) idIc.length, (byte) 0);
         Util.arrayFillNonAtomic(caKeyHash, (short) 0, (short) caKeyHash.length, (byte) 0);
     }
@@ -105,6 +111,11 @@ public final class TaContext {
     public void mseSetDst(byte[] data, short off, short len) {
         if (!hasTrustPoint()) {
             ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+        }
+        if (taDone) {
+            // Terminal Authentication MUST NOT run twice in a session
+            // (ICAO Doc 9303-11 §7.1.3).
+            ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
         if (!Lds2Record.find(data, off, len, EmrtdTags.DO_KEY_REFERENCE, FIND)
                 || FIND[1] < 1 || FIND[1] > REFERENCE_LENGTH) {
@@ -163,6 +174,68 @@ public final class TaContext {
         }
         importCertificate(data, bodyValueOffset, bodyValueLength);
         dstSet = false;
+    }
+
+    /** Records ID_IC = Comp(PKDH,IC) from an uncompressed PICC ephemeral point. */
+    public void notePiccEphemeral(byte[] uncompressedW, short off, short len) {
+        if (len == KEY_LENGTH && uncompressedW[off] == (byte) 0x04) {
+            Util.arrayCopyNonAtomic(uncompressedW, (short) (off + 1), idIc, (short) 0, (short) 32);
+        }
+    }
+
+    /** Records Comp(PKDH,IFD) from an uncompressed terminal ephemeral point. */
+    public void noteTerminalEphemeral(byte[] uncompressedW, short off, short len) {
+        if (len == KEY_LENGTH && uncompressedW[off] == (byte) 0x04) {
+            Util.arrayCopyNonAtomic(uncompressedW, (short) (off + 1), caKeyHash, (short) 0,
+                    (short) 32);
+        }
+    }
+
+    /** MSE:Set AT (P1/P2 = 0x81A4): selects the terminal public key by holder reference. */
+    public void mseSetAt(byte[] data, short off, short len) {
+        if (taDone) {
+            // Terminal Authentication MUST NOT run twice in a session
+            // (ICAO Doc 9303-11 §7.1.3).
+            ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+        }
+        if (!importedValid) {
+            ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+        }
+        if (!Lds2Record.find(data, off, len, EmrtdTags.DO_KEY_REFERENCE, FIND)
+                || FIND[1] < 1 || FIND[1] != importedRefLength
+                || Util.arrayCompare(data, FIND[0], importedRef, (short) 0, FIND[1]) != 0) {
+            ISOException.throwIt((short) 0x6A88); // referenced data not found
+        }
+        terminalSelected = true;
+        challengeValid = false;
+    }
+
+    public boolean isTerminalSelected() {
+        return terminalSelected;
+    }
+
+    /**
+     * EXTERNAL AUTHENTICATE for Terminal Authentication: verifies the terminal
+     * signature over {@code ID_IC || rIC || Comp(PKDH,IFD)} with the imported key
+     * (ICAO Doc 9303-11 §7.1.5.5).
+     */
+    public void externalAuthenticate(byte[] data, short off, short len) {
+        if (!terminalSelected || !challengeValid) {
+            ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+        }
+        if (len != 64) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        Util.arrayCopyNonAtomic(idIc, (short) 0, signatureInput, (short) 0, (short) 32);
+        Util.arrayCopyNonAtomic(challenge, (short) 0, signatureInput, (short) 32, (short) 8);
+        Util.arrayCopyNonAtomic(caKeyHash, (short) 0, signatureInput, (short) 40, (short) 32);
+        boolean ok = verifyEcdsa(importedW, signatureInput, (short) 0, (short) 72, data, off, len);
+        challengeValid = false;
+        terminalSelected = false;
+        if (!ok) {
+            ISOException.throwIt((short) 0x6300); // warning: signature verification failed
+        }
+        taDone = true;
     }
 
     /** The key referenced by the pending MSE:Set DST, or 6A88. */

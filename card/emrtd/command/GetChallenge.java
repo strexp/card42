@@ -16,6 +16,13 @@ public final class GetChallenge {
     public static short process(EmrtdApplet applet) {
         applet.random.generateData(applet.challenge, (short) 0, (short) 8);
         applet.challengeValid = true;
+        if (applet.ta != null) {
+            // Terminal Authentication uses its own challenge rIC (ICAO Doc
+            // 9303-11 §7.1.5.4), kept separately from the BAC challenge.
+            Util.arrayCopyNonAtomic(applet.challenge, (short) 0, applet.ta.challenge,
+                    (short) 0, (short) 8);
+            applet.ta.challengeValid = true;
+        }
         Util.arrayCopyNonAtomic(applet.challenge, (short) 0, applet.response,
                 (short) 0, (short) 8);
         return 8;

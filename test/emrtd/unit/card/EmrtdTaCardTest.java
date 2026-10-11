@@ -4,27 +4,32 @@ import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.security.SecureRandom;
+import java.util.Arrays;
 
 import card42.emrtd.EmrtdApplet;
 import card42.emrtd.EmrtdInstallParameters;
 import card42.emrtd.EmrtdTags;
+import card42.emrtd.ExternalAuthenticate;
+import card42.emrtd.GetChallenge;
 import card42.emrtd.LdsPerso;
 import card42.emrtd.Mse;
 import card42.emrtd.PsoVerifyCertificate;
+import card42.emrtd.TaContext;
+import card42.host.common.crypto.Ecdsa;
 import card42.host.emrtd.ta.CvCertificate;
 import card42.host.emrtd.ta.CvCertificateCodec;
 import card42.host.emrtd.ta.TaChain;
 
 /**
- * Card-side Terminal Authentication certificate verification (P3): drives
- * {@code Mse.process} (0x81B6) and {@code PsoVerifyCertificate.process}
- * (2A/00BE) on a real LDS1 {@link EmrtdApplet} against a host-issued CV
- * certificate chain, with the CVCA trust point set through the FF07
- * personalization DGI.  The ECDSA-SHA-256 plain verification runs on the
- * JCE-backed {@code Signature} stub, so the card's key import and status words
- * are checked without a simulator.
+ * Card-side Terminal Authentication: P3 certificate-chain verification and P4
+ * the EXTERNAL AUTHENTICATE step, driven on a real LDS1 {@link EmrtdApplet}
+ * against a host-issued CV certificate chain.  The CVCA trust point is set
+ * through the FF07 personalization DGI and the PACE/CA key hashes are injected
+ * directly (the PACE and Chip Authentication protocols are covered by their own
+ * simulator suites).  ECDSA-SHA-256 plain verification runs on the JCE-backed
+ * {@code Signature} stub.
  *
- * <p>Spec: ICAO Doc 9303-11 §7.1.5.1/§7.1.5.2, BSI TR-03110-3 A.7.2.
+ * <p>Spec: ICAO Doc 9303-11 §7.1.5, BSI TR-03110-3 A.7.
  */
 final class EmrtdTaCardTest {
 
@@ -37,6 +42,9 @@ final class EmrtdTaCardTest {
         rejectsTamperedCertificate();
         rejectsUnknownReference();
         rejectsWithoutTrustPoint();
+        fullTerminalAuthentication();
+        rejectsBadTerminalSignature();
+        rejectsExternalAuthenticateWithoutMseAt();
     }
 
     private static void verifyChain() throws Exception {
@@ -98,7 +106,86 @@ final class EmrtdTaCardTest {
                 "MSE:Set DST without a trust point -> 6985");
     }
 
+    private static void fullTerminalAuthentication() throws Exception {
+        EmrtdApplet applet = lds1Applet();
+        TaChain.Chain chain = TaChain.create(new SecureRandom());
+        setTrustPoint(applet, chain);
+        importChain(applet, chain);
+
+        byte[] idIc = filled(32, (byte) 0x11);
+        byte[] caKeyHash = filled(32, (byte) 0x22);
+        TaContext ta = taOf(applet);
+        ta.notePiccEphemeral(uncompressed(idIc), (short) 0, (short) 65);
+        ta.noteTerminalEphemeral(uncompressed(caKeyHash), (short) 0, (short) 65);
+
+        byte[] at = doTag(0x83, chain.terminal.certificateHolderReference().encode());
+        Asserts.noThrow(() -> Mse.process(applet, (byte) 0x81, (byte) 0xA4,
+                        at, (short) 0, (short) at.length),
+                "MSE:Set AT selects the terminal key");
+        Asserts.noThrow(() -> GetChallenge.process(applet), "GET CHALLENGE returns rIC");
+
+        byte[] challenge = (byte[]) field(TaContext.class, "challenge").get(ta);
+        byte[] input = concat(idIc, challenge, caKeyHash);
+        byte[] signature = Ecdsa.sign(input, chain.terminalPrivateScalar, new SecureRandom());
+        Asserts.noThrow(() -> ExternalAuthenticate.process(applet, signature,
+                        (short) 0, (short) signature.length),
+                "EXTERNAL AUTHENTICATE accepts the terminal signature");
+        Asserts.check((Boolean) field(TaContext.class, "taDone").get(ta),
+                "terminal authentication completed");
+
+        // A second Terminal Authentication in the same session is refused.
+        byte[] at2 = doTag(0x83, chain.terminal.certificateHolderReference().encode());
+        Asserts.sw((short) 0x6982, () -> Mse.process(applet, (byte) 0x81, (byte) 0xA4,
+                        at2, (short) 0, (short) at2.length),
+                "a second MSE:Set AT -> 6982");
+    }
+
+    private static void rejectsBadTerminalSignature() throws Exception {
+        EmrtdApplet applet = lds1Applet();
+        TaChain.Chain chain = TaChain.create(new SecureRandom());
+        setTrustPoint(applet, chain);
+        importChain(applet, chain);
+
+        byte[] idIc = filled(32, (byte) 0x11);
+        byte[] caKeyHash = filled(32, (byte) 0x22);
+        TaContext ta = taOf(applet);
+        ta.notePiccEphemeral(uncompressed(idIc), (short) 0, (short) 65);
+        ta.noteTerminalEphemeral(uncompressed(caKeyHash), (short) 0, (short) 65);
+
+        byte[] at = doTag(0x83, chain.terminal.certificateHolderReference().encode());
+        Mse.process(applet, (byte) 0x81, (byte) 0xA4, at, (short) 0, (short) at.length);
+        GetChallenge.process(applet);
+        byte[] challenge = (byte[]) field(TaContext.class, "challenge").get(ta);
+        byte[] signature = Ecdsa.sign(concat(idIc, challenge, caKeyHash),
+                chain.terminalPrivateScalar, new SecureRandom());
+        signature[0] ^= 0x01;
+        Asserts.sw((short) 0x6300, () -> ExternalAuthenticate.process(applet, signature,
+                        (short) 0, (short) signature.length),
+                "a bad terminal signature -> 6300");
+    }
+
+    private static void rejectsExternalAuthenticateWithoutMseAt() throws Exception {
+        EmrtdApplet applet = lds1Applet();
+        setTrustPoint(applet, TaChain.create(new SecureRandom()));
+        byte[] signature = new byte[64];
+        // Without MSE:Set AT the command falls through to the BAC path, which
+        // rejects a 64-byte body with 6700 (wrong length).
+        Asserts.sw((short) 0x6700, () -> ExternalAuthenticate.process(applet, signature,
+                        (short) 0, (short) signature.length),
+                "EXTERNAL AUTHENTICATE without MSE:Set AT -> BAC path 6700");
+    }
+
     // --- helpers -------------------------------------------------------------
+
+    private static void importChain(EmrtdApplet applet, TaChain.Chain chain) {
+        for (byte[] encoded : chain.toSend()) {
+            CvCertificate certificate = CvCertificateCodec.parse(encoded);
+            byte[] dst = mseSetDst(certificate);
+            byte[] pso = pso(certificate);
+            Mse.process(applet, (byte) 0x81, (byte) 0xB6, dst, (short) 0, (short) dst.length);
+            PsoVerifyCertificate.process(applet, pso, (short) 0, (short) pso.length);
+        }
+    }
 
     /** Writes the CVCA trust point DGI (FF07 = W(65) || refLen(1) || CAR). */
     private static void setTrustPoint(EmrtdApplet applet, TaChain.Chain chain) throws Exception {
@@ -123,6 +210,16 @@ final class EmrtdTaCardTest {
         perso.apply(bytes, (short) 0, (short) bytes.length);
     }
 
+    private static TaContext taOf(EmrtdApplet applet) throws Exception {
+        return (TaContext) field(EmrtdApplet.class, "ta").get(applet);
+    }
+
+    private static Field field(Class<?> type, String name) throws Exception {
+        Field field = type.getDeclaredField(name);
+        field.setAccessible(true);
+        return field;
+    }
+
     private static byte[] mseSetDst(CvCertificate certificate) {
         return mseSetDstRef(certificate.certificationAuthorityReference().encode());
     }
@@ -133,6 +230,19 @@ final class EmrtdTaCardTest {
 
     private static byte[] pso(CvCertificate certificate) {
         return concat(certificate.body(), CvCertificateCodec.signatureTlv(certificate.signature()));
+    }
+
+    private static byte[] uncompressed(byte[] x) {
+        byte[] out = new byte[65];
+        out[0] = 0x04;
+        System.arraycopy(x, 0, out, 1, x.length);
+        return out;
+    }
+
+    private static byte[] filled(int length, byte value) {
+        byte[] out = new byte[length];
+        Arrays.fill(out, value);
+        return out;
     }
 
     private static byte[] doTag(int tag, byte[] value) {

@@ -35,7 +35,10 @@ public final class Mse {
                 applet.ta.mseSetDst(data, off, len);
                 return 0;
             }
-            // MSE:Set AT for Terminal Authentication (0x81A4) is not wired yet.
+            if ((p2 & 0xFF) == (EmrtdTags.MSE_P2_TA & 0xFF)) {
+                applet.ta.mseSetAt(data, off, len);
+                return 0;
+            }
             ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
         }
         if ((p1 & 0x7F) != (EmrtdTags.MSE_P1_SET_COMPUTATION & 0x7F)) {
@@ -56,6 +59,10 @@ public final class Mse {
         applet.chipAuth.deriveSessionKeys(data, result[0], result[1],
                 applet.caEnc, (short) 0, applet.caMac, (short) 0);
         applet.caPending = true;
+        if (applet.ta != null) {
+            // Comp(PKDH,IFD): the x-coordinate of the terminal's CA ephemeral key.
+            applet.ta.noteTerminalEphemeral(data, result[0], result[1]);
+        }
         return 0;
     }
 

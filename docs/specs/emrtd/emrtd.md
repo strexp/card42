@@ -3,8 +3,9 @@
 > eMRTD 实现的当前设计：LDS1 + BAC + ISO/IEC 7816-4 安全报文 + Passive Authentication +
 > Active Authentication，以及 LDS2 应用、EF.CardAccess/SecurityInfo 解析、Chip
 > Authentication（ECDH）与 PACE（ECDH 通用映射，3DES 宣告 / AES-128 卡侧支持，MRZ 与 CAN）。EAC 1.11 仍为可选待办
-> （[`TODO.emrtd.md`](../../../TODO.emrtd.md)）；**Terminal Authentication（TAv2）已完成 P0
-> 可行性确认**（[terminal-authentication.md](terminal-authentication.md)），实现见 P1–P7。
+> （[`TODO.emrtd.md`](../../../TODO.emrtd.md)）；**Terminal Authentication（TAv2）P0–P4 已落地**
+> （主机 + 卡侧证书校验与协议；剩余 LDS2 授权/个性化/端到端见
+> [terminal-authentication.md](terminal-authentication.md) §1.1）。
 
 ## 1. 范围与 AID
 
@@ -75,10 +76,11 @@ applet 实现 `javacardx.apdu.ExtendedLength`，故扩展长度 APDU 能到达 a
 |-----|------|------|
 | `A4` | SELECT (by name / SELECT FILE) | SELECT by name 回 `6F 09 84 07 <DF name>`（明文由 JCRE 匹配；SM 内到达时由 applet `selectByName` 匹配，见下） |
 | `B0` | READ BINARY | 所选 EF 偏移（P1 b8=0）或短 EF 标识（P1 b8=1，P2 偏移）；不用 `READ BINARY2`（`B1`） |
-| `84` | GET CHALLENGE | 8 字节 RND.ICC |
-| `82` | EXTERNAL AUTHENTICATE | BAC 互认证（40 字节数据） |
+| `84` | GET CHALLENGE | 8 字节 RND.ICC（BAC 互认证；Terminal Authentication 的 rIC，§7.1.5.4） |
+| `82` | EXTERNAL AUTHENTICATE | BAC 互认证（40 字节数据）；或在 `MSE:Set AT` 后作 Terminal Authentication 终端签名校验（§7.1.5.5） |
 | `88` | INTERNAL AUTHENTICATE | Active Authentication（8 字节挑战） |
-| `22` | MSE | Chip Authentication `MSE:SET KAT`（§13）、PACE `MSE:Set AT`（§16） |
+| `2A` | PSO | Terminal Authentication `PSO:Verify Certificate`（`00BE`，§7.1.5.2） |
+| `22` | MSE | Chip Authentication `MSE:SET KAT`（§13）、PACE `MSE:Set AT`（§16）、Terminal Authentication `MSE:Set DST`（`81B6`）/`MSE:Set AT`（`81A4`，§7.1.5.1/3） |
 | `86` | GENERAL AUTHENTICATE | AES Chip Authentication 变体、PACE 四步（§16） |
 
 LDS2 应用另加 `B2`/`E2`/`A2`/`5F`/`D7`/`44`（§11）。`EmrtdApplet` 按角色分派：LDS1 服务

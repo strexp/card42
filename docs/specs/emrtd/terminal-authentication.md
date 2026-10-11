@@ -33,8 +33,18 @@
   `EmrtdTerminal` 的 `MSE:Set DST`(`81B6`)/`PSO:Verify Certificate`(`2A/00BE`)/`MSE:Set AT`(`81A4`)；
   `Pace.Session.piccPublicKey` 与 `ChipAuth` 的终端 CA 公钥暴露给 `ID_IC`/`Comp`；CLI
   `read -ta -ta-chain=<file> -ta-key=<hex>` 与 `ta-export`（生成演示链）。
-- **P3–P7（卡侧 + 个性化 + 测试）未实现**：`read -ta` 目前对未实现 TA 的卡会在
-  `MSE:Set DST` 回 `6A88`/`6A80`。
+- **P3（卡侧 CV 证书校验 + 信任点）已完成**：`card/emrtd/ta/TaContext`（CVCA 信任点、
+  `MSE:Set DST`(`81B6`)、`PSO:Verify Certificate`(`2A/00BE`)、ECDSA plain 验签、
+  公钥导入）、`Mse`/新 `PsoVerifyCertificate` 命令、`LdsPerso` DGI `FF07` 注入信任点；
+  卡侧单测 `EmrtdTaCardTest`（链导入、篡改→`6A80`、未知引用→`6A88`、无信任点→`6985`）。
+  签名覆盖**含 tag/len 的 body**（被单测发现并修正）。
+- **P4（卡侧 TA 协议）已完成**：`MSE:Set AT`(`81A4`) 选终端密钥、`EXTERNAL AUTHENTICATE`
+  验 `ID_IC‖rIC‖Comp(PKDH,IFD)`（坏签名→`6300`）；`ID_IC` 取自 PACE 卡侧 step-3 临时公钥
+  x 坐标、`Comp(PKDH,IFD)` 取自 CA 终端临时公钥 x 坐标；`GET CHALLENGE` 兼填 TA rIC；
+  `ExternalAuthenticate` 在已选终端密钥时路由到 TA，否则 BAC；同一会话只允许一次 TA
+  （第二次 `MSE:Set DST/AT`→`6982`）。卡侧单测覆盖全流程。
+- **P5–P7 未实现**：CHAT/扩展有效授权求值并门控 LDS2 EF；个性化脚本注入信任点/
+  `TerminalAuthenticationInfo`；jcsl/真卡端到端互操作与文档。
 
 ## 2. 平台实测（一次性探针，探针已移除）
 

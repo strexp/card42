@@ -27,6 +27,12 @@ public final class ExternalAuthenticate {
     }
 
     public static short process(EmrtdApplet applet, byte[] data, short off, short len) {
+        if (applet.ta != null && applet.ta.isTerminalSelected()) {
+            // Terminal Authentication EXTERNAL AUTHENTICATE (ICAO Doc 9303-11
+            // §7.1.5.5): the same INS is used after MSE:Set AT.
+            applet.ta.externalAuthenticate(data, off, len);
+            return 0;
+        }
         if (!applet.perso.seedSet()) {
             ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
         }

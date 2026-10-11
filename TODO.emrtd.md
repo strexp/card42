@@ -107,14 +107,16 @@
 - [~] **E5.9 Terminal Authentication (TAv2)**：LDS2 各 EF 的访问条件为 PACE+TA（ICAO Doc 9303-11
   §7.1：TA 对 LDS2 **REQUIRED**），授权位来自 IS/DV/CVCA 证书的 CHAT 扩展
   （Doc 9303-10 §5.4 Table 96/97/98）。当前仅强制 PACE。
-  **P0–P2 已完成**（[`docs/specs/emrtd/terminal-authentication.md`](docs/specs/emrtd/terminal-authentication.md)）：
+  **P0–P4 已完成**（[`docs/specs/emrtd/terminal-authentication.md`](docs/specs/emrtd/terminal-authentication.md)）：
   P0 真卡 J3R180 与 jcsl 实测 `SIG_CIPHER_ECDSA_PLAIN` 直接验 TR-03111 plain 签名（无需 DER
   转换）与 `ALG_RSA_SHA_256_PKCS1_PSS`；P1 主机 CV 证书模型/编解码/链验证
   （`host/emrtd/ta/`，单测 `EmrtdTaTest`）+ `TerminalAuthenticationInfo`；P2 主机 TA 驱动
-  `TerminalAuth` + `EmrtdTerminal` 的 TA 命令 + CLI `read -ta`/`ta-export`。
-  **剩余 P3–P7（卡侧）**：`card/emrtd/ta/` CV 证书校验与信任点（`MSE:Set DST`/`PSO:Verify
-  Certificate`/TA 版 `MSE:Set AT`/`EXTERNAL AUTHENTICATE`、plain 验签、CHAT 有效授权）→
-  LDS2 访问控制接线与个性化注入信任点/`TerminalAuthenticationInfo` → 端到端/真卡测试与文档。
+  `TerminalAuth` + `EmrtdTerminal` 的 TA 命令 + CLI `read -ta`/`ta-export`；P3 卡侧证书校验
+  （`card/emrtd/ta/TaContext`，`MSE:Set DST`/`PSO:Verify Certificate`，`LdsPerso` DGI
+  `FF07` 信任点）；P4 卡侧 TA 协议（`MSE:Set AT`/`EXTERNAL AUTHENTICATE`，`ID_IC`/`Comp`
+  捕获，单会话一次 TA）。卡侧单测 `EmrtdTaCardTest`。
+  **剩余 P5–P7**：CHAT/扩展有效授权求值并门控 LDS2 EF；个性化脚本注入信任点/
+  `TerminalAuthenticationInfo`；jcsl/真卡端到端互操作与文档。
 - [ ] **Chip Authentication AES profile（`id-CA-*-AES-CBC-CMAC-*`）**：主机 `ChipAuth` 仅
   ECDH+3DES；AES CA 需 MSE:Set AT + GENERAL AUTHENTICATE 流程（Doc 9303-11 §6.2.4.2），
   卡侧亦仅 3DES CA。
