@@ -78,8 +78,12 @@
       (`challenge/kenc/kmac/ksEnc/ksMac/ssc/caEnc/caMac` 112 B)、BAC scratch
       (`E_IFD/KIC/S2/sessionSeed` 96 B)、`SmScratch` 助手（`macBuffer`/两 `loadedEnc`/`ssc16`/`iv`
       80 B）。eMRTD 共享瞬态 1696→1664 B；BAC 读五组 DG EEPROM 基线 498→**120 B**；
-      `make test-unit`、`make test-emrtd`（模拟器）全绿。**维护注意**：eMRTD context 仍只剩
-      ~56 B 瞬态，后续任何新增瞬态分配需先回收等量空间。
+      `make test-unit`、`make test-emrtd`（模拟器）全绿。**真卡（J3R180）**：`card-install`
+      + `card-emrtd-perso` 成功（**无 `6F00`**，Plan A 净瞬态下降）；`EmrtdBacTest`/
+      `EmrtdLds2IntegrationTest`（3/3）`/EmrtdPaceIntegrationTest`/`EmrtdChipAuthIntegrationTest`/
+      `EmrtdLds1ChipAuthIntegrationTest` 单独运行通过；`EmrtdLds2AppsIntegrationTest` 单独
+      2/3 通过——其 PACE step 4 的间歇 `6F00` 即 §T5.3 既有问题，非本改动引入。
+      **维护注意**：eMRTD context 仍只剩 ~56 B 瞬态，后续任何新增瞬态分配需先回收等量空间。
 - [ ] **A6 复用 `APDU.getBuffer()` 作算法暂存（可选，独立开关）**：若仍需更多 eMRTD 瞬态
       （例如把每实例 `RetailMac.loadedKey`/`AesCmac` 缓存转瞬态），可把 `response`(256) 等
       ≤ 短 APDU buffer 的缓冲改寄宿 APDU buffer（RAM、不占瞬态配额）。需先做逐 handler 的
