@@ -2,6 +2,7 @@ package card42.emrtd;
 
 import card42.common.ApduIo;
 import card42.common.AppletBase;
+import card42.common.MemDiag;
 
 import javacard.framework.APDU;
 import javacard.framework.APDUException;
@@ -420,6 +421,11 @@ public final class EmrtdApplet extends AppletBase
     /** Runs one command, writing its response data to {@link #response}. */
     private short dispatch(byte ins, byte[] data, short off, short len, short le,
                            byte[] apduBuffer) {
+        // Project-private memory diagnostic (TODO.emv.md §A3); compiled out
+        // unless MemDiag.ENABLED is set.  Read-only, no allocation.
+        if (MemDiag.ENABLED && ins == EmrtdTags.INS_DIAG) {
+            return MemDiag.write(response, (short) 0);
+        }
         if (role != EmrtdInstallParameters.ROLE_LDS1) {
             switch (ins) {
             case EmrtdTags.INS_SELECT_FILE:

@@ -390,6 +390,14 @@ public class PaymentApplet extends EMVAppletBase {
             // (EMV v4.4 Book 3 Table 4/5).
             ISOException.throwIt(SW_FUNC_NOT_SUPPORTED); // 6A81
         }
+        // Project-private diagnostic tag 9F7F: free transient/persistent memory
+        // (TODO.emv.md §A3).  Compiled out unless MemDiag.ENABLED is set.
+        if (MemDiag.ENABLED && apduBuffer[OFFSET_P2] == (byte) 0x7F) {
+            apduBuffer[OFFSET_P2 + 1] = (byte) MemDiag.REPORT_LENGTH;
+            MemDiag.write(apduBuffer, (short) (OFFSET_P2 + 2));
+            apdu.setOutgoingAndSend(OFFSET_P1, (short) (3 + MemDiag.REPORT_LENGTH));
+            return;
+        }
         // The tag is already in apduBuffer[OFFSET_P1..OFFSET_P2]; only the
         // length and value are written after it and sent from OFFSET_P1.
         switch (apduBuffer[OFFSET_P2]) {

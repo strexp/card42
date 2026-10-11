@@ -69,9 +69,23 @@
       缓冲（`workScratch` 256、`chainData` 255、PIN 恢复 256）耗尽后 `6F00`（见 §B3）；
       §B1 的包级共享 `EmvScratch` 已把 per-instance 瞬态归零（共 1408 B，一次分配），本项
       现只需**实测安装后的余量**并复跑 §B3 的 `BoundaryTest`/`AesFlowTest`/非接触第二 AC
-      确认不再复现。实现建议：加只读诊断（`PersoHandler` 的 `3000` 报告
-      已带 persistent 余量，可并列 transient；或项目私有 GET DATA/DGI），用
-      `terminal apdu`/`card get-data` 在交易前后取值。硬件已具备，待执行。
+      确认不再复现。**已加只读诊断** `card/common/mem/MemDiag.java`（`ENABLED` 编译开关，
+      默认 `false`；量测构建置 `true`）：EMV 用项目私有 `GET DATA 9F7F`、eMRTD 用私有
+      `INS=0xCA`，各返回 6 字节 `[transient-deselect][transient-reset][persistent]` 余量，
+      无分配、无状态。量测步骤：`make card-uninstall` → `make card-emv-install` →
+      `... card get-data -tag=9F7F -host=pcsc:1`（记 EMV 上下文余量）→ `make card-emrtd-install`
+      → 再读 EMV（同值 = 瞬态按 context 计；下降 = 全局池，差值即 eMRTD 占用）→
+      `... terminal apdu -host=pcsc:1 -apdu=00A4040007A0000002471001 -apdu=80CA000000`（eMRTD 上下文）。
+      硬件已具备，待执行；量测后用**每包一份**方案收口（见下）。
+- [ ] **A4 eMRTD 命令 scratch 收口为"每包一份"（依赖 A3 实测）**：把 `AaCrypto`
+      (`nonce`/`block`/`hash` ≈510 B)、`Pace` 命令 scratch（≈481 B）、`ChipAuth.secret`(64 B)、
+      `BacCrypto.macBuffer`(8 B) 从**每实例**瞬态折进包级共享的 `EmrtdScratch`（同
+      `EmvScratch` 的做法），使 4 个 eMRTD 实例只占一份而非各占一份；`AaCrypto` 需存
+      `nonceLength` 并让共享缓冲按最大尺寸（256/234/32）分配，否则破坏 1024-bit KAT。
+      **风险**：上一轮"每实例瞬态"方案因安装期分配量翻倍、在 J3R180 上回退/耗尽而 `6F00`
+      （已回退，见提交 `ce7e645` 之后的工作区）；因此必须**先按 A3 实测余量**，再据此设定
+      `NvmBaselineTest.transientBudget` 的上限并仅在预算内启用。模拟器矩阵
+      （`make test`/`make test-emrtd`）先验证功能，真卡确认安装与 `BoundaryTest`/`AesFlowTest`。
 
 ## B. 卡侧实现与健壮性
 
