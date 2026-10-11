@@ -77,15 +77,25 @@ public final class Lds2FileSystem {
     public void select(short fid) {
         for (short i = 0; i < transparent.length; i++) {
             if (transparent[i].getFid() == fid) {
-                selectedTransparent = transparent[i];
-                selectedRecord = null;
+                // Same-value guards: these are persistent reference fields, and
+                // a same-value write may still cost a programming cycle.
+                if (selectedTransparent != transparent[i]) {
+                    selectedTransparent = transparent[i];
+                }
+                if (selectedRecord != null) {
+                    selectedRecord = null;
+                }
                 return;
             }
         }
         for (short i = 0; i < records.length; i++) {
             if (records[i].getFid() == fid) {
-                selectedRecord = records[i];
-                selectedTransparent = null;
+                if (selectedRecord != records[i]) {
+                    selectedRecord = records[i];
+                }
+                if (selectedTransparent != null) {
+                    selectedTransparent = null;
+                }
                 return;
             }
         }
@@ -148,19 +158,31 @@ public final class Lds2FileSystem {
 
     /** Makes a record EF the current one (FMM side effect). */
     public void selectRecord(Lds2RecordFile file) {
-        selectedRecord = file;
-        selectedTransparent = null;
+        if (selectedRecord != file) {
+            selectedRecord = file;
+        }
+        if (selectedTransparent != null) {
+            selectedTransparent = null;
+        }
     }
 
     /** Makes a transparent EF the current one. */
     public void selectTransparent(Lds2TransparentFile file) {
-        selectedTransparent = file;
-        selectedRecord = null;
+        if (selectedTransparent != file) {
+            selectedTransparent = file;
+        }
+        if (selectedRecord != null) {
+            selectedRecord = null;
+        }
     }
 
     /** Clears the current EF selection (an MF file became the current EF). */
     public void clearSelection() {
-        selectedTransparent = null;
-        selectedRecord = null;
+        if (selectedTransparent != null) {
+            selectedTransparent = null;
+        }
+        if (selectedRecord != null) {
+            selectedRecord = null;
+        }
     }
 }

@@ -200,7 +200,11 @@ public class EMVProtocolState implements ISO7816 {
 	}
 
 	public void setMedia(byte newMedia) {
-		media = newMedia;
+		// Same-value guard: a persistent scalar write may still cost a
+		// programming cycle, and a contact reader always reports the default.
+		if (media != newMedia) {
+			media = newMedia;
+		}
 	}
 
 	public short getATC() {
@@ -255,7 +259,11 @@ public class EMVProtocolState implements ISO7816 {
 		// The shared PDOL buffer is a fixed 64 bytes, the on-card bound
 		// (MAX_PDOL_DATA); GPO refuses a longer expansion before this point.
 		Util.arrayCopyNonAtomic(buf, off, EmvScratch.pdol, (short) 0, len);
-		pdolDataLength = len;
+		// Same-value guard: pdolDataLength is a persistent scalar and GPO is
+		// retried with the same length on a re-sent command.
+		if (pdolDataLength != len) {
+			pdolDataLength = len;
+		}
 	}
 
 	/**
@@ -447,7 +455,9 @@ public class EMVProtocolState implements ISO7816 {
 	 */
 	public void setChallenge(byte[] buf, short off) {
 		Util.arrayCopyNonAtomic(buf, off, challenge, (short) 0, (short) 8);
-		challengeValid = true;
+		if (!challengeValid) {
+			challengeValid = true;
+		}
 	}
 
 	public byte[] getChallenge() {
@@ -464,7 +474,11 @@ public class EMVProtocolState implements ISO7816 {
 	 * every command except VERIFY, which reads it before clearing.
 	 */
 	public void clearChallengeValid() {
-		challengeValid = false;
+		// The dispatcher clears this for every non-VERIFY command, so guard the
+		// persistent scalar: an already-invalid challenge must not cost a write.
+		if (challengeValid) {
+			challengeValid = false;
+		}
 	}
 
 	/** True while a non-final VERIFY / PIN CHANGE/UNBLOCK fragment is pending. */
@@ -529,8 +543,12 @@ public class EMVProtocolState implements ISO7816 {
 
 	/** Abandons the active chain (completed, failed or interrupted). */
 	public void resetChain() {
-		chainActive = false;
-		chainLength = 0;
+		// Same-value guard: the dispatcher resets the chain after most commands,
+		// and these are persistent scalars.
+		if (chainActive || chainLength != 0) {
+			chainActive = false;
+			chainLength = 0;
+		}
 	}
 
 	public EMVProtocolState(){
@@ -583,8 +601,10 @@ public class EMVProtocolState implements ISO7816 {
 		volatileState[VOL_CSU_APPLIED] = 0;
 		volatileState[VOL_DDA_PERFORMED] = 0;
 		volatileState[VOL_CDA_PERFORMED] = 0;
-		pdolDataLength = 0;
-		challengeValid = false;
+		if (pdolDataLength != 0) {
+			pdolDataLength = 0;
+		}
+		clearChallengeValid();
 		resetChain();
 	}
 	
