@@ -80,11 +80,13 @@ delete)
     awk '!/^[[:space:]]*#/ && NF >= 1 { print $1 }' "$conf" |
     while read -r aid; do
         echo ">>> delete applet $aid"
-        gp --delete "$aid" || true
+        # shellcheck disable=SC2086
+        gp --delete "$aid" ${GP_FORCE:-} || true
     done
     for pkg in "$@"; do
         echo ">>> delete package $pkg"
-        gp --delete "$pkg" || true
+        # shellcheck disable=SC2086
+        gp --delete "$pkg" ${GP_FORCE:-} || true
     done
     ;;
 *)

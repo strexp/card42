@@ -532,11 +532,13 @@ card-install: card-common card-emv card-emrtd
 # failed INSTALLs leave behind (a J3R180 then fails a later INSTALL with 6F00).
 # The common library package is deleted last, after its EMV/eMRTD clients, so a
 # re-LOAD of common.cap does not fail with 6985 (package already present).
+# GP_FORCE=-f forces the delete past a default-selected instance (otherwise the
+# card answers 6985 and the package survives, so the next load fails).
 # Uses the same GP_ARGS keys as the other card targets (config/local.mk).
 #
 #   make card-uninstall
 card-uninstall:
-	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_ARGS)" \
+	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_ARGS)" GP_FORCE="-f" \
 	  $(GP_SH) delete $(DEPLOY_BOTH_CONF) $(EMRTD_PACKAGE_AID_HEX) \
 	    $(PACKAGE_AID_HEX) $(COMMON_PACKAGE_AID_HEX)
 
