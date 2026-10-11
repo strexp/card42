@@ -1,5 +1,7 @@
 package card42.emrtd;
 
+import card42.common.TransientBuffers;
+
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 
@@ -22,7 +24,14 @@ import javacard.framework.ISOException;
 public final class LdsFileSystem {
 
     private final LdsFile[] files;
-    private LdsFile selected;
+
+    /**
+     * Index of the current EF plus one (0 = no current EF).  RAM (transient
+     * CLEAR_ON_DESELECT) so a READ BINARY that switches EF does not write
+     * EEPROM; the platform clears it when the applet context is deselected, so
+     * the current EF does not leak into the next session.
+     */
+    private final short[] selection;
 
     public LdsFileSystem() {
         files = new LdsFile[] {
@@ -46,14 +55,14 @@ public final class LdsFileSystem {
                 new LdsFile(EmrtdTags.FID_SOD),
                 new LdsFile(EmrtdTags.FID_COM),
         };
-        selected = null;
+        selection = TransientBuffers.makeShortArray((short) 1);
     }
 
     /** Selects the EF with the given FID; 6A82 when it is not an LDS1 file. */
     public void select(short fid) {
         for (short i = 0; i < files.length; i++) {
             if (files[i].getFid() == fid) {
-                selected = files[i];
+                selection[0] = (short) (i + 1);
                 return;
             }
         }
@@ -68,12 +77,13 @@ public final class LdsFileSystem {
      * {@code SELECT 011C} selects EF.CardAccess as usual.
      */
     public void selectMf() {
-        selected = null;
+        selection[0] = 0;
     }
 
     /** The currently selected EF, or null when none was selected. */
     public LdsFile getSelected() {
-        return selected;
+        short v = selection[0];
+        return v == 0 ? null : files[(short) (v - 1)];
     }
 
     /** The EF with the given FID, or null. */
@@ -106,10 +116,12 @@ public final class LdsFileSystem {
      * as current).  Returns the EF, or null when the SFI is unknown.
      */
     public LdsFile selectBySfi(short sfi) {
-        LdsFile file = getBySfi(sfi);
-        if (file != null) {
-            selected = file;
+        for (short i = 0; i < files.length; i++) {
+            if ((short) (files[i].getFid() & EmrtdTags.SFI_MASK) == sfi) {
+                selection[0] = (short) (i + 1);
+                return files[i];
+            }
         }
-        return file;
+        return null;
     }
 }

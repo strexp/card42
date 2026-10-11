@@ -77,7 +77,9 @@
       `EmrtdScratch.raw`(320) 固定为**持久**，腾出的空间换成包级瞬态：会话密钥/计数器
       (`challenge/kenc/kmac/ksEnc/ksMac/ssc/caEnc/caMac` 112 B)、BAC scratch
       (`E_IFD/KIC/S2/sessionSeed` 96 B)、`SmScratch` 助手（`macBuffer`/两 `loadedEnc`/`ssc16`/`iv`
-      80 B）。eMRTD 共享瞬态 1696→1664 B；BAC 读五组 DG EEPROM 基线 498→**120 B**；
+      80 B）。eMRTD 共享瞬态 1696→1664 B；BAC 读五组 DG EEPROM 基线 498→**96 B**；
+      并把 `AbstractSecureMessaging.le`(2 B) 与 `LdsFileSystem` 当前 EF 选择移入瞬态，
+      READ BINARY 热路径零 EEPROM 写（仅会话首个 SM 命令装载会话密钥）；
       `make test-unit`、`make test-emrtd`（模拟器）全绿。**真卡（J3R180）**：`card-install`
       + `card-emrtd-perso` 成功（**无 `6F00`**，Plan A 净瞬态下降）；`EmrtdBacTest`/
       `EmrtdLds2IntegrationTest`（3/3）`/EmrtdPaceIntegrationTest`/`EmrtdChipAuthIntegrationTest`/

@@ -38,8 +38,10 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
     private final byte[] loadedEnc;
     private boolean encLoaded;
 
-    /** Le of the last unwrapped command, or -1 when absent. */
-    private short le;
+    /** Le of the last unwrapped command, or -1 when absent.  RAM (package-shared
+     *  transient {@link SmScratch#le()}): it is per-command state and must not
+     *  cost an EEPROM write on the READ BINARY hot path. */
+    private final short[] leState;
 
     /**
      * Largest plaintext response whose SM envelope fits a 256-byte APDU,
@@ -52,11 +54,12 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         this.key = key;
         this.macBuffer = macBuffer;
         this.loadedEnc = loadedEnc;
+        this.leState = SmScratch.le();
         this.maxResponseData = computeMaxResponseData(blockSize);
     }
 
     public final short getLe() {
-        return le;
+        return leState[0];
     }
 
     public final short maxResponseData() {
@@ -109,7 +112,7 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
                               byte[] out, short outOff) {
         increment(ssc);
         prepareSsc(ssc);
-        le = -1;
+        leState[0] = -1;
         byte[] scratch = SmScratch.get();
 
         short do87Start = -1;
@@ -191,7 +194,7 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         }
 
         if (do97Len > 0) {
-            le = (short) (apdu[do97Val] & 0xFF);
+            leState[0] = (short) (apdu[do97Val] & 0xFF);
         }
         // Odd INS carries plain command data in DO'85' (Doc 9303-11 §9.8.4).
         if (do85Start >= 0) {

@@ -63,6 +63,9 @@ final class SmScratch {
     /** The AES-CBC initialization vector AES-ECB(K_enc, SSC16). */
     private static byte[] iv;
 
+    /** Le of the last unwrapped command, or -1 when absent. */
+    private static short[] leState;
+
     private SmScratch() {
     }
 
@@ -79,6 +82,7 @@ final class SmScratch {
             loadedEncAes = TransientBuffers.makeByteArray((short) 16);
             ssc16 = TransientBuffers.makeByteArray((short) 16);
             iv = TransientBuffers.makeByteArray((short) 16);
+            leState = TransientBuffers.makeShortArray((short) 1);
         }
     }
 
@@ -115,6 +119,16 @@ final class SmScratch {
     static byte[] iv() {
         init();
         return iv;
+    }
+
+    /**
+     * The shared Le cell of the last unwrapped command (RAM): the value is
+     * written and read within one command, so it must not cost an EEPROM write
+     * per secure-messaging command.
+     */
+    static short[] le() {
+        init();
+        return leState;
     }
 
     /**
