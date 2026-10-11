@@ -12,21 +12,7 @@ public final class JCSystem {
     public static final byte CLEAR_ON_RESET = (byte) 1;
     public static final byte CLEAR_ON_DESELECT = (byte) 2;
 
-    /** Memory-type selectors for {@link #getAvailableMemory(byte)} (Java Card). */
-    public static final byte MEMORY_TYPE_PERSISTENT = (byte) 1;
-    public static final byte MEMORY_TYPE_TRANSIENT_RESET = (byte) 2;
-    public static final byte MEMORY_TYPE_TRANSIENT_DESELECT = (byte) 3;
-
     private JCSystem() {
-    }
-
-    /**
-     * Plain-JVM stand-in for the platform memory query.  The stubs do not model
-     * a transient budget, so it reports a fixed large value; the card-side
-     * {@code MemDiag} is compiled out of the command path anyway.
-     */
-    public static int getAvailableMemory(byte memoryType) {
-        return 0x7FFF;
     }
 
     public static byte[] makeTransientByteArray(short length, byte event) {

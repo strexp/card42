@@ -130,13 +130,6 @@ public final class EmrtdTags {
     /** ACTIVATE (Additional Biometrics, §3.8.2). */
     public static final byte INS_ACTIVATE = (byte) 0x44;
 
-    /**
-     * Project-private GET DATA used only by the memory diagnostic
-     * ({@code MemDiag.ENABLED}, TODO.emv.md §A3); a production CAP never
-     * answers it.
-     */
-    public static final byte INS_DIAG = (byte) 0xCA;
-
     // MSE P1/P2 (BSI TR-03110-3 B.14.1 MSE:Set AT): set for computation / KAT.
     public static final byte MSE_P1_SET_COMPUTATION = (byte) 0x41;
     public static final byte MSE_P2_KAT = (byte) 0xA6;

@@ -177,19 +177,26 @@ final class NvmBaselineTest {
     private static void transientBudget() throws Exception {
         new EMVProtocolState(); // allocates EmvScratch
         newApplet(EmrtdInstallParameters.ROLE_LDS1, EmrtdTags.DF_NAME_LDS1); // EmrtdScratch + SmScratch
-        long emv = staticArrayBytes("card42.emv.EmvScratch");
-        long emrtd = staticArrayBytes("card42.emrtd.EmrtdScratch")
-                + staticArrayBytes("card42.emrtd.SmScratch");
+        long emv = staticTransientBytes("card42.emv.EmvScratch");
+        long emrtd = staticTransientBytes("card42.emrtd.EmrtdScratch")
+                + staticTransientBytes("card42.emrtd.SmScratch");
         long total = emv + emrtd;
         System.out.println();
         System.out.println("  shared transient footprint (allocated at install):");
         System.out.println(String.format("    emv %,d B + emrtd %,d B = %,d B", emv, emrtd, total));
+        // The J3R180 measurement (TODO.emv.md A3) puts the per-context budgets at
+        // ~3.4 KB (EMV) and ~2.1 KB (eMRTD); this is a combined regression bound.
         Asserts.check(total <= 4096, "shared transient footprint fits the J3R180 budget");
         Asserts.check(NvmWrite.transientAllocations() > 0, "shared buffers are transient");
     }
 
-    /** Sum of the lengths of the static array fields of a class. */
-    private static long staticArrayBytes(String className) throws Exception {
+    /**
+     * Sum of the lengths of the static array fields of a class that the platform
+     * handed out as transient (RAM) arrays.  A persistent fallback (see
+     * {@code TransientBuffers}), such as the eMRTD {@code raw} buffer, is
+     * excluded so the number is the real transient footprint.
+     */
+    private static long staticTransientBytes(String className) throws Exception {
         Class<?> c = Class.forName(className);
         long n = 0;
         Field[] fields = c.getDeclaredFields();
@@ -199,7 +206,7 @@ final class NvmBaselineTest {
             }
             fields[i].setAccessible(true);
             Object v = fields[i].get(null);
-            if (v != null && v.getClass().isArray()) {
+            if (v != null && v.getClass().isArray() && NvmWrite.isTransient(v)) {
                 n += (long) Array.getLength(v) * elementBytes(v.getClass().getComponentType());
             }
         }

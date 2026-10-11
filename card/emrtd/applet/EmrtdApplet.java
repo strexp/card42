@@ -2,7 +2,6 @@ package card42.emrtd;
 
 import card42.common.ApduIo;
 import card42.common.AppletBase;
-import card42.common.MemDiag;
 
 import javacard.framework.APDU;
 import javacard.framework.APDUException;
@@ -54,14 +53,18 @@ public final class EmrtdApplet extends AppletBase
     final ChipAuth chipAuth;
     final Pace pace;
 
-    final byte[] challenge = new byte[8];
+    /* Session keys, counters and the challenge are the package-shared
+     * CLEAR_ON_DESELECT buffers of {@link EmrtdScratch}: they were per-instance
+     * persistent arrays, so every session re-derived them into EEPROM and every
+     * deselection zero-filled them back (docs/specs/common/risks.md §2). */
+    final byte[] challenge;
     boolean challengeValid;
 
-    final byte[] kenc = new byte[16];
-    final byte[] kmac = new byte[16];
-    final byte[] ksEnc = new byte[16];
-    final byte[] ksMac = new byte[16];
-    final byte[] ssc = new byte[8];
+    final byte[] kenc;
+    final byte[] kmac;
+    final byte[] ksEnc;
+    final byte[] ksMac;
+    final byte[] ssc;
     /** True once BAC or Chip Authentication has established secure messaging. */
     boolean smEstablished;
     /**
@@ -87,8 +90,8 @@ public final class EmrtdApplet extends AppletBase
 
     /* Chip Authentication: the new session keys are applied after the response
      * to the authenticating command has been wrapped with the old keys. */
-    final byte[] caEnc = new byte[16];
-    final byte[] caMac = new byte[16];
+    final byte[] caEnc;
+    final byte[] caMac;
     boolean caPending;
 
     /* Plaintext command data and response data (SM unwrap/wrap).  Package-shared
@@ -117,15 +120,23 @@ public final class EmrtdApplet extends AppletBase
         this.dfNameLength = dfNameLength;
         // Allocate the package-shared transient session buffers and the SM
         // scratch once, at install: no command path allocates a transient array
-        // (docs/specs/common/risks.md).  Order matters: io/response then
-        // SmScratch (all used by every secure-messaging command) get the
-        // transient budget first; raw (extended commands only) is requested
-        // last so it, not SmScratch, is the one that degrades to EEPROM.
+        // (docs/specs/common/risks.md).  Order: io/response then SmScratch
+        // (used by every secure-messaging command) get the transient budget
+        // first, then the session state.  raw is persistent (see EmrtdScratch).
         EmrtdScratch.init();
         SmScratch.init();
+        EmrtdScratch.initSession();
         EmrtdScratch.initExtended();
         plain = EmrtdScratch.io;
         response = EmrtdScratch.response;
+        challenge = EmrtdScratch.challenge;
+        kenc = EmrtdScratch.kenc;
+        kmac = EmrtdScratch.kmac;
+        ksEnc = EmrtdScratch.ksEnc;
+        ksMac = EmrtdScratch.ksMac;
+        ssc = EmrtdScratch.ssc;
+        caEnc = EmrtdScratch.caEnc;
+        caMac = EmrtdScratch.caMac;
         boolean lds1Role = role == EmrtdInstallParameters.ROLE_LDS1;
         // Only the LDS1 instance uses the LDS1 catalog, BAC and AA crypto; an
         // LDS2 instance (Travel/Visa/Biometrics) would otherwise pay ~1.5 KB of
@@ -421,11 +432,6 @@ public final class EmrtdApplet extends AppletBase
     /** Runs one command, writing its response data to {@link #response}. */
     private short dispatch(byte ins, byte[] data, short off, short len, short le,
                            byte[] apduBuffer) {
-        // Project-private memory diagnostic (TODO.emv.md §A3); compiled out
-        // unless MemDiag.ENABLED is set.  Read-only, no allocation.
-        if (MemDiag.ENABLED && ins == EmrtdTags.INS_DIAG) {
-            return MemDiag.write(response, (short) 0);
-        }
         if (role != EmrtdInstallParameters.ROLE_LDS1) {
             switch (ins) {
             case EmrtdTags.INS_SELECT_FILE:

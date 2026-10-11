@@ -16,12 +16,10 @@ import javacard.framework.Util;
 
 public final class ExternalAuthenticate {
 
-    /* Reused scratch: the J3R180 does not reclaim per-call allocations, and BAC
-     * runs on every session, so these must not be allocated in process(). */
-    private static final byte[] E_IFD = new byte[32];
-    private static final byte[] KIC = new byte[16];
-    private static final byte[] S2 = new byte[32];
-    private static final byte[] SESSION_SEED = new byte[16];
+    /* The BAC scratch (E_IFD, K_IC, S2, session seed) is the package-shared
+     * transient {@link EmrtdScratch}: it used to be static persistent arrays,
+     * so every BAC handshake wrote 96 bytes to EEPROM for state that lives
+     * only for the command (docs/specs/common/risks.md §2). */
 
     private ExternalAuthenticate() {
     }
@@ -43,17 +41,17 @@ public final class ExternalAuthenticate {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
 
-        byte[] s = E_IFD;
+        byte[] s = EmrtdScratch.bacEIfd;
         applet.bac.decrypt(applet.kenc, data, off, s, (short) 0, (short) 32);
         // RND.IC must equal the challenge (Doc 9303-11 §4.3.1 step 3c).
         if (!ConstantTime.equals(s, (short) 8, applet.challenge, (short) 0, (short) 8)) {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
 
-        byte[] kic = KIC;
+        byte[] kic = EmrtdScratch.bacKic;
         applet.random.generateData(kic, (short) 0, (short) 16);
 
-        byte[] s2 = S2;
+        byte[] s2 = EmrtdScratch.bacS2;
         Util.arrayCopyNonAtomic(s, (short) 8, s2, (short) 0, (short) 8);   // RND.ICC
         Util.arrayCopyNonAtomic(s, (short) 0, s2, (short) 8, (short) 8);   // RND.IFD
         Util.arrayCopyNonAtomic(kic, (short) 0, s2, (short) 16, (short) 16);
@@ -61,7 +59,7 @@ public final class ExternalAuthenticate {
         applet.bac.computeMac(applet.kmac, applet.response, (short) 0, (short) 32,
                 applet.response, (short) 32);
 
-        byte[] sessionSeed = SESSION_SEED;
+        byte[] sessionSeed = EmrtdScratch.bacSessionSeed;
         BacCrypto.sessionSeed(s, (short) 16, kic, (short) 0, sessionSeed, (short) 0);
         applet.bac.deriveKey(sessionSeed, (short) 0, BacCrypto.DERIVE_ENC,
                 applet.ksEnc, (short) 0);

@@ -25,14 +25,17 @@ import javacard.security.Key;
 
 public abstract class AbstractSecureMessaging implements SecureMessaging {
 
-    /** Reused MAC output: 8 bytes for the retail MAC, 16 for AES-CMAC. */
-    private final byte[] macBuffer = new byte[16];
+    /** Reused MAC output: 8 bytes for the retail MAC, 16 for AES-CMAC.
+     *  Package-shared transient scratch ({@link SmScratch}). */
+    private final byte[] macBuffer;
 
     /** The block-cipher key of the active session. */
     protected final Key key;
 
-    /** Last loaded K_enc, so the cipher key schedule runs once per session. */
-    private final byte[] loadedEnc = new byte[16];
+    /** Last loaded K_enc, so the cipher key schedule runs once per session.
+     *  Package-shared transient scratch ({@link SmScratch}); each profile has
+     *  its own cache so a session that switches profile still short-circuits. */
+    private final byte[] loadedEnc;
     private boolean encLoaded;
 
     /** Le of the last unwrapped command, or -1 when absent. */
@@ -44,8 +47,11 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
      */
     private final short maxResponseData;
 
-    protected AbstractSecureMessaging(Key key, short blockSize) {
+    protected AbstractSecureMessaging(Key key, short blockSize,
+            byte[] macBuffer, byte[] loadedEnc) {
         this.key = key;
+        this.macBuffer = macBuffer;
+        this.loadedEnc = loadedEnc;
         this.maxResponseData = computeMaxResponseData(blockSize);
     }
 

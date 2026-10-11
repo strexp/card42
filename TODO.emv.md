@@ -64,33 +64,27 @@
       keyset 为 DES3、**无 SCP03/AES keyset**，故 SCP03 换钥当前不可验；真卡只能验 SCP02
       PUT KEY 路径（或先经 SCP02 注入 AES keyset 再切 SCP03，需评估）。模拟器 NG 换钥需卡
       KDD/发现上下文，jcsl 下不可达。
-- [ ] **A3 瞬态余量实测**：J3R180 上实测
-      `JCSystem.getAvailableMemory(MEMORY_TRANSIENT_DESELECT)` 余量。真卡已确认多实例惰性
-      缓冲（`workScratch` 256、`chainData` 255、PIN 恢复 256）耗尽后 `6F00`（见 §B3）；
-      §B1 的包级共享 `EmvScratch` 已把 per-instance 瞬态归零（共 1408 B，一次分配），本项
-      现只需**实测安装后的余量**并复跑 §B3 的 `BoundaryTest`/`AesFlowTest`/非接触第二 AC
-      确认不再复现。**已加只读诊断** `card/common/mem/MemDiag.java`（`ENABLED` 编译开关，
-      默认 `false`；量测构建置 `true`）：EMV 用项目私有 `GET DATA 9F7F`、eMRTD 用私有
-      `INS=0xCA`，各返回 6 字节 `[transient-deselect][transient-reset][persistent]` 余量，
-      无分配、无状态。量测步骤：`make card-uninstall` → `make card-emv-install` →
-      `... card get-data -tag=9F7F -host=pcsc:1`（记 EMV 上下文余量）→ `make card-emrtd-install`
-      → 再读 EMV（同值 = 瞬态按 context 计；下降 = 全局池，差值即 eMRTD 占用）→
-      `... terminal apdu -host=pcsc:1 -apdu=00A4040007A0000002471001 -apdu=80CA000000`（eMRTD 上下文）。
-      硬件已具备，待执行；量测后用**每包一份**方案收口（见下）。
-      **实测（2026-10-11，J3R180，生产 4+4 实例）**：`MemDiag` 读得 EMV context
-      `[transient-deselect 2176 B][transient-reset 32][persistent 0x7FFF(封顶)]`，eMRTD context
-      `[32][32][0x7FFF]`；eMRTD **只装**时仍为 `[32][36][0x7FFF]`——故瞬态**按 context 计**，
-      eMRTD context 已近满（剩 ~32 B）。生产 eMRTD 共享占用（`EmrtdScratch` io320+response256+
-      raw320 + `SmScratch` 800 = 1696）加每实例 MAC 引擎小块（~328/4 例）已把该 context 吃到边，
-      仅剩 32 B。**结论：eMRTD 侧无瞬态余量**，A4 不可行（见下）。
-- [!] **A4 eMRTD 命令 scratch 收口为"每包一份"——实测不可行（关闭）**：A3 实测 eMRTD
-      context 只剩 ~32 B 瞬态，而 A4 需再放 `AaCrypto`(522)+`Pace`(481)+`ChipAuth`(64)+
-      `BacCrypto`(8)≈1075 B，远超余量；即便改成共享也放不下，且回退成持久等于没省、并复现安装期
-      `6F00`（上一轮已回退）。故 `AaCrypto`/`Pace`/`ChipAuth`/`BacCrypto` scratch **保持持久**。
-      剩余的 eMRTD EEPROM 削减只能走**不新增瞬态**的路径（已合的同值守卫；`AaCrypto`/`Pace` 的
-      持久写量本身无法在预算内消除）。**维护注意**：eMRTD context 瞬态仅余 32 B，后续任何新增
-      瞬态分配都会触发回退，需先回收等量空间。若将来要回收，可评估"把仅长命令用的 `raw`(320)
-      改持久、换热路径会话/BAK/SM 共享缓冲(~288)"，但需先确认 `raw` 当前是否为瞬态（可能已回退）。
+- [x] **A3 瞬态余量实测（已完成）**：J3R180 上用一次性诊断（临时加 `MemDiag`，读后已移除，
+      方法与结论记录在此）实测 `getAvailableMemory`。结论：瞬态**按 context 计**——EMV
+      context 余量 ~2176 B；eMRTD context 仅 ~32 B（`raw` 瞬态）/ ~352 B（`raw` 持久），即
+      eMRTD context 预算 ~2056 B。生产 eMRTD 共享（io320+response256+raw320+`SmScratch` 800
+      = 1696）+ 每实例 MAC 引擎小块（~328/4 例）已吃满该 context。
+- [!] **A4 eMRTD 命令 scratch 收口为"每包一份"——实测不可行（关闭）**：A3 实测 eMRTD context
+      仅余 ~32 B，而 A4 需再放 `AaCrypto`(522)+`Pace`(481)+`ChipAuth`(64)+`BacCrypto`(8)≈1075 B，
+      放不下；即便改成共享也放不下，回退成持久等于没省，并复现安装期 `6F00`（上一轮已回退）。
+      故 `AaCrypto`/`Pace`/`ChipAuth` scratch **保持持久**。
+- [x] **A5 `raw` 置换热路径共享 scratch（已完成，Plan A）**：实测 `raw` 原为瞬态；将
+      `EmrtdScratch.raw`(320) 固定为**持久**，腾出的空间换成包级瞬态：会话密钥/计数器
+      (`challenge/kenc/kmac/ksEnc/ksMac/ssc/caEnc/caMac` 112 B)、BAC scratch
+      (`E_IFD/KIC/S2/sessionSeed` 96 B)、`SmScratch` 助手（`macBuffer`/两 `loadedEnc`/`ssc16`/`iv`
+      80 B）。eMRTD 共享瞬态 1696→1664 B；BAC 读五组 DG EEPROM 基线 498→**120 B**；
+      `make test-unit`、`make test-emrtd`（模拟器）全绿。**维护注意**：eMRTD context 仍只剩
+      ~56 B 瞬态，后续任何新增瞬态分配需先回收等量空间。
+- [ ] **A6 复用 `APDU.getBuffer()` 作算法暂存（可选，独立开关）**：若仍需更多 eMRTD 瞬态
+      （例如把每实例 `RetailMac.loadedKey`/`AesCmac` 缓存转瞬态），可把 `response`(256) 等
+      ≤ 短 APDU buffer 的缓冲改寄宿 APDU buffer（RAM、不占瞬态配额）。需先做逐 handler 的
+      别名静态分析，再加开关原型，经单测 / `make test` / `make test-emrtd` / 真卡（BAC 五组、
+      AA、PACE、CA、错误状态字封装、瞬态余量再 +256）验证后采用；失败即关开关。
 
 ## B. 卡侧实现与健壮性
 

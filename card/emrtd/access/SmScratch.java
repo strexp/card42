@@ -12,17 +12,25 @@ import card42.common.TransientBuffers;
  * is allocated in the transient (RAM) space when the platform has room, with a
  * persistent fallback otherwise, so the wrappers never fail for lack of RAM.
  *
- * The buffer is shared across every eMRTD applet instance of the package: only
- * the selected applet processes a command at a time, so a single buffer is
+ * <p>The buffer is shared across every eMRTD applet instance of the package:
+ * only the selected applet processes a command at a time, so a single buffer is
  * enough and the per-instance persistent footprint shrinks by 1 KB each.  This
  * also avoids the multi-instance transient exhaustion that per-instance lazy
  * allocations cause on a J3R180 (docs/specs/common/risks.md §2).
  *
- * The buffer is allocated once, from {@code EmrtdApplet}'s constructor via
+ * <p>The buffer is allocated once, from {@code EmrtdApplet}'s constructor via
  * {@link #init()} during installation, so no command path performs a transient
  * allocation (docs/specs/common/risks.md §2).  {@link #get()} keeps the lazy
  * first-use allocation for any caller that does not go through the applet.
  * The personalization path never uses these wrappers.
+ *
+ * <p>The small per-command helpers below (MAC output, the two per-profile K_enc
+ * dedup caches, the AES SSC form and IV) were persistent instance arrays in
+ * {@link AbstractSecureMessaging}/{@link Iso7816SmAes}; they are pure scratch,
+ * so they live here as shared transient arrays.  The 3DES and AES wrappers keep
+ * separate {@code loadedEnc} caches because a session can switch profiles
+ * (PACE AES then Chip Authentication 3DES) and sharing one cache would defeat
+ * the "load the key once per session key" short-circuit.
  *
  * @author card42
  */
@@ -37,21 +45,44 @@ final class SmScratch {
      */
     private static final short SIZE = (short) 800;
 
+    /** The 800-byte framing scratch handed out by {@link #get()}. */
     private static byte[] buffer;
+
+    /** Reused MAC output: 8 bytes for the retail MAC, 16 for AES-CMAC. */
+    private static byte[] macBuffer;
+
+    /** Last K_enc loaded into the 3DES cipher, so setEncKey runs once per session. */
+    private static byte[] loadedEnc3des;
+
+    /** Last K_enc loaded into the AES cipher. */
+    private static byte[] loadedEncAes;
+
+    /** The 16-byte AES SSC form (8 zero bytes then the counter). */
+    private static byte[] ssc16;
+
+    /** The AES-CBC initialization vector AES-ECB(K_enc, SSC16). */
+    private static byte[] iv;
 
     private SmScratch() {
     }
 
     /**
-     * Allocates the shared scratch once, at install (see
-     * {@code EmrtdApplet}), so no secure-messaging command path performs a
-     * transient allocation.  Idempotent.
+     * Allocates the shared scratch once, at install (see {@code EmrtdApplet}),
+     * so no secure-messaging command path performs a transient allocation.
+     * Idempotent.
      */
     static void init() {
         get();
+        if (macBuffer == null) {
+            macBuffer = TransientBuffers.makeByteArray((short) 16);
+            loadedEnc3des = TransientBuffers.makeByteArray((short) 16);
+            loadedEncAes = TransientBuffers.makeByteArray((short) 16);
+            ssc16 = TransientBuffers.makeByteArray((short) 16);
+            iv = TransientBuffers.makeByteArray((short) 16);
+        }
     }
 
-    /** The shared scratch array, allocated on first use. */
+    /** The shared 800-byte framing scratch array, allocated on first use. */
     static byte[] get() {
         byte[] b = buffer;
         if (b == null) {
@@ -59,6 +90,31 @@ final class SmScratch {
             buffer = b;
         }
         return b;
+    }
+
+    static byte[] macBuffer() {
+        init();
+        return macBuffer;
+    }
+
+    static byte[] loadedEnc3des() {
+        init();
+        return loadedEnc3des;
+    }
+
+    static byte[] loadedEncAes() {
+        init();
+        return loadedEncAes;
+    }
+
+    static byte[] ssc16() {
+        init();
+        return ssc16;
+    }
+
+    static byte[] iv() {
+        init();
+        return iv;
     }
 
     /**

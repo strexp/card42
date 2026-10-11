@@ -26,16 +26,20 @@ public final class Iso7816SmAes extends AbstractSecureMessaging {
     private final Cipher aesEcb;
     private final AesCmac aesMac;
 
-    /** The 16-byte SSC form (8 zero bytes then the counter). */
-    private final byte[] ssc16 = new byte[16];
-    private final byte[] iv = new byte[16];
+    /** The 16-byte SSC form (8 zero bytes then the counter); shared transient scratch. */
+    private final byte[] ssc16;
+    /** The AES-CBC IV AES-ECB(K_enc, SSC16); shared transient scratch. */
+    private final byte[] iv;
 
     public Iso7816SmAes() {
         super(KeyBuilder.buildKey(KeyBuilder.TYPE_AES,
-                KeyBuilder.LENGTH_AES_128, false), (short) 16);
+                KeyBuilder.LENGTH_AES_128, false), (short) 16,
+                SmScratch.macBuffer(), SmScratch.loadedEncAes());
         aesCbc = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_CBC_NOPAD, false);
         aesEcb = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, false);
         aesMac = new AesCmac();
+        ssc16 = SmScratch.ssc16();
+        iv = SmScratch.iv();
     }
 
     protected short blockSize() {

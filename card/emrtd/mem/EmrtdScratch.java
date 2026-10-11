@@ -22,10 +22,18 @@ import card42.common.TransientBuffers;
  *
  * <p>{@link #io} and {@link #response} (576 B) are allocated once, in
  * {@link #init()} during installation; no command path allocates them.
- * {@link #raw} (320 B, extended commands only) is allocated last, by
- * {@link #initExtended()}, so it takes the EEPROM fallback if the transient
- * budget runs short.  The total (896 B) is part of the J3R180 budget
- * documented in docs/specs/common/risks.md §2.
+ * {@link #initSession()} adds the BAC/PACE/Chip-Authentication session keys and
+ * the BAC command scratch as package-shared transient arrays: they were
+ * per-instance persistent arrays, so every session re-derived and zeroized
+ * them into EEPROM.
+ *
+ * <p>{@link #raw} (320 B, extended commands only) is deliberately a
+ * <em>persistent</em> (EEPROM) array.  The J3R180 eMRTD transient context
+ * (measured ~2056 B) is nearly exhausted by io/response plus {@code SmScratch}
+ * and the per-instance MAC scratch; trading this rarely-used extended-command
+ * buffer for the hot session scratch above was the only way to fit the latter
+ * without an EEPROM fallback (docs/specs/common/risks.md §2).  Only an
+ * extended-length secure-messaging command touches it.
  *
  * @author card42
  */
@@ -49,17 +57,41 @@ final class EmrtdScratch {
      * exceeds 255 bytes).  Distinct from {@link #io}, which holds the unwrapped
      * plaintext.
      *
-     * <p>Allocated by {@link #initExtended()} <em>after</em> {@link #io},
-     * {@link #response} and {@code SmScratch}: if the J3R180's transient budget
-     * does not stretch to this 320-byte buffer, this is the one that degrades to
-     * a persistent (EEPROM) array.  Only the rare extended command touches it,
-     * whereas {@code SmScratch} writes on every secure-messaging response, so
-     * the wrong degradation would cost ~4x on the READ BINARY hot path
-     * (630 ms vs 150 ms per 231-byte block).
+     * <p>Persistent on purpose: it is the rare extended-command buffer, and its
+     * 320 bytes are spent on the hot shared session scratch instead
+     * (docs/specs/common/risks.md §2).
      */
     static byte[] raw;
 
+    /*
+     * BAC/PACE/Chip-Authentication session state, package-shared transient.
+     * These were per-instance persistent arrays: a session derived
+     * K_enc/K_mac/Ks_enc/Ks_mac, the SSC and the challenge, and zeroized them
+     * again on the next SELECT/DESELECT, writing the same bytes to EEPROM each
+     * time.  Only one applet instance processes a command at a time, so one
+     * shared set is enough (docs/specs/common/risks.md §2).
+     */
+    static byte[] challenge;      // GET CHALLENGE RND.ICC (8)
+    static byte[] kenc;           // BAC K_enc (16)
+    static byte[] kmac;           // BAC K_mac (16)
+    static byte[] ksEnc;          // session Ks_enc (16)
+    static byte[] ksMac;          // session Ks_mac (16)
+    static byte[] ssc;            // send sequence counter (8)
+    static byte[] caEnc;          // staged Chip Authentication Ks_enc (16)
+    static byte[] caMac;          // staged Chip Authentication Ks_mac (16)
+
+    /*
+     * BAC EXTERNAL AUTHENTICATE scratch (E_IFD, K_IC, S2, session seed).  Was a
+     * set of static persistent arrays in ExternalAuthenticate; it is per-command
+     * working state, so it is shared transient scratch here.
+     */
+    static byte[] bacEIfd;        // E_IFD (32)
+    static byte[] bacKic;         // K_IC (16)
+    static byte[] bacS2;          // S2 = RND.ICC || RND.IFD || K_IC (32)
+    static byte[] bacSessionSeed; // K_IFD XOR K_IC (16)
+
     private static boolean initialized;
+    private static boolean sessionInitialized;
 
     private EmrtdScratch() {
     }
@@ -79,13 +111,37 @@ final class EmrtdScratch {
     }
 
     /**
-     * Allocates {@link #raw}, once, after {@code SmScratch.init()}; idempotent.
-     * It is the last transient request, so it is the one that falls back to
-     * EEPROM when the context budget is exhausted.
+     * Allocates the BAC/PACE/Chip-Authentication session state once, at install;
+     * idempotent.  Called after {@code SmScratch.init()} so the 800-byte SM
+     * framing scratch (written by every secure-messaging response) keeps the
+     * transient budget ahead of these smaller session buffers.
+     */
+    static void initSession() {
+        if (sessionInitialized) {
+            return;
+        }
+        challenge = TransientBuffers.makeByteArray((short) 8);
+        kenc = TransientBuffers.makeByteArray((short) 16);
+        kmac = TransientBuffers.makeByteArray((short) 16);
+        ksEnc = TransientBuffers.makeByteArray((short) 16);
+        ksMac = TransientBuffers.makeByteArray((short) 16);
+        ssc = TransientBuffers.makeByteArray((short) 8);
+        caEnc = TransientBuffers.makeByteArray((short) 16);
+        caMac = TransientBuffers.makeByteArray((short) 16);
+        bacEIfd = TransientBuffers.makeByteArray((short) 32);
+        bacKic = TransientBuffers.makeByteArray((short) 16);
+        bacS2 = TransientBuffers.makeByteArray((short) 32);
+        bacSessionSeed = TransientBuffers.makeByteArray((short) 16);
+        sessionInitialized = true;
+    }
+
+    /**
+     * Allocates {@link #raw} once, at install; idempotent.  It is a persistent
+     * (EEPROM) array on purpose (see the class note).
      */
     static void initExtended() {
         if (raw == null) {
-            raw = TransientBuffers.makeByteArray((short) 320);
+            raw = new byte[(short) 320];
         }
     }
 }
