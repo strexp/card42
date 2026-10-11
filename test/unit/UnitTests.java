@@ -50,6 +50,7 @@ public final class UnitTests {
         PassportReportTest.run();
         EmrtdCardAccessTest.run();
         EmrtdTaTest.run();
+        EmrtdTaCardTest.run();
 
         System.out.println();
         System.out.println("== host ==");

@@ -88,6 +88,11 @@ public final class EmrtdTags {
     public static final short DGI_CARD_SECURITY = (short) 0xFF05;
     /** PACE password encoding f(CAN) = raw CAN octets, password reference 0x02. */
     public static final short DGI_PACE_CAN_SEED = (short) 0xFF06;
+    /**
+     * Terminal Authentication CVCA trust point:
+     * {@code W(65) || refLen(1) || CAR(refLen)} (BSI TR-03110-3 A.7.2).
+     */
+    public static final short DGI_TA_TRUST_POINT = (short) 0xFF07;
 
     // Application/EF outer tags.
     public static final short TAG_COM = (short) 0x60;
@@ -152,6 +157,31 @@ public final class EmrtdTags {
     // Chip Authentication private-key reference / public-key DO.
     public static final short DO_CA_PUBLIC_KEY = (short) 0x91;
     public static final short DO_KEY_ID = (short) 0x84;
+
+    // Terminal Authentication (ICAO Doc 9303-11 §7.1, BSI TR-03110-3 A.7).
+    /** MSE P1 "set for verification" (same value as the computation variant). */
+    public static final byte MSE_P1_SET_VERIFICATION = (byte) 0x81;
+    /** MSE P2: set the digital signature template (certificate verification). */
+    public static final byte MSE_P2_DST = (byte) 0xB6;
+    /** MSE P2: terminal authentication (external authentication template). */
+    public static final byte MSE_P2_TA = (byte) 0xA4;
+    /** DO'83' key reference for MSE:Set DST / MSE:Set AT. */
+    public static final short DO_KEY_REFERENCE = (short) 0x83;
+    /** PSO:Verify Certificate P1/P2 (ICAO Doc 9303-11 §7.1.5.2). */
+    public static final byte PSO_P1_VERIFY_CERT = (byte) 0x00;
+    public static final byte PSO_P2_VERIFY_CERT = (byte) 0xBE;
+    /** PSO data objects: certificate body and signature. */
+    public static final short DO_CERT_BODY = (short) 0x7F4E;
+    public static final short DO_CERT_SIGNATURE = (short) 0x5F37;
+
+    // CV certificate body data objects (BSI TR-03110-3 Table 27).
+    public static final short TAG_TA_CAR = (short) 0x42;
+    public static final short TAG_TA_CHR = (short) 0x5F20;
+    public static final short TAG_TA_PROFILE_ID = (short) 0x5F29;
+    public static final short TAG_TA_PUBLIC_KEY = (short) 0x7F49;
+    public static final short TAG_TA_CHAT = (short) 0x7F4C;
+    public static final short TAG_TA_OID = (short) 0x06;
+    public static final short TAG_TA_EC_POINT = (short) 0x86;
 
     /**
      * Largest EF the card can serve.  {@code READ BINARY} addresses a 15-bit

@@ -52,6 +52,8 @@ public final class EmrtdApplet extends AppletBase
     final Lds2Perso lds2Perso;
     final ChipAuth chipAuth;
     final Pace pace;
+    /** Terminal Authentication state; only the LDS1 instance creates it. */
+    final TaContext ta;
 
     final byte[] challenge = new byte[8];
     boolean challengeValid;
@@ -141,7 +143,8 @@ public final class EmrtdApplet extends AppletBase
         sm = sm3des;
         chipAuth = new ChipAuth();
         pace = new Pace();
-        perso = lds1Role ? new LdsPerso(catalog, aa, chipAuth, pace) : null;
+        ta = lds1Role ? new TaContext() : null;
+        perso = lds1Role ? new LdsPerso(catalog, aa, chipAuth, pace, ta) : null;
         lds2Perso = lds2 == null ? null : new Lds2Perso(lds2, chipAuth, pace);
         expectedBlock = 0;
         // EF.DIR lists every application the card hosts (Doc 9303-10 §3.11.2).
@@ -225,6 +228,9 @@ public final class EmrtdApplet extends AppletBase
         smAes.reset();
         sm = sm3des;
         pace.reset();
+        if (ta != null) {
+            ta.clearSession();
+        }
     }
 
     /**
@@ -330,6 +336,7 @@ public final class EmrtdApplet extends AppletBase
         case EmrtdTags.INS_INTERNAL_AUTHENTICATE:
         case EmrtdTags.INS_EXTERNAL_AUTHENTICATE:
         case EmrtdTags.INS_MANAGE_SECURITY_ENVIRONMENT:
+        case EmrtdTags.INS_PSO:
             try {
                 APDU.waitExtension();
             } catch (APDUException e) {
@@ -405,6 +412,8 @@ public final class EmrtdApplet extends AppletBase
         case EmrtdTags.INS_MANAGE_SECURITY_ENVIRONMENT:
             return Mse.process(this, apduBuffer[ISO7816.OFFSET_P1],
                     apduBuffer[ISO7816.OFFSET_P2], data, off, len);
+        case EmrtdTags.INS_PSO:
+            return PsoVerifyCertificate.process(this, data, off, len);
         case EmrtdTags.INS_GENERAL_AUTHENTICATE:
             return Mse.generalAuthenticate(this, data, off, len);
         default:

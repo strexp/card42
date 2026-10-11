@@ -1,10 +1,14 @@
 package javacard.security;
 
 import java.io.ByteArrayOutputStream;
+import java.math.BigInteger;
 import java.security.KeyFactory;
+import java.security.spec.ECGenParameterSpec;
+import java.security.spec.ECPoint;
+import java.security.spec.ECPublicKeySpec;
 import java.security.spec.RSAPrivateKeySpec;
 import java.security.spec.RSAPublicKeySpec;
-import java.math.BigInteger;
+import java.util.Arrays;
 
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -12,12 +16,13 @@ import javax.crypto.spec.SecretKeySpec;
 /**
  * Minimal plain-JVM stand-in for the Java Card {@code Signature}, backed by JCE
  * (docs/specs/common/toolchain.md §6).  It supports the RSA PKCS#1 v1.5 algorithms the
- * card-side eMRTD Active Authentication uses (SHA-1 and SHA-256) and the single
+ * card-side eMRTD Active Authentication uses (SHA-1 and SHA-256), the single
  * DES MAC algorithms the card {@code RetailMac} prefers
- * ({@code ALG_DES_MAC8_ISO9797_M2} and {@code ALG_DES_MAC8_NOPAD}).  Setting the
- * system property {@code card42.desmac.software} makes the DES MAC algorithms
- * report {@code NO_SUCH_ALGORITHM} so the unit tests can also drive the manual
- * fallback path with the same card source.
+ * ({@code ALG_DES_MAC8_ISO9797_M2} and {@code ALG_DES_MAC8_NOPAD}) and the
+ * P-256 ECDSA plain-format verification the card-side Terminal Authentication
+ * uses.  Setting the system property {@code card42.desmac.software} makes the
+ * DES MAC algorithms report {@code NO_SUCH_ALGORITHM} so the unit tests can also
+ * drive the manual fallback path with the same card source.
  */
 public class Signature {
 
@@ -28,6 +33,10 @@ public class Signature {
     public static final byte ALG_RSA_SHA_256_PKCS1 = (byte) 4;
     public static final byte ALG_DES_MAC8_NOPAD = (byte) 10;
     public static final byte ALG_DES_MAC8_ISO9797_M2 = (byte) 11;
+    public static final byte ALG_ECDSA_SHA_256 = (byte) 33;
+
+    /** Cipher selector for the plain (r||s) ECDSA signature format. */
+    public static final byte SIG_CIPHER_ECDSA_PLAIN = (byte) 9;
 
     /** Forces the DES MAC algorithms to be reported as unavailable. */
     public static final String SOFTWARE_DES_MAC_PROPERTY = "card42.desmac.software";
@@ -40,6 +49,8 @@ public class Signature {
     private byte[] desKey;
     private ByteArrayOutputStream desData;
     private boolean desM2;
+
+    private boolean ecdsaPlain;
 
     private Signature(byte algorithm) {
         this.algorithm = algorithm;
@@ -62,9 +73,28 @@ public class Signature {
         return getInstance(algorithm, false);
     }
 
+    /**
+     * The three-parameter factory used by Terminal Authentication with the
+     * plain-format ECDSA cipher (Java Card {@code Signature.SIG_CIPHER_ECDSA_PLAIN}).
+     */
+    public static Signature getInstance(byte messageDigestAlgorithm, byte cipherAlgorithm,
+                                        byte paddingAlgorithm, boolean externalAccess) {
+        if (cipherAlgorithm == SIG_CIPHER_ECDSA_PLAIN
+                && messageDigestAlgorithm == MessageDigest.ALG_SHA_256
+                && paddingAlgorithm == 0) {
+            Signature s = new Signature(ALG_ECDSA_SHA_256);
+            s.ecdsaPlain = true;
+            return s;
+        }
+        throw new CryptoException((short) 1);
+    }
+
     public void init(Key theKey, byte theMode) {
         this.key = theKey;
         this.mode = theMode;
+        if (ecdsaPlain) {
+            return;
+        }
         if (algorithm == ALG_DES_MAC8_ISO9797_M2 || algorithm == ALG_DES_MAC8_NOPAD) {
             desKey = new byte[8];
             ((DESKey) theKey).getKey(desKey, (short) 0);
@@ -146,6 +176,9 @@ public class Signature {
 
     public boolean verify(byte[] inBuff, short inOffset, short inLength,
                           byte[] sigBuff, short sigOffset, short sigLength) {
+        if (ecdsaPlain) {
+            return verifyEcdsaPlain(inBuff, inOffset, inLength, sigBuff, sigOffset, sigLength);
+        }
         try {
             java.security.Signature verifier =
                     java.security.Signature.getInstance(name(algorithm));
@@ -161,9 +194,31 @@ public class Signature {
         }
     }
 
+    /** P-256 ECDSA plain (r||s) verification, delegating to the JDK's SunEC. */
+    private boolean verifyEcdsaPlain(byte[] inBuff, short inOffset, short inLength,
+                                     byte[] sigBuff, short sigOffset, short sigLength) {
+        try {
+            byte[] w = ((ECPublicKey) key).wBytes();
+            java.security.Signature verifier =
+                    java.security.Signature.getInstance("SHA256withECDSA");
+            verifier.initVerify(jceEcPublic(w));
+            if (inLength > 0) {
+                verifier.update(inBuff, inOffset, inLength);
+            }
+            byte[] plain = new byte[sigLength];
+            System.arraycopy(sigBuff, sigOffset, plain, 0, sigLength);
+            return verifier.verify(plainToDer(plain));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public short getLength() {
         if (algorithm == ALG_DES_MAC8_ISO9797_M2 || algorithm == ALG_DES_MAC8_NOPAD) {
             return 8;
+        }
+        if (ecdsaPlain) {
+            return 64;
         }
         return (short) (((key != null ? key.getSize() : (short) 0) + 7) / 8);
     }
@@ -188,6 +243,62 @@ public class Signature {
                 new BigInteger(1, rsa.modulusBytes()),
                 new BigInteger(1, rsa.exponentBytes()));
         return KeyFactory.getInstance("RSA").generatePublic(spec);
+    }
+
+    private static java.security.PublicKey jceEcPublic(byte[] w) throws Exception {
+        java.security.AlgorithmParameters params =
+                java.security.AlgorithmParameters.getInstance("EC");
+        params.init(new ECGenParameterSpec("secp256r1"));
+        java.security.spec.ECParameterSpec spec =
+                params.getParameterSpec(java.security.spec.ECParameterSpec.class);
+        BigInteger x = new BigInteger(1, Arrays.copyOfRange(w, 1, 33));
+        BigInteger y = new BigInteger(1, Arrays.copyOfRange(w, 33, 65));
+        return KeyFactory.getInstance("EC")
+                .generatePublic(new ECPublicKeySpec(new ECPoint(x, y), spec));
+    }
+
+    /** TR-03111 plain (r||s) to X9.62 DER, for the JDK verifier. */
+    private static byte[] plainToDer(byte[] plain) {
+        if (plain.length != 64) {
+            throw new CryptoException((short) 1);
+        }
+        byte[] r = derInteger(plain, 0);
+        byte[] s = derInteger(plain, 32);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(0x30);
+        writeLength(out, r.length + s.length);
+        out.write(r, 0, r.length);
+        out.write(s, 0, s.length);
+        return out.toByteArray();
+    }
+
+    private static byte[] derInteger(byte[] value, int off) {
+        int start = off;
+        int len = 32;
+        while (len > 1 && value[start] == 0) {
+            start++;
+            len--;
+        }
+        byte[] v = Arrays.copyOfRange(value, start, start + len);
+        if ((v[0] & 0x80) != 0) {
+            byte[] padded = new byte[v.length + 1];
+            System.arraycopy(v, 0, padded, 1, v.length);
+            v = padded;
+        }
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(0x02);
+        writeLength(out, v.length);
+        out.write(v, 0, v.length);
+        return out.toByteArray();
+    }
+
+    private static void writeLength(ByteArrayOutputStream out, int len) {
+        if (len < 0x80) {
+            out.write(len);
+        } else {
+            out.write(0x81);
+            out.write(len);
+        }
     }
 
     private static String name(byte algorithm) {

@@ -168,7 +168,8 @@ UNIT_CLASSES  := $(UNIT_DIR)/classes
 UNIT_STUB_SRC := $(wildcard test/common/stubs/javacard/framework/*.java) \
                  $(wildcard test/common/stubs/javacard/security/*.java) \
                  $(wildcard test/common/stubs/javacardx/crypto/*.java)
-UNIT_SRC      := $(shell find test/emv/unit -name '*.java') \
+UNIT_SRC      := $(shell find test/unit -name '*.java') \
+                 $(shell find test/emv/unit -name '*.java') \
                  $(shell find test/emrtd/unit -name '*.java') \
                  $(shell find test/common -name '*.java')
 UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReader.java \
@@ -236,8 +237,10 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_EMRTD_DIR)/command/InternalAuthenticate.java \
                  $(CARD_EMRTD_DIR)/command/Lds2Record.java \
                  $(CARD_EMRTD_DIR)/command/Mse.java \
+                 $(CARD_EMRTD_DIR)/command/PsoVerifyCertificate.java \
                  $(CARD_EMRTD_DIR)/command/ReadBinary.java \
-                 $(CARD_EMRTD_DIR)/command/SelectFile.java
+                 $(CARD_EMRTD_DIR)/command/SelectFile.java \
+                 $(CARD_EMRTD_DIR)/ta/TaContext.java
 UNIT_HOST_SRC := $(HOST_LIB_SRC)
 # The applet implements org.globalplatform.Personalization (GP API 1.6), so the
 # GP API jar links the command-level card tests in the pure-JVM unit build.

@@ -16,6 +16,7 @@ import card42.emrtd.LdsFileSystem;
 import card42.emrtd.LdsMfStore;
 import card42.emrtd.LdsPerso;
 import card42.emrtd.PaceSeedSink;
+import card42.emrtd.TaContext;
 import card42.host.common.util.Hex;
 
 /**
@@ -263,7 +264,7 @@ final class EmrtdPersoStreamTest {
                 paceCanLength[0] = len;
             }
         };
-        LdsPerso perso = new LdsPerso(catalog, aa, chipAuth, pace);
+        LdsPerso perso = new LdsPerso(catalog, aa, chipAuth, pace, new TaContext());
 
         // Feed in 13-byte chunks: the DGI headers and 5000-byte DG2 straddle
         // many STORE DATA blocks.
@@ -322,7 +323,7 @@ final class EmrtdPersoStreamTest {
 
                     public void setCanSeed(byte[] src, short off, short len) {
                     }
-                });
+                }, new TaContext());
         Asserts.sw((short) 0x6A80,
                 () -> other.apply(missingDg1, (short) 0, (short) missingDg1.length),
                 "LDS1 sequence without DG1 -> 6A80");
@@ -359,7 +360,7 @@ final class EmrtdPersoStreamTest {
 
                     public void setCanSeed(byte[] src, short off, short len) {
                     }
-                });
+                }, new TaContext());
         perso.apply(sequence, (short) 0, (short) sequence.length);
 
         Lds2TransparentFile mfSecurity = LdsMfStore.file(EmrtdTags.FID_CARD_SECURITY);

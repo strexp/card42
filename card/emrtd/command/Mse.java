@@ -23,9 +23,21 @@ public final class Mse {
     private Mse() {
     }
 
-    /** MSE:Set KAT (Chip Authentication) or MSE:Set AT (PACE). */
+    /** MSE:Set KAT (Chip Authentication), MSE:Set AT (PACE / TA) or MSE:Set DST (TA). */
     public static short process(EmrtdApplet applet, byte p1, byte p2,
                                 byte[] data, short off, short len) {
+        if ((p1 & 0x7F) == (EmrtdTags.MSE_P1_SET_VERIFICATION & 0x7F)) {
+            // P1 = 0x81: set for verification (Terminal Authentication).
+            if (applet.ta == null) {
+                ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
+            }
+            if ((p2 & 0xFF) == (EmrtdTags.MSE_P2_DST & 0xFF)) {
+                applet.ta.mseSetDst(data, off, len);
+                return 0;
+            }
+            // MSE:Set AT for Terminal Authentication (0x81A4) is not wired yet.
+            ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
+        }
         if ((p1 & 0x7F) != (EmrtdTags.MSE_P1_SET_COMPUTATION & 0x7F)) {
             ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
         }

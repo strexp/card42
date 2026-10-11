@@ -30,6 +30,8 @@ public final class LdsPerso extends DgiStream.Sink {
     public static final short DGI_PACE_SEED = EmrtdTags.DGI_PACE_SEED;
     /** DGI carrying the PACE password encoding f(CAN) = raw CAN octets (ref 0x02). */
     public static final short DGI_PACE_CAN_SEED = EmrtdTags.DGI_PACE_CAN_SEED;
+    /** DGI carrying the CVCA trust point W(65) || refLen(1) || CAR (Terminal Authentication). */
+    public static final short DGI_TA_TRUST_POINT = EmrtdTags.DGI_TA_TRUST_POINT;
 
     /** Largest key-DGI value: modLen(2) + 256 + expLen(2) + 256. */
     private static final short SCRATCH_SIZE = (short) 520;
@@ -43,11 +45,13 @@ public final class LdsPerso extends DgiStream.Sink {
     private static final byte MODE_PACE = 6;
     private static final byte MODE_MF = 7;
     private static final byte MODE_PACE_CAN = 8;
+    private static final byte MODE_TA = 9;
 
     private final LdsCatalog catalog;
     private final AaCrypto aa;
     private final ChipAuth chipAuth;
     private final PaceSeedSink pace;
+    private final TaContext ta;
     private final DgiStream stream;
 
     private final byte[] seed = new byte[16];
@@ -61,11 +65,13 @@ public final class LdsPerso extends DgiStream.Sink {
     private boolean seedSet;
     private boolean dg1Set;
 
-    public LdsPerso(LdsCatalog catalog, AaCrypto aa, ChipAuth chipAuth, PaceSeedSink pace) {
+    public LdsPerso(LdsCatalog catalog, AaCrypto aa, ChipAuth chipAuth, PaceSeedSink pace,
+                    TaContext ta) {
         this.catalog = catalog;
         this.aa = aa;
         this.chipAuth = chipAuth;
         this.pace = pace;
+        this.ta = ta;
         this.stream = new DgiStream(this);
     }
 
@@ -126,6 +132,8 @@ public final class LdsPerso extends DgiStream.Sink {
             mode = MODE_PACE;
         } else if (dgi == DGI_PACE_CAN_SEED) {
             mode = MODE_PACE_CAN;
+        } else if (dgi == DGI_TA_TRUST_POINT) {
+            mode = MODE_TA;
         } else if (dgi == EmrtdTags.DGI_CARD_SECURITY) {
             // EF.CardSecurity lives in the master file (Doc 9303-10 §3.11.4),
             // so it is streamed into the shared LdsMfStore, not the LDS1
@@ -183,6 +191,8 @@ public final class LdsPerso extends DgiStream.Sink {
             pace.setSeed(scratch, (short) 0, scratchLen);
         } else if (mode == MODE_PACE_CAN) {
             pace.setCanSeed(scratch, (short) 0, scratchLen);
+        } else if (mode == MODE_TA) {
+            ta.setTrustPoint(scratch, (short) 0, scratchLen);
         }
         mode = MODE_NONE;
         scratchLen = 0;
