@@ -182,6 +182,12 @@ public final class EmrtdTags {
     public static final short TAG_TA_CHAT = (short) 0x7F4C;
     public static final short TAG_TA_OID = (short) 0x06;
     public static final short TAG_TA_EC_POINT = (short) 0x86;
+    /** Discretionary data / authorization bits (BSI TR-03110-3 Table 27). */
+    public static final short TAG_TA_DISCRETIONARY = (short) 0x53;
+    /** Corporate/extension template (application authorizations). */
+    public static final short TAG_TA_DISCRETIONARY_TEMPLATE = (short) 0x73;
+    /** Certificate extensions (nests 0x73 templates). */
+    public static final short TAG_TA_EXTENSIONS = (short) 0x65;
 
     /**
      * Largest EF the card can serve.  {@code READ BINARY} addresses a 15-bit

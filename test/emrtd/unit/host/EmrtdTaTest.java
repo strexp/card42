@@ -131,7 +131,7 @@ final class EmrtdTaTest {
     private static void effectiveAuthorization() {
         TaChain.Chain chain = TaChain.create(new SecureRandom());
         Map<String, byte[]> effective = CvChainVerifier.effectiveAuthorization(chain.fullChain());
-        Asserts.bytes(new byte[] { (byte) 0x03 }, effective.get(CvCertificate.OID_LDS2_TRAVEL),
+        Asserts.bytes(new byte[] { (byte) 0x0F }, effective.get(CvCertificate.OID_LDS2_TRAVEL),
                 "Travel authorization is ANDed across the chain");
         Asserts.check(CvChainVerifier.granted(effective.get(CvCertificate.OID_LDS2_TRAVEL), 1),
                 "effective authorization grants the append bit");

@@ -11,6 +11,8 @@ import card42.emrtd.EmrtdInstallParameters;
 import card42.emrtd.EmrtdTags;
 import card42.emrtd.ExternalAuthenticate;
 import card42.emrtd.GetChallenge;
+import card42.emrtd.Lds2Perso;
+import card42.emrtd.Lds2Record;
 import card42.emrtd.LdsPerso;
 import card42.emrtd.Mse;
 import card42.emrtd.PsoVerifyCertificate;
@@ -45,6 +47,7 @@ final class EmrtdTaCardTest {
         fullTerminalAuthentication();
         rejectsBadTerminalSignature();
         rejectsExternalAuthenticateWithoutMseAt();
+        travelAuthorization();
     }
 
     private static void verifyChain() throws Exception {
@@ -176,6 +179,81 @@ final class EmrtdTaCardTest {
     }
 
     // --- helpers -------------------------------------------------------------
+
+    /**
+     * LDS2 authorization gating (Doc 9303-10 §5.4): with the Travel
+     * authorization bit the record EF is reachable; without it the read is
+     * refused with 6982 even after a successful Terminal Authentication.
+     */
+    private static void travelAuthorization() throws Exception {
+        TaChain.Chain chain = TaChain.create(new SecureRandom());
+
+        EmrtdApplet granted = travelApplet();
+        setTravelTrustPoint(granted, chain, (byte) 0x0F);
+        authenticateTerminal(granted, chain);
+        Asserts.sw((short) 0x6A83,
+                () -> Lds2Record.readRecord(granted, (byte) 1, (byte) 0x0C, (short) 0),
+                "granted LDS2 read reaches the record EF (no records -> 6A83)");
+
+        EmrtdApplet denied = travelApplet();
+        setTravelTrustPoint(denied, chain, (byte) 0x00);
+        authenticateTerminal(denied, chain);
+        Asserts.sw((short) 0x6982,
+                () -> Lds2Record.readRecord(denied, (byte) 1, (byte) 0x0C, (short) 0),
+                "LDS2 read without the Travel authorization -> 6982");
+    }
+
+    private static void authenticateTerminal(EmrtdApplet applet, TaChain.Chain chain)
+            throws Exception {
+        importChain(applet, chain);
+        byte[] idIc = filled(32, (byte) 0x11);
+        byte[] caKeyHash = filled(32, (byte) 0x22);
+        TaContext ta = taOf(applet);
+        ta.notePiccEphemeral(uncompressed(idIc), (short) 0, (short) 65);
+        ta.noteTerminalEphemeral(uncompressed(caKeyHash), (short) 0, (short) 65);
+        byte[] at = doTag(0x83, chain.terminal.certificateHolderReference().encode());
+        Mse.process(applet, (byte) 0x81, (byte) 0xA4, at, (short) 0, (short) at.length);
+        GetChallenge.process(applet);
+        byte[] challenge = (byte[]) field(TaContext.class, "challenge").get(ta);
+        byte[] signature = Ecdsa.sign(concat(idIc, challenge, caKeyHash),
+                chain.terminalPrivateScalar, new SecureRandom());
+        ExternalAuthenticate.process(applet, signature, (short) 0, (short) signature.length);
+    }
+
+    /** Personalizes the LDS2 trust point (FF07) with the given Travel authorization. */
+    private static void setTravelTrustPoint(EmrtdApplet applet, TaChain.Chain chain, byte travel)
+            throws Exception {
+        byte[] w = chain.cvca.ecPublicKey();
+        byte[] car = chain.cvca.certificateHolderReference().encode();
+        ByteArrayOutputStream value = new ByteArrayOutputStream();
+        value.write(w, 0, w.length);
+        value.write(car.length);
+        value.write(car, 0, car.length);
+        value.write(0x03); // ePassport CHAT
+        value.write(travel);
+        value.write(0x0F); // Visa
+        value.write(0x0F); // Biometrics
+        byte[] dgi = new byte[value.size() + 3];
+        dgi[0] = (byte) 0xFF;
+        dgi[1] = 0x07;
+        dgi[2] = (byte) value.size();
+        System.arraycopy(value.toByteArray(), 0, dgi, 3, value.size());
+
+        Field field = EmrtdApplet.class.getDeclaredField("lds2Perso");
+        field.setAccessible(true);
+        Lds2Perso perso = (Lds2Perso) field.get(applet);
+        perso.apply(dgi, (short) 0, (short) dgi.length);
+    }
+
+    private static EmrtdApplet travelApplet() throws Exception {
+        Constructor<EmrtdApplet> ctor = EmrtdApplet.class.getDeclaredConstructor(
+                byte.class, byte[].class, short.class);
+        ctor.setAccessible(true);
+        EmrtdApplet applet = ctor.newInstance(EmrtdInstallParameters.ROLE_LDS2_TRAVEL,
+                EmrtdTags.DF_NAME_TRAVEL, (short) EmrtdTags.DF_NAME_TRAVEL.length);
+        field(EmrtdApplet.class, "paceDone").setBoolean(applet, true);
+        return applet;
+    }
 
     private static void importChain(EmrtdApplet applet, TaChain.Chain chain) {
         for (byte[] encoded : chain.toSend()) {

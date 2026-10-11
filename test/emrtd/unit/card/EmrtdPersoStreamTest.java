@@ -388,7 +388,7 @@ final class EmrtdPersoStreamTest {
             public void setCanSeed(byte[] src, short off, short len) {
             }
         };
-        Lds2Perso perso = new Lds2Perso(travel, chipAuth, pace);
+        Lds2Perso perso = new Lds2Perso(travel, chipAuth, pace, null);
 
         byte[] cardAccess = Hex.parse("3003020100");
         byte[] record = pattern(200);
@@ -427,7 +427,7 @@ final class EmrtdPersoStreamTest {
 
             public void setCanSeed(byte[] src, short off, short len) {
             }
-        });
+        }, null);
         byte[] biometric = pattern(1000);
         ByteArrayOutputStream bioSeq = new ByteArrayOutputStream();
         writeDgi(bioSeq, Lds2FileSystem.FID_BIOMETRIC, biometric);

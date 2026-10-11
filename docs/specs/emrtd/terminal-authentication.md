@@ -43,8 +43,17 @@
   x 坐标、`Comp(PKDH,IFD)` 取自 CA 终端临时公钥 x 坐标；`GET CHALLENGE` 兼填 TA rIC；
   `ExternalAuthenticate` 在已选终端密钥时路由到 TA，否则 BAC；同一会话只允许一次 TA
   （第二次 `MSE:Set DST/AT`→`6982`）。卡侧单测覆盖全流程。
-- **P5–P7 未实现**：CHAT/扩展有效授权求值并门控 LDS2 EF；个性化脚本注入信任点/
-  `TerminalAuthenticationInfo`；jcsl/真卡端到端互操作与文档。
+- **P5（授权 + 个性化）已完成**：卡侧 `TaContext.effectiveAuth`（CVCA 信任点与每张证书的
+  CHAT/应用扩展逐位 AND，App 序号 Travel/Visa/Bio = 1/2/3）；DGI `FF07` 扩展为
+  `W(65)‖refLen(1)‖CAR‖[CHAT,Travel,Visa,Bio]`；`EmrtdApplet.requireLds2Access` 按有效授权
+  门控 LDS2 EF/记录（read=b1、append=b2），`ta` 在所有 eMRTD 实例上启用，LDS2 分派加入
+  `GET CHALLENGE`/`EXTERNAL AUTHENTICATE`/`PSO`；EF.CardAccess/DG14 宣告
+  `TerminalAuthenticationInfo`；个性化对 LDS1 注入 FF07（demo CVCA `TaChain.demo`）。
+- **P6（测试/文档）**：卡侧单测覆盖授权正/负路径（有授权读达记录 EF `6A83`、无授权 `6982`）。
+  **jcsl 的 TA 端到端受"扩展长度命令 APDU"未支持阻塞**：TA 的 `PSO:Verify Certificate` 数据
+  ~275 B，SM 封装后 >255，需扩展命令 APDU（J3R180 支持，jcsl/主机侧见 `TODO.emv.md` E6）；
+  故 LDS2 默认个性化不注入 FF07（保持既有 PACE-only 套件不回归），LDS2 TA 门控由卡侧单测
+  覆盖。真卡/扩展 APDU 到位后再补 jcsl/真卡 TA 端到端。
 
 ## 2. 平台实测（一次性探针，探针已移除）
 

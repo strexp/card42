@@ -59,6 +59,23 @@ public final class TaContext {
     final byte[] idIc = new byte[32];
     final byte[] caKeyHash = new byte[32];
 
+    /**
+     * Trust-point relative authorization per application (Doc 9303-10 §5.4.2):
+     * [0] = ePassport CHAT byte, [1] = Travel, [2] = Visa, [3] = Biometrics.
+     * Persistent (personalization DGI FF07).
+     */
+    final byte[] trustPointAuth = new byte[4];
+    /** Session effective authorization: trust-point auth AND each verified certificate. */
+    final byte[] effectiveAuth = new byte[4];
+
+    /** Application authorization extension OIDs (ICAO Doc 9303-10 §5.4.2). */
+    private static final byte[] OID_TRAVEL = {
+        0x67, (byte) 0x81, 0x08, 0x01, 0x01, 0x09, 0x01 };
+    private static final byte[] OID_VISA = {
+        0x67, (byte) 0x81, 0x08, 0x01, 0x01, 0x09, 0x02 };
+    private static final byte[] OID_BIOMETRICS = {
+        0x67, (byte) 0x81, 0x08, 0x01, 0x01, 0x09, 0x03 };
+
     /** ID_IC || rIC || Comp(PKDH,IFD) (32 + 8 + 32). */
     private final byte[] signatureInput = new byte[72];
 
@@ -77,8 +94,21 @@ public final class TaContext {
         challengeValid = false;
         taDone = false;
         terminalSelected = false;
+        Util.arrayCopyNonAtomic(trustPointAuth, (short) 0, effectiveAuth, (short) 0, (short) 4);
         Util.arrayFillNonAtomic(idIc, (short) 0, (short) idIc.length, (byte) 0);
         Util.arrayFillNonAtomic(caKeyHash, (short) 0, (short) caKeyHash.length, (byte) 0);
+    }
+
+    /** Effective authorization byte for an application index (0 epassport, 1..3). */
+    public byte authorization(short application) {
+        return effectiveAuth[application];
+    }
+
+    /** True when the terminal is authenticated and holds the requested bit (0..7). */
+    public boolean granted(short application, byte bit) {
+        short mask = (short) (1 << bit);
+        short value = (short) (effectiveAuth[application] & mask);
+        return taDone && value != 0;
     }
 
     /** True once a CVCA trust point has been personalized. */
@@ -104,6 +134,14 @@ public final class TaContext {
         Util.arrayCopyNonAtomic(src, (short) (off + KEY_LENGTH + 1),
                 trustPointRef, (short) 0, refLen);
         trustPointRefLength = refLen;
+        Util.arrayFillNonAtomic(trustPointAuth, (short) 0, (short) 4, (byte) 0);
+        short authOff = (short) (off + KEY_LENGTH + 1 + refLen);
+        if ((short) (authOff + 4) <= (short) (off + len)) {
+            // Optional trailing relative authorization
+            // [ePassport, Travel, Visa, Biometrics] (Doc 9303-10 §5.4.2).
+            Util.arrayCopyNonAtomic(src, authOff, trustPointAuth, (short) 0, (short) 4);
+        }
+        Util.arrayCopyNonAtomic(trustPointAuth, (short) 0, effectiveAuth, (short) 0, (short) 4);
         trustPointValid = true;
     }
 
@@ -280,6 +318,10 @@ public final class TaContext {
                 chrOff = valueOff;
                 chrLength = valueLength;
                 chrFound = true;
+            } else if (tag == EmrtdTags.TAG_TA_CHAT) {
+                andChat(data, valueOff, valueLength);
+            } else if (tag == EmrtdTags.TAG_TA_EXTENSIONS) {
+                andExtensions(data, valueOff, valueLength);
             }
             p = (short) (p + total);
         }
@@ -310,6 +352,83 @@ public final class TaContext {
             p = (short) (p + total);
         }
         return 0;
+    }
+
+    /** ANDs the certificate's CHAT relative authorization into the effective authorization. */
+    private void andChat(byte[] data, short off, short len) {
+        if (Lds2Record.find(data, off, len, EmrtdTags.TAG_TA_DISCRETIONARY, FIND)
+                && FIND[1] >= 1) {
+            effectiveAuth[0] = (byte) (effectiveAuth[0] & data[FIND[0]]);
+        }
+    }
+
+    /** ANDs each application authorization extension into the effective authorization. */
+    private void andExtensions(byte[] data, short off, short len) {
+        short p = off;
+        short end = (short) (off + len);
+        while (p < end) {
+            short total = Tlv.totalLength(data, p);
+            if (total <= 0 || (short) (p + total) > end) {
+                break;
+            }
+            if (Tlv.getTag(data, p) == EmrtdTags.TAG_TA_DISCRETIONARY_TEMPLATE) {
+                andExtension(data, Tlv.valueOffset(data, p),
+                        Tlv.getLength(data, Tlv.lengthOffset(data, p)));
+            }
+            p = (short) (p + total);
+        }
+    }
+
+    private void andExtension(byte[] data, short off, short len) {
+        short oidOff = 0;
+        short oidLen = 0;
+        boolean oidFound = false;
+        short bitsOff = 0;
+        boolean bitsFound = false;
+        short p = off;
+        short end = (short) (off + len);
+        while (p < end) {
+            short total = Tlv.totalLength(data, p);
+            if (total <= 0 || (short) (p + total) > end) {
+                break;
+            }
+            short tag = Tlv.getTag(data, p);
+            if (tag == EmrtdTags.TAG_TA_OID) {
+                oidOff = Tlv.valueOffset(data, p);
+                oidLen = Tlv.getLength(data, Tlv.lengthOffset(data, p));
+                oidFound = true;
+            } else if (tag == EmrtdTags.TAG_TA_DISCRETIONARY) {
+                bitsOff = Tlv.valueOffset(data, p);
+                bitsFound = true;
+            }
+            p = (short) (p + total);
+        }
+        if (!oidFound || !bitsFound) {
+            return;
+        }
+        short index = appIndex(data, oidOff, oidLen);
+        if (index >= 0) {
+            effectiveAuth[index] = (byte) (effectiveAuth[index] & data[bitsOff]);
+        }
+    }
+
+    /** 1 = Travel, 2 = Visa, 3 = Biometrics; -1 for an unknown application OID. */
+    private static short appIndex(byte[] data, short off, short len) {
+        if (matches(data, off, len, OID_TRAVEL)) {
+            return (short) 1;
+        }
+        if (matches(data, off, len, OID_VISA)) {
+            return (short) 2;
+        }
+        if (matches(data, off, len, OID_BIOMETRICS)) {
+            return (short) 3;
+        }
+        return (short) -1;
+    }
+
+    private static boolean matches(byte[] data, short off, short len, byte[] oid) {
+        return len == (short) oid.length
+                && Util.arrayCompare(data, off, oid, (short) 0, len) == 0;
     }
 
     private void ensureEc() {

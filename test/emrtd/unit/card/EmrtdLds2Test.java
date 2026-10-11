@@ -185,7 +185,7 @@ final class EmrtdLds2Test {
                 paceCanSeedLength[0] = len;
             }
         };
-        Lds2Perso perso = new Lds2Perso(travel, chipAuth, pace);
+        Lds2Perso perso = new Lds2Perso(travel, chipAuth, pace, null);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writeDgi(out, EmrtdTags.FID_CARD_ACCESS, Hex.parse("30 03 0201 00"));
         writeDgi(out, (short) (0x7000 | EmrtdTags.FID_RECORDS), Hex.parse("5F4401AA"));

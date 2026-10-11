@@ -33,6 +33,10 @@ public final class ExternalAuthenticate {
             applet.ta.externalAuthenticate(data, off, len);
             return 0;
         }
+        if (applet.perso == null) {
+            // LDS2 instances have no BAC seed (no LDS1 personalization).
+            ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+        }
         if (!applet.perso.seedSet()) {
             ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
         }

@@ -143,9 +143,9 @@ public final class EmrtdApplet extends AppletBase
         sm = sm3des;
         chipAuth = new ChipAuth();
         pace = new Pace();
-        ta = lds1Role ? new TaContext() : null;
+        ta = new TaContext();
         perso = lds1Role ? new LdsPerso(catalog, aa, chipAuth, pace, ta) : null;
-        lds2Perso = lds2 == null ? null : new Lds2Perso(lds2, chipAuth, pace);
+        lds2Perso = lds2 == null ? null : new Lds2Perso(lds2, chipAuth, pace, ta);
         expectedBlock = 0;
         // EF.DIR lists every application the card hosts (Doc 9303-10 §3.11.2).
         LdsMfStore.addDirectoryEntry(dfName, dfNameLength);
@@ -393,6 +393,12 @@ public final class EmrtdApplet extends AppletBase
                         apduBuffer[ISO7816.OFFSET_P2], data, off, len);
             case EmrtdTags.INS_GENERAL_AUTHENTICATE:
                 return Mse.generalAuthenticate(this, data, off, len);
+            case EmrtdTags.INS_GET_CHALLENGE:
+                return GetChallenge.process(this);
+            case EmrtdTags.INS_EXTERNAL_AUTHENTICATE:
+                return ExternalAuthenticate.process(this, data, off, len);
+            case EmrtdTags.INS_PSO:
+                return PsoVerifyCertificate.process(this, data, off, len);
             default:
                 ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
                 return 0; // unreachable
@@ -443,8 +449,9 @@ public final class EmrtdApplet extends AppletBase
             lds2.clearSelection();
             return 0;
         }
-        // Every DF file needs PACE.
-        requirePace();
+        // Every DF file needs PACE and, when a trust point is personalized, the
+        // Terminal Authentication read authorization (Doc 9303-10 §5.4).
+        requireLds2Access(LDS2_READ_BIT);
         selectedMf = null;
         lds2.select(fid);
         return 0;
@@ -462,6 +469,39 @@ public final class EmrtdApplet extends AppletBase
         }
     }
 
+    /** LDS2 read authorization bit (b1 of the application authorization byte). */
+    static final byte LDS2_READ_BIT = 0;
+    /** LDS2 append authorization bit (b2 of the application authorization byte). */
+    static final byte LDS2_APPEND_BIT = 1;
+
+    /** The application authorization index for this LDS2 instance (1..3). */
+    private short lds2ApplicationIndex() {
+        switch (role) {
+        case EmrtdInstallParameters.ROLE_LDS2_TRAVEL:
+            return (short) 1;
+        case EmrtdInstallParameters.ROLE_LDS2_VISA:
+            return (short) 2;
+        case EmrtdInstallParameters.ROLE_LDS2_BIOMETRICS:
+            return (short) 3;
+        default:
+            return (short) 0;
+        }
+    }
+
+    /**
+     * LDS2 access control (ICAO Doc 9303-11 §1.2 Note 2 / Doc 9303-10 §5.4):
+     * PACE is required, and once a Terminal Authentication trust point is
+     * personalized the terminal must hold the requested authorization bit for
+     * this application.  A card without a trust point enforces PACE only
+     * (development configuration).
+     */
+    void requireLds2Access(byte bit) {
+        requirePace();
+        if (ta != null && ta.hasTrustPoint() && !ta.granted(lds2ApplicationIndex(), bit)) {
+            ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+        }
+    }
+
     /** True for the master-file EFs readable before PACE (ALWAYS). */
     private static boolean isPublicMf(short fid) {
         return fid == EmrtdTags.FID_CARD_ACCESS
@@ -474,6 +514,7 @@ public final class EmrtdApplet extends AppletBase
         short p2 = (short) (apduBuffer[ISO7816.OFFSET_P2] & 0xFF);
         Lds2TransparentFile file;
         short offset;
+        boolean mfFile = false;
         if ((p1 & EmrtdTags.READ_P1_SFI) != 0) {
             // Short EF identifier form (Doc 9303-10 §3.6.3.2 Table 5); a valid
             // SFI also sets that EF as current (ISO/IEC 7816-4 §6.1.2).
@@ -487,6 +528,7 @@ public final class EmrtdApplet extends AppletBase
                 if (file != null) {
                     selectedMf = file;
                     lds2.clearSelection();
+                    mfFile = true;
                 }
             }
             offset = p2;
@@ -495,6 +537,7 @@ public final class EmrtdApplet extends AppletBase
             }
         } else {
             file = selectedMf != null ? selectedMf : lds2.getSelectedTransparent();
+            mfFile = selectedMf != null;
             offset = (short) (((p1 & 0x7F) << 8) | p2);
             if (file == null) {
                 // 6986: command not allowed, no current EF (ISO/IEC 7816-4 §6.1.5).
@@ -502,10 +545,15 @@ public final class EmrtdApplet extends AppletBase
             }
         }
         // EF.CardAccess, EF.ATR/INFO and EF.DIR are readable before PACE;
-        // EF.CardSecurity and the record EFs need PACE (Doc 9303-10 §3.11.4
-        // Table 34, §5.4).
+        // EF.CardSecurity needs PACE (Doc 9303-10 §3.11.4 Table 34), and the
+        // DF transparent EFs need PACE and, when a trust point is present,
+        // Terminal Authentication (§5.4).
         if (!isPublicMf(file.getFid())) {
-            requirePace();
+            if (mfFile) {
+                requirePace();
+            } else {
+                requireLds2Access(LDS2_READ_BIT);
+            }
         }
         short want = le <= 0 ? (short) 256 : le;
         short cap = sm.maxResponseData();

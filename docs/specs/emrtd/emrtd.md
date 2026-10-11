@@ -286,6 +286,11 @@ EF.CardAccess `011C` 与 EF.CardSecurity `011D` 属**主文件**（`LdsMfStore`�
 实例共享），不在任何 LDS2 DF 内（Doc 9303-10 §3.11.3/§3.11.4）。EF.CardAccess 恒可
 选择/读取；EF.CardSecurity 与所有 LDS2 记录/透明 EF 的访问 **MUST** 先完成 PACE，否则
 回 `6982`（Doc 9303-11 §1.2 Note 2 / §4.2 step 3；Doc 9303-10 §3.11.4 Table 34、§5.4）。
+**Terminal Authentication（TAv2，可选）**：当卡被个性化注入 CVCA 信任点（DGI `FF07`）时，
+LDS2 EF/记录访问在 PACE 之外还按**有效授权**门控——`TaContext` 把信任点与链中各证书的
+CHAT/应用扩展逐位 AND，`EmrtdApplet.requireLds2Access` 按 Travel/Visa/Biometrics 的
+read(b1)/append(b2) 位放行，否则 `6982`（Doc 9303-10 §5.4 Table 96/97/98）。未注入信任点的
+卡保持 PACE-only（开发配置）；TA 的端到端见 [terminal-authentication.md](terminal-authentication.md)。
 SM 建立（BAC/PACE/CA）后收到明文 APDU 即中止会话并回 `6982`（Doc 9303-11 §9.8.3）；
 **当前临时放行所有明文命令（互操作排障，见 `EmrtdApplet.processCommand` 的实验注释）**：
 明文命令在明文下应答且不中止会话（SSC 不推进、会话密钥保留），之后仍可继续 SM 读；逐命令的
