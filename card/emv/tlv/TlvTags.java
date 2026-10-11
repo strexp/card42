@@ -22,11 +22,10 @@ public final class TlvTags {
 
     // --- DGI containers (EMV CPS v2.0 Annex A) ---------------
     //
-    // The EMV CPS v2.0 (2021-08) numbering replaces the former project-specific
-    // E0xx containers.  File records keep the EMV CPS v2.0 scheme where the DGI is the
-    // (SFI << 8) | record key, i.e. '0101'..'1EFF' are record templates.
-    // The card42-specific data uses project DGIs outside the ranges that EMV CPS v2.0
-    // reserves (9F60-9F6F, 7FF0-7FFE, 8F01, 7F01, 00CF, 0062).
+    // DGIs follow the EMV CPS v2.0 (2021-08) numbering.  File records use the
+    // scheme where the DGI is the (SFI << 8) | record key, i.e. '0101'..'1EFF' are
+    // record templates.  The card42-specific data uses project DGIs outside the
+    // ranges that EMV CPS v2.0 reserves (9F60-9F6F, 7FF0-7FFE, 8F01, 7F01, 00CF, 0062).
 
     /** SELECT response data (an A5 FCI proprietary template), EMV CPS v2.0 Annex A DGI '9102'. */
     public static final short DGI_FCI_RESPONSE = (short) 0x9102;

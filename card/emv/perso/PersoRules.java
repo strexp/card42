@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 
 /* Reusable validation rules for personalization DGI values (EMV CPS v2.0
@@ -13,7 +13,7 @@ import javacard.framework.ISOException;
  * @author card42
  */
 
-public final class PersoRules implements ISO7816 {
+public final class PersoRules {
 
     /*
      * Reused cursors: one for a single-level walk, one for the inner walk of a

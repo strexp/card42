@@ -1,8 +1,8 @@
 package card42.emv;
 
 /* The EMV command INS bytes (EMV v4.4 Book 3 §6.3.2 Table 3) plus the STORE
- * DATA P1 flag, split out of the former EMVConstants constant interface so a
- * class depends on the command codes only when it handles commands.
+ * DATA P1 flag.  A class depends on the command codes only when it handles
+ * commands.
  *
  * SELECT (A4) and EXTERNAL AUTHENTICATE (82) are defined by
  * {@link javacard.framework.ISO7816} and are not repeated here.

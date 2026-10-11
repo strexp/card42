@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -33,7 +33,7 @@ import javacard.security.KeyBuilder;
  * @author card42
  */
 
-public class EMVCrypto implements ISO7816 {
+public class EMVCrypto {
 
 	/* The session state and the AIP provider (docs/specs/common/architecture.md §2). */
 	private final EMVProtocolState protocolState;

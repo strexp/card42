@@ -6,8 +6,8 @@ package card42.emrtd;
  * established: {@link Iso7816Sm} (BAC/3DES, retail MAC) and
  * {@link Iso7816SmAes} (PACE/AES-128, CMAC).
  *
- * The applet holds one active reference, so the command path no longer branches
- * on the negotiated profile.
+ * The applet holds one active reference, so no command path branches on the
+ * negotiated profile.
  *
  * @author card42
  */

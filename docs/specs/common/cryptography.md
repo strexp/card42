@@ -112,7 +112,7 @@ ISO/IEC 9797-1 Algorithm 5（CMAC），CV '6' 的 AC、ARPC Method 2 与 SM MAC 
 `ALG_AES_BLOCK_128_CBC_NOPAD` 在 jcsl 与 J3R180 上均已实测可用（`PACE ECDH-GM AES-128` 通过；
 `AesCmac`/`Cipher.ALG_AES_BLOCK_128_CBC_NOPAD` 已是既有 SM 路径）。
 
-## 5. ARPC 校验（`card/emv/crypto/Arpc.java`）
+## 5. ARPC 校验（`card/emv/command/Arpc.java`）
 
 复用第一次 AC 的 `SK_AC`，**不重派生**；比对用常量时间（见 §8）。
 

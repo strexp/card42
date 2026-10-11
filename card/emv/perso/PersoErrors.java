@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 
 /* Maps a failure raised while applying a personalization sequence to the
@@ -19,7 +19,7 @@ import javacard.framework.ISOException;
  * @author card42
  */
 
-public final class PersoErrors implements ISO7816 {
+public final class PersoErrors {
 
     private PersoErrors() {
     }
@@ -35,6 +35,6 @@ public final class PersoErrors implements ISO7816 {
         if (e instanceof javacard.security.CryptoException) {
             ISOException.throwIt(SW_CONDITIONS_NOT_SATISFIED); // 6985
         }
-        ISOException.throwIt(ISO7816.SW_UNKNOWN);
+        ISOException.throwIt(SW_UNKNOWN);
     }
 }

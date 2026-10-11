@@ -6,7 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 import card42.host.emv.cli.Main;
 
 /**

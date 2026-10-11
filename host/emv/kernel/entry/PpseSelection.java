@@ -45,14 +45,6 @@ public final class PpseSelection implements Selection {
     private PreProcessingIndicators indicators;
     private KernelActivation activation;
 
-    /**
-     * Selection with the flat supported-AID list used before H1: a default
-     * Combination Table for every transaction type.
-     */
-    public PpseSelection(String[] supportedAids) {
-        this(CombinationTable.defaults(supportedAids), new EntryPointConfiguration());
-    }
-
     public PpseSelection(CombinationTable table, EntryPointConfiguration config) {
         this(table, config, KernelListener.NONE);
     }

@@ -7,7 +7,7 @@ import javax.smartcardio.CardTerminal;
 import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.transport.Terminal;
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 import card42.host.emrtd.access.Bac;
 import card42.host.emrtd.access.MrzKeySeed;
 import card42.host.emrtd.aa.ActiveAuthentication;
@@ -17,7 +17,7 @@ import card42.host.emrtd.lds.Dg1;
 import card42.host.emrtd.lds.Dg15;
 import card42.host.emrtd.lds.Dg2;
 import card42.host.emrtd.lds.LdsFileUtil;
-import card42.host.emrtd.lds.LdsReader;
+import card42.host.emrtd.access.LdsReader;
 import card42.host.emrtd.lds.LdsSecurityObject;
 import card42.host.emrtd.lds.Sod;
 import card42.host.emrtd.pa.CscaKeyStore;

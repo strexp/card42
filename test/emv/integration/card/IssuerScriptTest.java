@@ -8,10 +8,12 @@ import javax.smartcardio.CardTerminal;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 
-import card42.host.emv.crypto.SmCrypto;
+import card42.host.emv.kernel.script.IssuerScriptProcessor;
+import card42.host.emv.kernel.script.IssuerScript;
+import card42.host.emv.crypto.ScriptSession;
 import card42.host.emv.crypto.AcCrypto;
 import card42.host.emv.lib.Terminal;
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 import card42.host.common.util.Bytes;
 import card42.host.common.util.Hex;
 import card42.host.common.codec.Responses;
@@ -22,7 +24,7 @@ import card42.host.common.codec.TlvWriter;
 /**
  * Issuer script and post-issuance command tests (EMV v4.4 Book 2 §8.2, §9.2/§9.3).
  *
- * It drives the Format 1 secure-messaging MAC chain of {@link SmCrypto} against
+ * It drives the Format 1 secure-messaging MAC chain of {@link ScriptSession} against
  * the contact instance and covers:
  *
  *   - PIN CHANGE/UNBLOCK (P2=00) delivered in a 71 script, including the MAC
@@ -125,13 +127,13 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(firstAc);
 
         byte[] script = buildScript(0x71, "01020304",
                 session.command(0x24, 0x00, 0x00).getBytes(),
                 session.command(0x24, 0x00, 0x00).getBytes());
-        SmCrypto.IssuerScript parsed = SmCrypto.parseIssuerScript(script);
+        IssuerScript parsed = IssuerScript.parse(script);
         Checks.check("71 script identifier", parsed.scriptId != null
                 && parsed.scriptId.length == 4);
         Checks.check("71 script command count", parsed.commands.size() == 2);
@@ -150,7 +152,7 @@ public class IssuerScriptTest {
                         AcCrypto.iso9564Format2("1234")).getBytes());
         Checks.check("PIN CHANGE/UNBLOCK with enciphered PIN data",
                 enciphered.getSW(), 0x9000);
-        byte[] results = SmCrypto.issuerScriptResults(2, 0, parsed.scriptId);
+        byte[] results = IssuerScriptProcessor.issuerScriptResults(2, 0, parsed.scriptId);
         Checks.check("9F5B successful result", (results[0] & 0xF0) == 0x20
                 && (results[0] & 0x0F) == 0);
         Checks.bytes(Hex.parse("01020304"),
@@ -166,7 +168,7 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(firstAc);
         // APPLICATION UNBLOCK on a valid application is a no-op success
         // (EMV v4.4 Book 3 section 6.5.2).
@@ -191,7 +193,7 @@ public class IssuerScriptTest {
             return;
         }
         byte[] aac = Responses.parseAc(first).ac;
-        SmCrypto.ScriptSession unblock = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession unblock = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         unblock.start(aac);
         // APPLICATION BLOCK on an already invalidated application is still a
         // success (EMV v4.4 Book 3 section 6.5.1).
@@ -213,7 +215,7 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(firstAc);
 
         byte[] bad = session.command(0x24, 0x00, 0x00).getBytes();
@@ -229,7 +231,7 @@ public class IssuerScriptTest {
         // A new transaction (new ATC) resets the secure-messaging session.
         byte[] freshAc = beginArqcSession(terminal, CONTACT_AID, pdol);
         if (freshAc != null) {
-            SmCrypto.ScriptSession recovered = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+            ScriptSession recovered = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
             recovered.start(freshAc);
             Checks.check("new ATC resets the MAC failure",
                     terminal.transmit(recovered.command(0x24, 0x00, 0x00).getBytes()).getSW(),
@@ -266,7 +268,7 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(firstAc);
         Checks.check("post-issuance P1 != 00 -> 6A81",
                 terminal.transmit(session.command(0x1E, 0x01, 0x00).getBytes()).getSW(),
@@ -302,7 +304,7 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(firstAc);
 
         // These are rejected structurally before the MAC is checked, so no
@@ -341,7 +343,7 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.setMacLength(4);
         session.start(firstAc);
         CommandAPDU first = session.command(0x24, 0x00, 0x00);
@@ -361,7 +363,7 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(firstAc);
         Checks.check("PIN CHANGE/UNBLOCK with an 81 object",
                 terminal.transmit(session.commandWithObjects(0x24, 0x00, 0x00,
@@ -388,7 +390,7 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(firstAc);
         Checks.check("PIN CHANGE/UNBLOCK P2=00",
                 terminal.transmit(session.command(0x24, 0x00, 0x00).getBytes()).getSW(),
@@ -403,7 +405,7 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(firstAc);
         Checks.check("PIN CHANGE/UNBLOCK P2=01 -> 6A81",
                 terminal.transmit(session.command(0x24, 0x00, 0x01).getBytes()).getSW(),
@@ -436,7 +438,7 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(firstAc);
         Checks.check("chained PIN CHANGE/UNBLOCK fragment -> 9000",
                 terminal.transmit(session.commandChained(0x24, 0x00, 0x00).getBytes())
@@ -451,7 +453,7 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(firstAc);
         Checks.check("chained PIN CHANGE/UNBLOCK fragment -> 9000",
                 terminal.transmit(session.commandChained(0x24, 0x00, 0x00).getBytes())
@@ -477,15 +479,15 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(firstAc);
 
         byte[] script71 = buildScript(0x71, "0A0B0C0D",
                 session.command(0x24, 0x00, 0x00).getBytes());
         byte[] script72 = buildScript(0x72, "0E0F1011",
                 session.command(0x24, 0x00, 0x00).getBytes());
-        SmCrypto.IssuerScript s71 = SmCrypto.parseIssuerScript(script71);
-        SmCrypto.IssuerScript s72 = SmCrypto.parseIssuerScript(script72);
+        IssuerScript s71 = IssuerScript.parse(script71);
+        IssuerScript s72 = IssuerScript.parse(script72);
         Checks.check("71 script parsed", s71.commands.size() == 1);
         Checks.check("72 script parsed", s72.commands.size() == 1);
         Checks.check("71 command",
@@ -494,12 +496,12 @@ public class IssuerScriptTest {
                 terminal.transmit(s72.commands.get(0)).getSW(), 0x9000);
 
         // Issuer Script Results (EMV v4.4 Book 4 Annex A5) and the TVR failure bits.
-        byte[] results = SmCrypto.issuerScriptResults(2, 0, s72.scriptId);
+        byte[] results = IssuerScriptProcessor.issuerScriptResults(2, 0, s72.scriptId);
         Checks.check("72 script results", (results[0] & 0xF0) == 0x20);
         byte[] tvr = new byte[5];
-        SmCrypto.setScriptFailure(tvr, false);
+        IssuerScriptProcessor.setTvrFailure(tvr, false);
         Checks.check("TVR before final AC bit", (tvr[4] & 0x20) != 0);
-        SmCrypto.setScriptFailure(tvr, true);
+        IssuerScriptProcessor.setTvrFailure(tvr, true);
         Checks.check("TVR after final AC bit", (tvr[4] & 0x10) != 0);
     }
 
@@ -525,7 +527,7 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(firstAc);
         Checks.check("CVR count: command 1",
                 terminal.transmit(session.command(0x24, 0x00, 0x00).getBytes()).getSW(),
@@ -559,7 +561,7 @@ public class IssuerScriptTest {
         if (arqc == null) {
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(GENERIC_MAC_KEY, null);
+        ScriptSession session = new ScriptSession(GENERIC_MAC_KEY, null);
         session.start(arqc);
         // The cryptogram content is irrelevant: the card refuses because no
         // encipherment master key was personalized (EMV v4.4 Book 2 §9.2/§9.3).
@@ -576,7 +578,7 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        SmCrypto.ScriptSession withKey = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession withKey = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         withKey.start(firstAc);
         Checks.check("87 padding indicator != 01 -> 6A80",
                 terminal.transmit(withKey.commandWithObjects(0x24, 0x00, 0x00,
@@ -624,7 +626,7 @@ public class IssuerScriptTest {
                     + Checks.sw(aac.getSW()));
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(Responses.parseAc(aac).ac);
         Checks.check("APPLICATION UNBLOCK after CSU block",
                 terminal.transmit(session.command(0x18, 0x00, 0x00).getBytes()).getSW(),
@@ -843,7 +845,7 @@ public class IssuerScriptTest {
         if (firstAc == null) {
             return;
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(firstAc);
         Checks.check("CARD BLOCK",
                 terminal.transmit(session.command(0x16, 0x00, 0x00).getBytes()).getSW(),

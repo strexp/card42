@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
@@ -24,7 +24,7 @@ import javacard.framework.Util;
  * @author card42
  */
 
-public class EMVStaticData implements ISO7816 {
+public class EMVStaticData {
 
     /** Instance AID, used as the DF name in the FCI. */
     private final byte[] aid = new byte[(short) 16];

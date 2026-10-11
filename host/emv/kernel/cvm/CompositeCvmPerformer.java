@@ -1,7 +1,7 @@
 package card42.host.emv.kernel.cvm;
 
 import card42.host.emv.kernel.data.Cvm;
-import card42.host.emv.kernel.analysis.CvmPerformer;
+import card42.host.emv.kernel.core.CvmPerformer;
 
 /**
  * A {@link CvmPerformer} that dispatches each CVM method to the first delegate

@@ -1,7 +1,7 @@
 package card42.common;
 
 import javacard.framework.APDU;
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 
 /* Shared short-APDU command-data reception and response transmission.
@@ -22,7 +22,7 @@ import javacard.framework.ISOException;
  * @author card42
  */
 
-public final class ApduIo implements ISO7816 {
+public final class ApduIo {
 
     private ApduIo() {
     }

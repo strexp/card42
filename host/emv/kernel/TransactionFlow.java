@@ -9,9 +9,9 @@ import card42.host.common.codec.Responses;
 import card42.host.common.codec.EmvTags;
 import card42.host.emv.lib.TagPolicy;
 import card42.host.common.codec.Tags;
-import card42.host.emv.crypto.SmCrypto;
+import card42.host.emv.kernel.script.IssuerScript;
 import card42.host.emv.kernel.analysis.CvmList;
-import card42.host.emv.kernel.analysis.CvmPerformer;
+import card42.host.emv.kernel.core.CvmPerformer;
 import card42.host.emv.kernel.analysis.ProcessingRestrictions;
 import card42.host.emv.kernel.analysis.TerminalActionAnalysis;
 import card42.host.emv.kernel.analysis.TerminalRiskManagement;
@@ -527,7 +527,7 @@ final class TransactionFlow {
         }
         java.util.List<byte[]> selected = new java.util.ArrayList<>();
         for (byte[] template : auth.issuerScripts) {
-            if (SmCrypto.tagOf(template) == tag) {
+            if (IssuerScript.tagOf(template) == tag) {
                 selected.add(template);
             }
         }

@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import card42.host.emv.kernel.analysis.CvmPerformer;
+import card42.host.emv.kernel.core.CvmPerformer;
 import card42.host.emv.kernel.core.ConfirmationProvider;
 import card42.host.emv.kernel.core.Issuer;
 import card42.host.emv.kernel.core.KernelException;

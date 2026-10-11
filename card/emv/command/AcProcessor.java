@@ -3,7 +3,7 @@ package card42.emv;
 import card42.common.*;
 
 import javacard.framework.APDU;
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
@@ -19,7 +19,7 @@ import javacard.framework.Util;
  * @author card42
  */
 
-public class AcProcessor implements ISO7816 {
+public class AcProcessor {
 
     /** P1 b5-b4 selects the offline data authentication type (EMV v4.4 Book 3 Table 12). */
     private static final byte ODA_MASK = (byte) 0x18;

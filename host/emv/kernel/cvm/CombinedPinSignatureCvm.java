@@ -1,7 +1,7 @@
 package card42.host.emv.kernel.cvm;
 
 import card42.host.emv.kernel.data.Cvm;
-import card42.host.emv.kernel.analysis.CvmPerformer;
+import card42.host.emv.kernel.core.CvmPerformer;
 
 /**
  * Combined offline PIN and signature CVM performer (EMV v4.4 Book 3 Table 43,

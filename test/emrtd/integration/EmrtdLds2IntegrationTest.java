@@ -7,11 +7,11 @@ import javax.smartcardio.CardTerminal;
 import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.transport.Terminal;
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 import card42.host.emrtd.access.Pace;
 import card42.host.emrtd.lds.CardAccess;
 import card42.host.emrtd.lds.LdsFileUtil;
-import card42.host.emrtd.lds.LdsReader;
+import card42.host.emrtd.access.LdsReader;
 import card42.host.emrtd.perso.EmrtdPersoExporter;
 import card42.host.emrtd.transport.EmrtdTerminal;
 

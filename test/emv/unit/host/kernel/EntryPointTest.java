@@ -129,7 +129,8 @@ final class EntryPointTest {
         // ADF Name, AID, Kernel ID, priority presence and Extended Selection
         // (EMV Contactless Book B v2.12 §3.3.2.5 bullet E).
         java.util.List<EntryPoint.Candidate> list = EntryPoint.selectCandidates(
-                ppseFci(entry("A000000003101001", 0x01, KERNEL_ZERO, Hex.parse("AABB"))), visa);
+                ppseFci(entry("A000000003101001", 0x01, KERNEL_ZERO, Hex.parse("AABB"))),
+                CombinationTable.defaults(visa), CombinationTable.PURCHASE);
         Asserts.eq(1, list.size(), "one Combination");
         EntryPoint.Candidate c = list.get(0);
         Asserts.eq("A000000003101001", c.adfHex, "Candidate carries the ADF Name");
@@ -141,7 +142,8 @@ final class EntryPointTest {
                 "Candidate carries the Extended Selection");
 
         list = EntryPoint.selectCandidates(ppseFci(
-                entry("A0000000031010", -1, KERNEL_ZERO, null)), visa);
+                entry("A0000000031010", -1, KERNEL_ZERO, null)),
+                CombinationTable.defaults(visa), CombinationTable.PURCHASE);
         Asserts.check(!list.get(0).priorityPresent,
                 "Candidate records an absent priority indicator");
         Asserts.check(list.get(0).extendedSelection == null,

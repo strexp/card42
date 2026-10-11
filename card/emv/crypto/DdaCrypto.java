@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.security.PrivateKey;
@@ -27,7 +27,7 @@ import javacard.security.SignatureMessageRecovery;
  * @author card42
  */
 
-public class DdaCrypto implements ISO7816 {
+public class DdaCrypto {
 
     /** Recoverable-message length returned by sign(); transient (session). */
     private final short[] m1Length;

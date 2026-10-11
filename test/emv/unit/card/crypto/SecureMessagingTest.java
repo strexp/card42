@@ -9,7 +9,7 @@ import javax.smartcardio.CommandAPDU;
 
 import card42.emv.SecureMessaging;
 
-import card42.host.emv.crypto.SmCrypto;
+import card42.host.emv.crypto.ScriptSession;
 import card42.host.emv.crypto.AcCrypto;
 import card42.host.common.crypto.AesCmac;
 import card42.host.common.util.Bytes;
@@ -23,7 +23,7 @@ import card42.host.common.util.Hex;
  * {@link SecureMessaging#format1MacInput} precisely so it can be checked here:
  * the padded input is {@code ICV || CLA INS P1 P2 80 00 00 00 || <each data
  * object padded with 80 00.. to a multiple of 8>}.  The same vectors are then
- * cross-checked against the host-side {@link SmCrypto} so the two sides cannot
+ * cross-checked against the host-side {@link ScriptSession} so the two sides cannot
  * drift apart.
  */
 final class SecureMessagingTest {
@@ -77,7 +77,7 @@ final class SecureMessagingTest {
 
         // --- Cross-check with the host-side Format 1 MAC ---------------------
         byte[] macSessionKey = AcCrypto.sessionKey(MAC_KEY, ICV);
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(MAC_KEY, null);
+        ScriptSession session = new ScriptSession(MAC_KEY, null);
         session.start(ICV);
         CommandAPDU command = session.command(0x24, 0x00, 0x00);
         byte[] hostMac = Arrays.copyOfRange(command.getData(),

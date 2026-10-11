@@ -11,7 +11,7 @@ import javax.smartcardio.CardTerminal;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 
-import card42.host.emv.crypto.SmCrypto;
+import card42.host.emv.crypto.ScriptSession;
 import card42.host.emv.crypto.AcCrypto;
 import card42.host.emv.app.issuer.IssuerHost;
 import card42.host.emv.kernel.ContactlessKernel;
@@ -19,9 +19,10 @@ import card42.host.emv.kernel.core.Authorization;
 import card42.host.emv.kernel.core.Issuer;
 import card42.host.emv.kernel.core.KernelListener;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.entry.CombinationTable;
 import card42.host.emv.kernel.entry.EntryPoint;
 import card42.host.emv.lib.Terminal;
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 import card42.host.common.util.Hex;
 import card42.host.common.util.Reporter;
 import card42.host.common.util.Bcd;
@@ -192,7 +193,8 @@ public class ContactlessTest {
         // order the kernel walks to retry after a refused SELECT
         // (EMV Contactless Book B v2.12 §3.3.3.5).
         java.util.List<EntryPoint.Candidate> ordered = EntryPoint.selectCandidates(
-                ppseFci(dirEntry(aidA, 0x03, null), dirEntry(aidB, 0x01, null)), supported);
+                ppseFci(dirEntry(aidA, 0x03, null), dirEntry(aidB, 0x01, null)),
+                CombinationTable.defaults(supported), CombinationTable.PURCHASE);
         Checks.check("selectCandidates orders the candidates by priority",
                 ordered.size() == 2 && aidB.equals(ordered.get(0).adfHex)
                         && aidA.equals(ordered.get(1).adfHex));
@@ -638,8 +640,8 @@ public class ContactlessTest {
                 System.arraycopy(csu, 0, auth, 4, 4);
                 byte[][] scripts = null;
                 if (withScript) {
-                    SmCrypto.ScriptSession session =
-                            new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+                    ScriptSession session =
+                            new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
                     session.start(arqc);
                     byte[] command = session.command(0x18, 0x00, 0x00).getBytes();
                     if (failScript) {

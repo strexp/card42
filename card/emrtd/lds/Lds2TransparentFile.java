@@ -104,7 +104,7 @@ public final class Lds2TransparentFile {
         activated = true;
     }
 
-    /** Starts a fresh write; previously allocated pages are kept for reuse. */
+    /** Starts a fresh write; pages allocated by an earlier write are reused. */
     public void beginSet() {
         requireWritable();
         length = 0;

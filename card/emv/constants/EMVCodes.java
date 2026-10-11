@@ -1,7 +1,7 @@
 package card42.emv;
 
-/* Cryptogram, AC-type and CVM-type codes, split out of the former EMVConstants
- * constant interface so a class depends only on the codes it handles.
+/* Cryptogram, AC-type and CVM-type codes.  A class depends only on the codes it
+ * handles.
  *
  * @author card42
  */

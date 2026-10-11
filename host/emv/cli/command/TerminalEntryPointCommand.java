@@ -14,7 +14,7 @@ import card42.host.emv.kernel.entry.PpseSelection;
 import card42.host.emv.kernel.entry.PreProcessingIndicators;
 import card42.host.common.transport.TerminalSession;
 import card42.host.emv.lib.Amounts;
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 import card42.host.common.util.Hex;
 
 /**

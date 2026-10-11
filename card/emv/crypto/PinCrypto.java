@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.security.PrivateKey;
 import javacardx.crypto.Cipher;
@@ -28,7 +28,7 @@ import javacardx.crypto.Cipher;
  * @author card42
  */
 
-public class PinCrypto implements ISO7816 {
+public class PinCrypto {
 
     private PrivateKey pinKey;
     private Cipher pinCipher;

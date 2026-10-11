@@ -1,4 +1,4 @@
-package card42.host.common.util;
+package card42.host.common.cli;
 
 import java.util.ArrayList;
 import java.util.Arrays;

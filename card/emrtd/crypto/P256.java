@@ -5,8 +5,8 @@ import javacard.security.ECKey;
 /* P-256 (secp256r1) domain parameters, FIPS 186-4 / BSI TR-03110 Table 6.
  *
  * Shared by PACE (ECDH generic mapping) and Chip Authentication, which both
- * build P-256 keys and previously carried an identical copy of these five
- * constants and of setCurve().  The constants are read-only.
+ * build P-256 keys via setCurve() from these constants.  The constants are
+ * read-only.
  *
  * @author card42
  */

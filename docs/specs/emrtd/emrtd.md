@@ -237,12 +237,12 @@ LDS2 指令为 `@lds2 <role>`、`@cardaccess`、`@cardsecurity`、`@record <fid>
 ```
 host/emrtd/
 ├── transport/ EmrtdTerminal
-├── lds/       LdsFileUtil, LdsReader, Dg1, Dg2, Dg15, Dg, Com, Sod,
+├── lds/       LdsFileUtil, Dg1, Dg2, Dg15, Dg, Com, Sod,
 │              CmsSignedData, LdsSecurityObject, AlgorithmIds,
 │              SecurityInfo, PaceInfo, ChipAuthenticationInfo,
 │              ChipAuthenticationPublicKeyInfo, ActiveAuthenticationInfo,
 │              CardAccess, CardSecurity
-├── access/    MrzKeySeed, Bac, Iso7816Sm, Iso7816SmAes, SecureMessaging, ChipAuth, Pace
+├── access/    LdsReader, MrzKeySeed, Bac, Iso7816Sm, Iso7816SmAes, SecureMessaging, ChipAuth, Pace
 ├── pa/        CscaKeyStore, DscVerifier, PassiveAuthentication
 ├── aa/        ActiveAuthentication
 ├── perso/     EmrtdPersoExporter, SodBuilder, Dg2Builder, CardSecurityBuilder, LdsScript

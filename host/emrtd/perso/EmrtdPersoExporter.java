@@ -343,8 +343,7 @@ public final class EmrtdPersoExporter {
     /**
      * EF.CardAccess SecurityInfos: PACE ECDH-GM 3DES + AES-128, CA ECDH 3DES.
      *
-     * <p>AES-128 is advertised again now that the AES secure-messaging profile
-     * is no longer the bottleneck: the card-side CMAC is batched through the
+     * <p>AES-128 is advertised: the card-side CMAC is batched through the
      * platform CBC engine, so on the J3R180 an AES-128 {@code READ BINARY} costs
      * about the same as (marginally less than) the native-DES retail MAC
      * (~81 ms vs ~93 ms per ~231 B, jcsl and real card both run AES-128 PACE).

@@ -3,7 +3,7 @@ package card42.emv;
 import card42.common.*;
 
 import javacard.framework.APDU;
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
@@ -27,7 +27,7 @@ import javacard.framework.Util;
  * @author card42
  */
 
-public class OfflinePin implements ISO7816 {
+public class OfflinePin {
 
     private final OfflinePinState pin;
     private final PinCrypto pinCrypto;

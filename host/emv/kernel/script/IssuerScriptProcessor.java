@@ -6,8 +6,6 @@ import java.io.ByteArrayOutputStream;
 
 import javax.smartcardio.ResponseAPDU;
 
-import card42.host.emv.crypto.SmCrypto;
-
 /**
  * Terminal-side issuer script processing (EMV v4.4 Book 3 §10.10, EMV v4.4
  * Book 4 §6.3.9 / Annex A5).
@@ -21,6 +19,11 @@ import card42.host.emv.crypto.SmCrypto;
  * GENERATE AC sets TVR byte 5 b6, after it b5 (EMV v4.4 Book 3 Annex C §C5).
  */
 public final class IssuerScriptProcessor {
+
+    /** TVR byte 5 bit 6: script processing failed before the final AC. */
+    public static final byte TVR_SCRIPT_FAILED_BEFORE_FINAL_AC = (byte) 0x20;
+    /** TVR byte 5 bit 5: script processing failed after the final AC. */
+    public static final byte TVR_SCRIPT_FAILED_AFTER_FINAL_AC = (byte) 0x10;
 
     /** Aggregated outcome of processing one or more issuer scripts. */
     public static final class Result {
@@ -44,6 +47,32 @@ public final class IssuerScriptProcessor {
     }
 
     /**
+     * Builds the value of Issuer Script Results (tag 9F5B) for one script:
+     * byte 1 = (result &lt;&lt; 4) | sequence, bytes 2-5 = the Script Identifier
+     * (zero filled when absent).
+     *
+     * @param result 0 = not performed, 1 = failed, 2 = successful
+     * @param sequence sequence number of the failing command (0 when none)
+     */
+    public static byte[] issuerScriptResults(int result, int sequence, byte[] scriptId) {
+        byte[] out = new byte[5];
+        out[0] = (byte) (((result & 0x0F) << 4) | (sequence & 0x0F));
+        if (scriptId != null) {
+            System.arraycopy(scriptId, 0, out, 1, Math.min(scriptId.length, 4));
+        }
+        return out;
+    }
+
+    /**
+     * Sets the TVR "Script processing failed before/after final GENERATE AC"
+     * bit (EMV v4.4 Book 3 §10.10 / Annex C §C5).
+     */
+    public static void setTvrFailure(byte[] tvr, boolean afterFinalAc) {
+        tvr[4] |= afterFinalAc ? TVR_SCRIPT_FAILED_AFTER_FINAL_AC
+                : TVR_SCRIPT_FAILED_BEFORE_FINAL_AC;
+    }
+
+    /**
      * Processes the given templates in order, sending every 86 command.  A
      * non-9000 response stops the current script and is reported as a failure;
      * the remaining templates are still processed (the terminal sends each
@@ -54,7 +83,7 @@ public final class IssuerScriptProcessor {
      */
     public static Result process(Terminal terminal, boolean afterFinalAc, byte[]... templates)
             throws Exception {
-        ByteArrayOutputStream results = new ByteArrayOutputStream();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
         boolean anyFailed = false;
         boolean before = false;
         boolean after = false;
@@ -64,15 +93,15 @@ public final class IssuerScriptProcessor {
         // (EMV v4.4 Book 4 §6.3.9).  The cumulative total spans all templates.
         int cumulative = 0;
         for (byte[] template : templates) {
-            SmCrypto.IssuerScript script;
+            IssuerScript script;
             try {
-                script = SmCrypto.parseIssuerScript(template);
+                script = IssuerScript.parse(template);
             } catch (RuntimeException e) {
                 // Annex E Scenario 3 / Book 4 §12.2.4: a script that does not
                 // parse is reported as 'Script not performed' (9F5B byte 1
                 // result 0), sets the script-processing TVR bits, and the
                 // remaining scripts are still processed.
-                results.write(SmCrypto.issuerScriptResults(0, 0, null));
+                out.write(issuerScriptResults(0, 0, null));
                 anyFailed = true;
                 if (afterFinalAc) {
                     after = true;
@@ -93,7 +122,7 @@ public final class IssuerScriptProcessor {
             if (tooLong || cumulative > 128) {
                 // Script length error: reported as 'Script not performed' and
                 // the TVR script bits are set (EMV v4.4 Book 4 §6.3.9/§12.2.4).
-                results.write(SmCrypto.issuerScriptResults(0, 0, script.scriptId));
+                out.write(issuerScriptResults(0, 0, script.scriptId));
                 anyFailed = true;
                 if (afterFinalAc) {
                     after = true;
@@ -120,7 +149,7 @@ public final class IssuerScriptProcessor {
                 }
             }
             int nibble = failed ? (failSequence >= 15 ? 0x0F : failSequence) : 0;
-            results.write(SmCrypto.issuerScriptResults(failed ? 1 : 2, nibble, script.scriptId));
+            out.write(issuerScriptResults(failed ? 1 : 2, nibble, script.scriptId));
             if (failed) {
                 anyFailed = true;
                 if (afterFinalAc) {
@@ -130,16 +159,16 @@ public final class IssuerScriptProcessor {
                 }
             }
         }
-        return new Result(results.toByteArray(), anyFailed, before, after, sent);
+        return new Result(out.toByteArray(), anyFailed, before, after, sent);
     }
 
     /** Applies a result to the TVR byte 5 script-processing bits. */
     public static void applyToTvr(Result result, byte[] tvr) {
         if (result.failedBeforeFinalAc) {
-            SmCrypto.setScriptFailure(tvr, false);
+            setTvrFailure(tvr, false);
         }
         if (result.failedAfterFinalAc) {
-            SmCrypto.setScriptFailure(tvr, true);
+            setTvrFailure(tvr, true);
         }
     }
 }

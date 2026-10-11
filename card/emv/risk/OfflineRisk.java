@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
@@ -36,7 +36,7 @@ import javacard.framework.Util;
  * @author card42
  */
 
-public class OfflineRisk implements ISO7816 {
+public class OfflineRisk {
 
     /** Amounts are BCD, 6 bytes (12 digits), as EMV numeric amounts. */
     private static final short AMOUNT_LENGTH = (short) 6;

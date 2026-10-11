@@ -2,7 +2,7 @@ package card42.host.emv.kernel;
 
 import java.util.Random;
 
-import card42.host.emv.kernel.analysis.CvmPerformer;
+import card42.host.emv.kernel.core.CvmPerformer;
 import card42.host.emv.kernel.core.EndApplicationException;
 import card42.host.emv.kernel.core.Issuer;
 import card42.host.emv.kernel.core.KernelException;

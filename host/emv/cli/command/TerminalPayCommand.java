@@ -42,7 +42,7 @@ import card42.host.emv.oda.CaKeyStore;
 import card42.host.emv.lib.Terminal;
 import card42.host.common.transport.TerminalSession;
 import card42.host.emv.lib.Amounts;
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 import card42.host.common.util.Hex;
 import card42.host.common.util.KeyValueFile;
 import card42.host.common.util.Reporter;

@@ -11,10 +11,10 @@ import java.util.Map;
 import card42.host.emv.lib.Apdus;
 import card42.host.common.codec.Json;
 import card42.host.emv.crypto.AcCrypto;
-import card42.host.emv.crypto.SmCrypto;
+import card42.host.emv.crypto.ScriptSession;
 import card42.host.emv.app.issuer.IssuerCrypto;
 import card42.host.emv.app.issuer.IssuerHost;
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 import card42.host.common.util.Hex;
 
 /**
@@ -32,7 +32,7 @@ import card42.host.common.util.Hex;
  * </pre>
  *
  * <p>Every command is a thin wrapper over {@link IssuerHost}, {@link AcCrypto}
- * and {@link SmCrypto}; the crypto vectors live in the unit suites.  Exit codes
+ * and {@link ScriptSession}; the crypto vectors live in the unit suites.  Exit codes
  * match the rest of the CLI: 0 success, 2 usage error.
  */
 public final class IssuerCommand {
@@ -180,7 +180,7 @@ public final class IssuerCommand {
             byte[] macKey = Hex.parse(args.get("mac-key", ""));
             byte[] encKey = args.has("enc-key") ? Hex.parse(args.get("enc-key", "")) : null;
             byte[] arqc = eightBytes(Hex.parse(args.require("arqc")), "arqc");
-            SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(macKey, encKey);
+            ScriptSession session = new ScriptSession(macKey, encKey);
             if (args.has("mac-length")) {
                 session.setMacLength(Integer.parseInt(args.get("mac-length", "8")));
             }

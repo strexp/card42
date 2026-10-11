@@ -2,13 +2,13 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 
 /* Zero-allocation cursor over a sequence of DGI containers (docs/specs/common/architecture.md §2).
  *
- * This is the DGI counterpart of TlvReader and replaces the hand-written loop
- * in PersoHandler.  A DGI container is DGI(2 bytes) || EMV CPS v2.0 length || value,
+ * This is the DGI counterpart of TlvReader, used by PersoHandler.  A DGI
+ * container is DGI(2 bytes) || EMV CPS v2.0 length || value,
  * where the length field is the EMV CPS v2.0 §3.2 encoding (1 byte, or 'FF' +
  * 2 bytes) and only the value itself uses BER-TLV.  The cursor is a thin
  * wrapper over DGI/Tlv.
@@ -20,7 +20,7 @@ import javacard.framework.ISOException;
  * @author card42
  */
 
-public final class DgiReader implements ISO7816 {
+public final class DgiReader {
 
     private byte[] buf;
     private short end;

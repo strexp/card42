@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
@@ -23,7 +23,7 @@ import javacard.framework.Util;
  * @author card42
  */
 
-public final class FciBuilder implements ISO7816 {
+public final class FciBuilder {
 
     private FciBuilder() {
     }

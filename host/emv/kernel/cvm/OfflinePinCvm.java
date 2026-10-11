@@ -5,7 +5,7 @@ import javax.smartcardio.ResponseAPDU;
 import card42.host.emv.kernel.data.Cvm;
 import card42.host.common.codec.Tags;
 import card42.host.emv.crypto.AcCrypto;
-import card42.host.emv.kernel.analysis.CvmPerformer;
+import card42.host.emv.kernel.core.CvmPerformer;
 import card42.host.emv.kernel.core.PinProvider;
 import card42.host.emv.kernel.core.TransactionResult;
 import card42.host.emv.kernel.data.TransactionRequest;

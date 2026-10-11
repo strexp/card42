@@ -19,13 +19,12 @@ import javacard.framework.Util;
  * instead of growing page by page.
  *
  * The backing store is paged: the content lives in fixed 256-byte pages,
- * allocated on first use and reused across writes.  This replaces the earlier
- * exact-size "grow a byte[] and copy the old content" scheme, which for a
- * multi-kilobyte DG2 (large face image) meant an O(n^2) EEPROM copy sequence
- * and, at the last growth step, two full copies live at once.  Pages keep the
- * peak allocation at one page and never demand one large contiguous array, so a
- * larger file costs only the bytes it actually uses and survives a fragmented
- * heap (docs/specs/common/risks.md §2).
+ * allocated on first use and reused across writes.  Paging keeps the peak
+ * allocation at one page instead of an O(n^2) "grow a byte[] and copy the old
+ * content" sequence (which for a multi-kilobyte DG2, a large face image, would
+ * also hold two full copies at the last growth step); it never demands one
+ * large contiguous array, so a larger file costs only the bytes it actually
+ * uses and survives a fragmented heap (docs/specs/common/risks.md §2).
  *
  * @author card42
  */

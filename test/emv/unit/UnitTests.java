@@ -89,7 +89,7 @@ public final class UnitTests {
         AcCryptoTest.run();
         AcVectorTest.run();
         AesVectorTest.run();
-        SmCryptoTest.run();
+        ScriptSessionTest.run();
         CardCryptoVectorTest.run();
         ArpcVectorTest.run();
         SecureMessagingTest.run();

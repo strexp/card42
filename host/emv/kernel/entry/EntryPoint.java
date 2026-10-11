@@ -81,24 +81,9 @@ public final class EntryPoint {
      * @return the selected ADF Name in hex, or null when no entry matches
      */
     public static String selectCandidate(byte[] fci, String[] supportedAids) {
-        java.util.List<Candidate> candidates = selectCandidates(fci, supportedAids);
+        java.util.List<Candidate> candidates = selectCandidates(fci,
+                CombinationTable.defaults(supportedAids), CombinationTable.PURCHASE);
         return candidates.isEmpty() ? null : candidates.get(0).adfHex;
-    }
-
-    /**
-     * The supported Directory Entries of a PPSE FCI, ordered by priority (the
-     * highest priority first, ties keeping their Directory Entry order).  The
-     * kernel walks this list so that a failed {@code SELECT (ADF Name)} can
-     * remove the candidate and retry (EMV Contactless Book B v2.12 §3.3.3.5).
-     *
-     * <p>This overload keeps the flat supported-AID list used before the Entry
-     * Point configuration (H1); it is equivalent to a default Combination Table
-     * for a purchase.
-     */
-    public static java.util.List<Candidate> selectCandidates(byte[] fci,
-            String[] supportedAids) {
-        return selectCandidates(fci, CombinationTable.defaults(supportedAids),
-                CombinationTable.PURCHASE);
     }
 
     /**
@@ -209,26 +194,26 @@ public final class EntryPoint {
 
     /**
      * The default Requested Kernel ID for a brand's ADF Name (EMV Contactless
-     * Book B v2.12 Table 3-6); any other ADF Name defaults to kernel 0.
+     * Book B v2.12 Table 3-6) by RID prefix; any other ADF Name defaults to
+     * kernel 0.  A new brand is added by extending the two tables, not by
+     * editing a branch.
      */
+    private static final String[] DEFAULT_KERNEL_RIDS = {
+        "A000000003", // Visa
+        "A000000004", // Mastercard
+        "A000000025", // American Express
+        "A000000065", // JCB
+        "A000000152", // Discover
+        "A000000333", // UnionPay
+    };
+
+    private static final int[] DEFAULT_KERNEL_IDS = { 3, 2, 4, 5, 6, 7 };
+
     public static int defaultKernelId(String adfHex) {
-        if (adfHex.startsWith("A000000003")) {
-            return 3; // Visa
-        }
-        if (adfHex.startsWith("A000000004")) {
-            return 2; // Mastercard
-        }
-        if (adfHex.startsWith("A000000025")) {
-            return 4; // American Express
-        }
-        if (adfHex.startsWith("A000000065")) {
-            return 5; // JCB
-        }
-        if (adfHex.startsWith("A000000152")) {
-            return 6; // Discover
-        }
-        if (adfHex.startsWith("A000000333")) {
-            return 7; // UnionPay
+        for (int i = 0; i < DEFAULT_KERNEL_RIDS.length; i++) {
+            if (adfHex.startsWith(DEFAULT_KERNEL_RIDS[i])) {
+                return DEFAULT_KERNEL_IDS[i];
+            }
         }
         return 0; // Other
     }

@@ -13,6 +13,7 @@ import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.codec.TlvWriter;
 import card42.host.emv.kernel.data.Tvr;
+import card42.host.emv.kernel.script.IssuerScript;
 import card42.host.emv.kernel.script.IssuerScriptProcessor;
 import card42.host.emv.lib.Terminal;
 import card42.host.common.util.Hex;
@@ -33,6 +34,29 @@ final class IssuerScriptProcessorTest {
 
     static void run() throws Exception {
         System.out.println("IssuerScriptProcessor");
+
+        // --- Issuer Script Results (EMV v4.4 Book 4 Annex A5) ----------------
+        Asserts.bytes(Hex.parse("2001020304"),
+                IssuerScriptProcessor.issuerScriptResults(2, 0, Hex.parse("01020304")),
+                "9F5B successful result");
+        Asserts.bytes(Hex.parse("1500000000"),
+                IssuerScriptProcessor.issuerScriptResults(1, 5, null),
+                "9F5B failed result without identifier");
+
+        // --- TVR script failure bits (EMV v4.4 Book 3 §10.10) ----------------
+        byte[] scalarTvr = new byte[5];
+        IssuerScriptProcessor.setTvrFailure(scalarTvr, false);
+        Asserts.bytes(Hex.parse("0000000020"), scalarTvr, "TVR before final AC bit");
+        IssuerScriptProcessor.setTvrFailure(scalarTvr, true);
+        Asserts.bytes(Hex.parse("0000000030"), scalarTvr, "TVR after final AC bit");
+
+        // --- 71/72 template parsing ------------------------------------------
+        IssuerScript parsed = IssuerScript.parse(script(0x71, Hex.parse("01020304"),
+                Hex.parse("8C240000"), Hex.parse("8C1E0000")));
+        Asserts.bytes(Hex.parse("01020304"), parsed.scriptId, "issuer script identifier");
+        Asserts.eq(2, parsed.commands.size(), "issuer script command count");
+        Asserts.bytes(Hex.parse("8C240000"), parsed.commands.get(0), "issuer script command 0");
+        Asserts.bytes(Hex.parse("8C1E0000"), parsed.commands.get(1), "issuer script command 1");
 
         // A 'warning' SW1 ('62'/'63') is not a failure: the next command is
         // still sent and the script is reported successful (result 2).

@@ -42,8 +42,8 @@ public abstract class SecurityInfo {
 
     /**
      * A one-line description of this entry's type-specific fields for the
-     * reports, or an empty string when it has none.  Replaces the report's
-     * {@code instanceof} downcasts with a polymorphic call.
+     * reports, or an empty string when it has none.  Lets the reports describe
+     * each entry polymorphically rather than by downcast.
      */
     public String describe() {
         return "";

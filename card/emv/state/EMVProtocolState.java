@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
@@ -31,7 +31,7 @@ import javacard.framework.Util;
  *
  */
 
-public class EMVProtocolState implements ISO7816 {
+public class EMVProtocolState {
 
 	/** Index of the "GPO already advanced the ATC" session flag. */
 	private static final short VOL_GPO_DONE = 3;

@@ -1,8 +1,7 @@
 package card42.emv;
 
-/* Status words, key-modulus bounds and issuer-authentication state that the
- * former EMVConstants constant interface exposed to every EMV class.  Split out
- * so a class depends only on the status codes it uses.
+/* Status words, key-modulus bounds and issuer-authentication state.  A class
+ * depends only on the status codes it uses.
  *
  * ISO7816 already provides 6A80/6985/6A81/6A86/6A88/6A82/6A83 and 6700.
  *

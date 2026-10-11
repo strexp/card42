@@ -3,7 +3,7 @@ package card42.emv;
 import card42.common.*;
 
 import javacard.framework.APDU;
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 
@@ -34,7 +34,7 @@ import org.globalplatform.Personalization;
  * @author card42
  */
 
-public abstract class EMVAppletBase extends AppletBase implements ISO7816, Personalization {
+public abstract class EMVAppletBase extends AppletBase implements Personalization {
 
 	protected final EMVProtocolState protocolState;
 

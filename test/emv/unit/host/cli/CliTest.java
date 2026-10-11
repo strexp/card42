@@ -6,12 +6,12 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 
 import card42.host.emv.lib.Amounts;
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 import card42.host.common.codec.Json;
 import card42.host.emv.report.TransactionReport;
 import card42.host.common.codec.TlvDump;
 import card42.host.emv.crypto.AcCrypto;
-import card42.host.emv.crypto.SmCrypto;
+import card42.host.emv.kernel.script.IssuerScript;
 import card42.host.emv.app.issuer.IssuerHost;
 import card42.host.emv.oda.CaKey;
 import card42.host.emv.oda.CaKeyProfile;
@@ -127,7 +127,7 @@ final class CliTest {
      * The issuer command family (docs/specs/common/toolchain.md §7.1): drives {@link
      * card42.host.emv.cli.Main} and checks the KCV / session key / ARPC / JSON
      * authorisation against the crypto helpers (the independent vectors live in
-     * {@code AcCryptoTest} / {@code SmCryptoTest}).
+     * {@code AcCryptoTest} / {@code ScriptSessionTest}).
      */
     private static void issuerCommands() throws Exception {
         byte[] key = Hex.parse("0F0E0D0C0B0A09080706050403020100");
@@ -175,11 +175,11 @@ final class CliTest {
                 "issuer authorize script echo");
 
         // issuer script: raw and Format 1 secure-messaging templates parse back.
-        SmCrypto.IssuerScript raw = SmCrypto.parseIssuerScript(Hex.parse(
+        IssuerScript raw = IssuerScript.parse(Hex.parse(
                 runCli(null, "issuer", "script", "-command=001E0000", "-script-id=01020304")));
         Asserts.bytes(Hex.parse("01020304"), raw.scriptId, "issuer script identifier");
         Asserts.bytes(Hex.parse("001E0000"), raw.commands.get(0), "issuer script command");
-        SmCrypto.IssuerScript sm = SmCrypto.parseIssuerScript(Hex.parse(
+        IssuerScript sm = IssuerScript.parse(Hex.parse(
                 runCli(null, "issuer", "script", "-command=001E0000",
                         "-mac-key=11111111111111111111111111111111", "-arqc=AABBCCDDEEFF0011")));
         Asserts.eq(1, sm.commands.size(), "issuer script SM command count");

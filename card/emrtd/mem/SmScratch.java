@@ -48,10 +48,9 @@ final class SmScratch {
      *     256-byte AA signature).
      *
      * The ciphertext is written straight to the caller's output buffer, so the
-     * two phases share offset 0 and no second staging region is needed.  352
-     * replaces the earlier 800-byte buffer (which held the encryption input at
-     * offset 512 while also reserving ~320 for the MAC input) and returns about
-     * 448 bytes to the exhausted eMRTD transient context (TODO.emrtd.md §A3).
+     * two phases share offset 0 and no second staging region is needed.  A
+     * 352-byte buffer is enough, leaving the rest of the eMRTD transient context
+     * free (TODO.emrtd.md §A3).
      */
     private static final short SIZE = (short) 352;
 

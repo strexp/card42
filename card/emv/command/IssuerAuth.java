@@ -3,7 +3,7 @@ package card42.emv;
 import card42.common.*;
 
 import javacard.framework.APDU;
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 
 /* Issuer authentication (EMV v4.4 Book 2 §8.2, EMV v4.4 Book 3 Annex C §C9.3/§C10).
@@ -17,7 +17,7 @@ import javacard.framework.ISOException;
  * @author card42
  */
 
-public class IssuerAuth implements ISO7816 {
+public class IssuerAuth {
 
     private final EMVAppletBase applet;
     private final EMVStaticData staticData;

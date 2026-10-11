@@ -4,7 +4,7 @@ import card42.host.emv.app.perso.PersoExporter;
 import card42.host.emv.app.perso.PersoScript;
 import card42.host.emv.app.perso.SdaKeyProfile;
 import card42.host.emv.oda.SdaKeys;
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 
 /**
  * Exports the DGI sequence of every instance in a personalization script

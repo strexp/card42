@@ -60,7 +60,7 @@ make clean           # 清理 build/
 
 | 文件 | 内容 |
 |------|------|
-| `config/build.mk` | 输出目录、三个源码目录（`CARD_COMMON_DIR`/`CARD_EMV_DIR`/`CARD_EMRTD_DIR`，含 EMV 别名 `CARD_DIR`）、`TEST_CONTACTLESS` |
+| `config/build.mk` | 输出目录、三个源码目录（`CARD_COMMON_DIR`/`CARD_EMV_DIR`/`CARD_EMRTD_DIR`）、`TEST_CONTACTLESS` |
 | `config/toolchain.mk` | `JAVA_HOME`、`JAVA`、`JAVAC`、`JAR`、`JAVAC_RELEASE` |
 | `config/externals.mk` | Java Card SDK、GlobalPlatform API、GPPro jar |
 | `config/target.mk` | `JC_TARGET`、`JC_API_VERSION` |

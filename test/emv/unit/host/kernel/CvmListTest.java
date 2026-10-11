@@ -1,6 +1,6 @@
 package card42.test;
 import card42.host.emv.kernel.analysis.CvmList;
-import card42.host.emv.kernel.analysis.CvmPerformer;
+import card42.host.emv.kernel.core.CvmPerformer;
 import card42.host.common.util.Hex;
 import card42.host.emv.kernel.data.Tvr;
 

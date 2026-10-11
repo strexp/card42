@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
@@ -24,7 +24,7 @@ import javacard.framework.Util;
  * @author card42
  */
 
-public class PersoHandler implements ISO7816 {
+public class PersoHandler {
 
     /** Maximum size of one instance's complete DGI sequence (docs/specs/emv/personalization.md §1). */
     private static final short BUFFER_SIZE = (short) 2048;
@@ -110,7 +110,7 @@ public class PersoHandler implements ISO7816 {
             applet.resetPersoState();
         }
         if (p2 != expectedBlock) {
-            ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
+            ISOException.throwIt(SW_INCORRECT_P1P2);
         }
         if ((short) (bufferLength + len) > BUFFER_SIZE) {
             ISOException.throwIt(SW_WRONG_LENGTH);

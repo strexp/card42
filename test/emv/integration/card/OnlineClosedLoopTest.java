@@ -4,12 +4,12 @@ import javax.smartcardio.Card;
 import javax.smartcardio.CardTerminal;
 import javax.smartcardio.ResponseAPDU;
 
-import card42.host.emv.crypto.SmCrypto;
+import card42.host.emv.crypto.ScriptSession;
 import card42.host.emv.crypto.AcCrypto;
 import card42.host.emv.app.issuer.IssuerHost;
 import card42.host.emv.kernel.script.IssuerScriptProcessor;
 import card42.host.emv.lib.Terminal;
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 import card42.host.common.util.Hex;
 import card42.host.common.codec.Responses;
 import card42.host.common.codec.Tags;
@@ -98,8 +98,8 @@ public class OnlineClosedLoopTest {
                         && (((lastOnline[0] & 0xFF) << 8) | (lastOnline[1] & 0xFF)) == atc);
 
         // --- issuer script after the final AC: a PIN CHANGE/UNBLOCK ---
-        SmCrypto.ScriptSession session =
-                new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session =
+                new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(ac1.ac);
         byte[] okScript = IssuerHost.script(0x72, "AABBCCDD",
                 session.command(0x24, 0x00, 0x00).getBytes());

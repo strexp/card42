@@ -56,27 +56,30 @@ card/common/   card42.common 库：Tlv/TlvReader、RetailMac/AesCmac/MacAlgorith
                ApduIo、AppletBase（SELECT/分派骨架）
 card/emv/      card42.emv：
   applet/      EMVAppletBase / InstallParameters / PaymentApplet / DirectoryApplet
-  command/     支付命令处理器：OfflinePin / OfflinePinState / DynamicAuth / AcProcessor /
-               IssuerAuth / PostIssuance / PaymentPerso / CvrBuilder（CVR/IAD 组装）/
+  command/     支付命令处理器：OfflinePin / DynamicAuth / AcProcessor / IssuerAuth /
+               PostIssuance / Arpc（ARPC 校验）/ CvrBuilder（CVR/IAD 组装）/
                TransactionFinalizer（交易收尾：累计器/日志/CVR 结转位）
-  constants/   EMVCommands / EMVStatus / EMVRoles / EMVCodes / EMVAids
+  constants/   EMVCommands / EMVStatus / EMVRoles / EMVCodes / EMVAids / Defaults
   data/        EMVStaticData(门面) / PaymentData / SdaCertificateData（ODA 证书数据）/
-               FciBuilder / RecordBuilder / DirectoryBuilder / DirectoryRecords /
-               RecordStore / Defaults / Iad
-  state/       EMVProtocolState
-  risk/        CardRiskManagement / OfflineRisk / TransactionLog
-  crypto/      EMVCrypto / Arpc / AcResponseBuilder / SessionKey / CryptoProfile /
-               SecureMessaging / DdaCrypto / PinCrypto / RsaKey
-  perso/       PersoHandler / PersoRules（DGI/记录结构校验）/ PersoErrors
+               DirectoryRecords / RecordStore / Iad / TransactionLog（交易日志）
+  state/       EMVProtocolState / OfflinePinState
+  risk/        CardRiskManagement / OfflineRisk
+  crypto/      EMVCrypto / SessionKey / CryptoProfile / SecureMessaging / DdaCrypto /
+               PinCrypto / RsaKey
+  builder/     FciBuilder / RecordBuilder / DirectoryBuilder / AcResponseBuilder
+  perso/       PersoHandler / PersoRules（DGI/记录结构校验）/ PersoErrors / PaymentPerso
   tlv/         Dgi / DgiReader / DolReader / TlvTags
 card/emrtd/    card42.emrtd：applet/（EmrtdApplet / EmrtdInstallParameters）、
-               lds/（LdsFile / LdsFileSystem / LdsCatalog / LdsPerso；LDS2：
-               Lds2TransparentFile / Lds2RecordFile / Lds2FileSystem / Lds2Perso）、
+               lds/（LdsFile / LdsFileSystem / LdsCatalog；LDS2：
+               Lds2TransparentFile / Lds2RecordFile / Lds2FileSystem）、
+               perso/（LdsPerso / Lds2Perso / DgiStream）、
                command/（SelectFile / ReadBinary / GetChallenge / ExternalAuthenticate /
-               InternalAuthenticate / Lds2Record / Mse）、access/（MrzKeySeed / BacCrypto /
-               SecureMessaging / AbstractSecureMessaging /
+               InternalAuthenticate / Lds2File / Lds2Record / Mse）、access/（MrzKeySeed /
+               BacCrypto / SecureMessaging / AbstractSecureMessaging /
                Iso7816Sm / Iso7816SmAes / ChipAuth / Pace / PaceSeedSink）、
-               crypto/（AaCrypto）、tlv/（EmrtdTags）
+               crypto/（AaCrypto / P256 / Sha1Kdf）、
+               mem/（EmrtdScratch / SmScratch / MacEngines / KdfEngines）、
+               tlv/（EmrtdTags）
 ```
 
 卡侧 applet 骨架：
@@ -121,9 +124,9 @@ host/common/    card42.host.common（无 EMV 依赖）：
   transport/    Terminal（通用 transmit/select）/ Terminals / TerminalSession / TracingChannel
   codec/        Tags / TlvWriter / TlvDump / Json / Responses / Der / DerWriter
   crypto/       AesCmac / Iso9797（ISO 9797-1 Alg3 + 3DES 原语）/ P256（自包含 P-256）
-  util/         Hex / Bytes / Digests / Bcd / Args / Reporter / KeyValueFile
+  util/         Hex / Bytes / Digests / Bcd / Reporter / KeyValueFile
   report/       Display（UI/凭条 SPI，no-op 默认）
-  cli/          CliSupport（退出码/usage 约定）
+  cli/          CliSupport（退出码/usage 约定）/ Args（命令行选项解析）
 host/emv/       card42.host.emv：
   lib/          Apdus / TagPolicy（Book 3 §7.5 策略）/ Amounts / Terminal（EMV 便捷扩展）/
                 IssuerKey（恢复出的 RSA 公钥）
@@ -131,7 +134,8 @@ host/emv/       card42.host.emv：
                 CaKeyProfile（CA 公钥环）/ Sda / SdaKeys（离线 SDA 生成器与密钥档案）
   kernel/       TerminalKernel / ContactKernel / ContactlessKernel 共享 TransactionFlow
     core/       TransactionResult（只读，内核经 Mutable 写）/ Outcome / Decision / Selection /
-                OdaVerifier（ODA 抽象，注入 TransactionFlow）/ Issuer / Authorization /
+                OdaVerifier（ODA 抽象，注入 TransactionFlow）/ CvmPerformer（CVM 抽象，
+                注入 TransactionFlow）/ Issuer / Authorization /
                 KernelListener / KernelException +
                 TransactionException + TransportException + EndApplicationException /
                 PinProvider / OnlinePinProvider / SignatureProvider / ConfirmationProvider
@@ -139,24 +143,25 @@ host/emv/       card42.host.emv：
                 Cvm / ReferralHandler
     entry/      EntryPoint / ApplicationSelection / PpseSelection / PseSelection
     oda/        OfflineDataAuthentication（SDA/DDA/CDA 编排；实现 core/OdaVerifier）
-    analysis/   TerminalActionAnalysis / CvmList / CvmPerformer / ProcessingRestrictions /
+    analysis/   TerminalActionAnalysis / CvmList / ProcessingRestrictions /
                 TerminalRiskManagement
     cvm/        OfflinePinCvm / OnlinePinCvm / SignatureCvm / CombinedPinSignatureCvm /
                 CompositeCvmPerformer
-    script/     IssuerScriptProcessor（Book 3 §10.10）
-  crypto/       EmvKeys / AcCrypto / SmCrypto / PersoMac
+    script/     IssuerScript / IssuerScriptProcessor（Book 3 §10.10）
+  crypto/       EmvKeys / AcCrypto / SmCrypto / ScriptSession / PersoMac
   report/       TransactionReport / Receipt / ReceiptRenderer / ReceiptPrinter
   app/issuer/   IssuerHost / IssuerCrypto / ClosedLoopIssuer / AuthFileIssuer / SubprocessIssuer
   app/perso/    PersoScript / SdaKeyProfile / PersoExporter
   cli/          Main（`card42.host.emv.cli.Main`）
     command/    PersoCommand / TerminalPayCommand / TerminalInspectCommand /
                 TerminalApduCommand / TerminalEntryPointCommand / IssuerCommand / CardCommand
-host/emrtd/     card42.host.emrtd：transport/EmrtdTerminal；lds/（LdsFileUtil / LdsReader /
+host/emrtd/     card42.host.emrtd：transport/EmrtdTerminal；lds/（LdsFileUtil /
                 Dg1 / Dg2 / Dg15 / Dg / Com / Sod / CmsSignedData / LdsSecurityObject /
                 AlgorithmIds / SecurityInfo / UnknownSecurityInfo / PaceInfo /
                 ChipAuthenticationInfo /
                 ChipAuthenticationPublicKeyInfo / ActiveAuthenticationInfo / CardAccess /
-                CardSecurity）；access/（MrzKeySeed / Bac / Iso7816Sm / Iso7816SmAes /
+                CardSecurity）；access/（LdsReader（LDS 读文件 I/O）/ MrzKeySeed / Bac /
+                Iso7816Sm / Iso7816SmAes /
                 SecureMessaging / ChipAuth / Pace）；pa/（CscaKeyStore / DscVerifier /
                 PassiveAuthentication）；aa/ActiveAuthentication；perso/（EmrtdPersoExporter /
                 SodBuilder / Dg2Builder / CardSecurityBuilder / LdsScript）；

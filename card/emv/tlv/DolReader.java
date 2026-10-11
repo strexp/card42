@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 
 /* Zero-allocation cursor over an EMV Data Object List (DOL) definition
@@ -19,8 +19,8 @@ import javacard.framework.ISOException;
  *       // r.tag(), r.valueLength(), r.dataOffset()
  *   }
  *
- * It replaces the hand-written "walk tag+length" loops of EMVStaticData
- * (CDOL length / 9F37 offset, docs/specs/emv/personalization.md §3) and provides the PDOL
+ * It provides the "walk tag+length" queries of EMVStaticData
+ * (CDOL length / 9F37 offset, docs/specs/emv/personalization.md §3), the PDOL
  * length check of GET PROCESSING OPTIONS and the TVR lookup of Card Action
  * Analysis with a single tool.
  *
@@ -31,7 +31,7 @@ import javacard.framework.ISOException;
  * @author card42
  */
 
-public final class DolReader implements ISO7816 {
+public final class DolReader {
 
     private byte[] dol;
     private short end;

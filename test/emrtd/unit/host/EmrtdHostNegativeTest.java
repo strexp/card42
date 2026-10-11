@@ -29,7 +29,7 @@ import card42.host.emrtd.lds.CardAccess;
 import card42.host.emrtd.lds.CardSecurity;
 import card42.host.emrtd.lds.ChipAuthenticationInfo;
 import card42.host.emrtd.lds.Dg15;
-import card42.host.emrtd.lds.LdsReader;
+import card42.host.emrtd.access.LdsReader;
 import card42.host.emrtd.lds.SecurityInfo;
 import card42.host.emrtd.transport.EmrtdTerminal;
 

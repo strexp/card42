@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -36,7 +36,7 @@ import javacardx.crypto.Cipher;
  * @author card42
  */
 
-public class SecureMessaging implements ISO7816 {
+public class SecureMessaging {
 
     /** Longest secured command data field handled (post-issuance commands). */
     private static final short SCRATCH_SIZE = (short) 64;

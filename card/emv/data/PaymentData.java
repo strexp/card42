@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
@@ -23,7 +23,7 @@ import javacard.framework.Util;
  * @author card42
  */
 
-public class PaymentData implements ISO7816 {
+public class PaymentData {
 
     /** Structured payment fields (EMV CPS v2.0 Annex A DGI '3001' and record 1). */
     private final byte[] label = new byte[(short) 16];

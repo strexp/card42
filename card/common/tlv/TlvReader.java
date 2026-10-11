@@ -1,13 +1,12 @@
 package card42.common;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 
 /* Zero-allocation cursor over a BER-TLV byte range (docs/specs/common/architecture.md §2).
  *
- * It replaces the hand-written "walk the tags until the end" loops that were
- * repeated in the payment configuration, the directory entry and the
- * personalization handler.  Typical use:
+ * It is the single "walk the tags until the end" cursor shared by the payment
+ * configuration, the directory entry and the personalization handler.  Typical use:
  *
  *   TlvReader r = reader.reset(buf, off, len);
  *   while (r.hasNext()) {
@@ -30,7 +29,7 @@ import javacard.framework.ISOException;
  * @author card42
  */
 
-public final class TlvReader implements ISO7816 {
+public final class TlvReader {
 
     private byte[] buf;
     private short end;

@@ -12,14 +12,14 @@ import card42.host.common.codec.Responses;
 import card42.host.emv.lib.TagPolicy;
 import card42.host.common.codec.Tags;
 import card42.host.emv.crypto.AcCrypto;
-import card42.host.emv.crypto.SmCrypto;
+import card42.host.emv.crypto.ScriptSession;
 import card42.host.emv.kernel.core.TransactionResult;
 import card42.host.emv.kernel.data.TerminalConfig;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.kernel.data.TerminalDol;
 import card42.host.emv.lib.Terminal;
 import card42.host.common.transport.TerminalSession;
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 import card42.host.common.util.Hex;
 import card42.host.common.util.Sw;
 
@@ -113,7 +113,7 @@ public final class CardCommand {
                 args.get("host", "pcsc:0"),
                 Integer.parseInt(args.get("wait", "10")), args.has("trace"), System.err)) {
             Terminal terminal = new Terminal(terminalSession.terminal);
-            SmCrypto.ScriptSession session = establishSession(terminal, aid(args), macKey, encKey);
+            ScriptSession session = establishSession(terminal, aid(args), macKey, encKey);
             ResponseAPDU r = terminal.transmit(session.command(ins, 0x00, 0x00).getBytes());
             print(name, r);
             return r.getSW() == 0x9000 ? 0 : 1;
@@ -154,7 +154,7 @@ public final class CardCommand {
                 print("PIN CHANGE old PIN", verify);
                 return 1;
             }
-            SmCrypto.ScriptSession session = establishSession(terminal, aid, macKey, encKey);
+            ScriptSession session = establishSession(terminal, aid, macKey, encKey);
             ResponseAPDU r = terminal.transmit(session.command(0x24, 0x00, 0x01, null,
                     AcCrypto.iso9564Format2(newPin)).getBytes());
             print("PIN CHANGE", r);
@@ -188,7 +188,7 @@ public final class CardCommand {
                 args.get("host", "pcsc:0"),
                 Integer.parseInt(args.get("wait", "10")), args.has("trace"), System.err)) {
             Terminal terminal = new Terminal(terminalSession.terminal);
-            SmCrypto.ScriptSession session = establishSession(terminal, aid(args), macKey, encKey);
+            ScriptSession session = establishSession(terminal, aid(args), macKey, encKey);
             ResponseAPDU r = change
                     ? terminal.transmit(session.command(0x24, 0x00, 0x01, null,
                             AcCrypto.iso9564Format2(args.get("new", ""))).getBytes())
@@ -257,7 +257,7 @@ public final class CardCommand {
      * the GPO is skipped for it (the card still serves GENERATE AC and the
      * post-issuance commands).
      */
-    private static SmCrypto.ScriptSession establishSession(Terminal terminal, String aid,
+    private static ScriptSession establishSession(Terminal terminal, String aid,
             byte[] macKey, byte[] encKey) throws Exception {
         ResponseAPDU sel = terminal.select(aid);
         if (sel.getSW() == 0x9000) {
@@ -288,7 +288,7 @@ public final class CardCommand {
         if (arqc == null || arqc.length != 8) {
             throw new IllegalStateException("first AC is not an 8-byte cryptogram");
         }
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(macKey, encKey);
+        ScriptSession session = new ScriptSession(macKey, encKey);
         session.start(arqc);
         return session;
     }

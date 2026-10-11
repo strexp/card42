@@ -103,7 +103,7 @@ Online ATC）**仅在交易实际联机（ARC 非 `Y3`/`Z3`）且首 AC 为 ARQC
 成功时写入（Book 3 Annex A Table 37；Book 2 §8.2）。
 
 **CSU 处理**（Book 3 Annex C §C10）：`Update PIN Try Counter`（byte2 b5）把持久 PTC 设为
-byte1 b4-b1 的值，包括 0（锁 PIN）与任意中间值（`card/emv/command/OfflinePinState.java`，包裹
+byte1 b4-b1 的值，包括 0（锁 PIN）与任意中间值（`card/emv/state/OfflinePinState.java`，包裹
 `OwnerPIN` 并另存持久 PTC/PTL，`9F17` 上报该值）；`CSU Created by Proxy for the Issuer`
 （byte2 b3）为 1 时不驱动脱机计数（本卡采用 §10.11.1.1「shall not update the offline
 counters」选项，`OfflineRisk.updateCountersApply`）。DGI `9010`（PTC‖PTL）个性化该计数器。

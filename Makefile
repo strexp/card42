@@ -52,10 +52,6 @@ EMRTD_CAP_FILE := $(DELIVERABLES)/card42/emrtd/javacard/emrtd.cap
 EMRTD_EXP_FILE := $(DELIVERABLES)/card42/emrtd/javacard/emrtd.exp
 EMRTD_CONF     := $(BUILD_DIR)/card42-emrtd.conf
 
-# Backward-compatible aliases (the EMV CAP is the default card deliverable).
-CAP_FILE  := $(EMV_CAP_FILE)
-EXP_FILE  := $(EMV_EXP_FILE)
-CONF_FILE := $(EMV_CONF)
 GEN_SRC   := $(GEN_DIR)/card42/emv/BuildConfig.java
 
 # Host five-module deliverables: card42-common.jar is the shared library;
@@ -100,7 +96,6 @@ EMRTD_PERSO_SCRIPT ?= perso/emrtd/sample.perso
 CARD_COMMON_SRC := $(shell find $(CARD_COMMON_DIR) -name '*.java')
 CARD_EMV_SRC    := $(shell find $(CARD_EMV_DIR) -name '*.java') $(GEN_SRC)
 CARD_EMRTD_SRC  := $(shell find $(CARD_EMRTD_DIR) -name '*.java' 2>/dev/null)
-SOURCES    := $(CARD_EMV_SRC)
 
 # --- Simulator paths --------------------------------------------------------
 SIM_DIR      ?= $(BUILD_DIR)/sim
@@ -142,7 +137,7 @@ HOST_LIB_STAMP       := $(BUILD_DIR)/host/lib.stamp
 # runs every suite, so a relative cd must not be repeated per iteration.  Only
 # the COMService module is needed (the `socket:` transport of the integration
 # suites, docs/specs/common/toolchain.md §6); deployment/personalization go through
-# GPPro, so the simulator's own AMS modules are no longer on the path.
+# GPPro, so the simulator's own AMS modules are not on the class path.
 HOST_JAVA := $(JAVA) -p $(JC_SIM_CLIENT)/COMService \
               --add-modules ALL-MODULE-PATH -cp .
 
@@ -365,8 +360,8 @@ $(HOST_LIB_STAMP): $(HOST_LIB_SRC)
 # --- Simulator --------------------------------------------------------------
 # `*-install` = LOAD the CAP(s) + CREATE the instances; personalization is the
 # separate `*-perso` step.  No suffix installs both modules, `-emv`/`-emrtd`
-# select one.  (`deploy` is no longer a target name; the simulator and real-card
-# flows share the same `install`/`perso` vocabulary.)
+# select one.  The simulator and real-card flows share the same `install`/`perso`
+# vocabulary.
 
 sim-configure: sim-stop
 	@mkdir -p $(SIM_DIR)

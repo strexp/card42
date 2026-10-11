@@ -4,6 +4,7 @@ import card42.common.*;
 
 import javacard.framework.APDU;
 import javacard.framework.ISOException;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.Util;
 
 /* The EMV directory applet (EMV CPS v2.0 §A.3).

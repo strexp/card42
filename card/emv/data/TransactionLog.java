@@ -2,7 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
-import javacard.framework.ISO7816;
+import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
@@ -34,7 +34,7 @@ import javacard.framework.Util;
  * @author card42
  */
 
-public class TransactionLog implements ISO7816 {
+public class TransactionLog {
 
     /** SFI of the cyclic log file; EMV v4.4 Book 3 Annex D4 requires 11..30. */
     public static final short SFI = (short) 0x0F; // 15

@@ -23,7 +23,7 @@ import card42.host.emv.kernel.entry.EntryPoint;
 import card42.host.emv.kernel.oda.OfflineDataAuthentication;
 import card42.host.emv.oda.CaKeyProfile;
 import card42.host.common.transport.TerminalSession;
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 import card42.host.common.util.Hex;
 import card42.host.common.util.Reporter;
 

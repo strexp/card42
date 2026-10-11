@@ -3,9 +3,8 @@ package card42.emv;
 import javacard.framework.APDU;
 
 /* The lifecycle, role, directory-type and interface-media constants of an EMV
- * instance, split out of the former EMVConstants constant interface.  They are
- * the instance's identity (docs/specs/common/architecture.md §1) rather than
- * command or status data.
+ * instance.  They are the instance's identity (docs/specs/common/architecture.md §1)
+ * rather than command or status data.
  *
  * @author card42
  */

@@ -6,9 +6,9 @@ import javax.smartcardio.Card;
 import javax.smartcardio.CardTerminal;
 import javax.smartcardio.ResponseAPDU;
 
-import card42.host.emv.crypto.SmCrypto;
+import card42.host.emv.crypto.ScriptSession;
 import card42.host.emv.lib.Terminal;
-import card42.host.common.util.Args;
+import card42.host.common.cli.Args;
 import card42.host.common.util.Hex;
 import card42.host.common.codec.Responses;
 import card42.host.common.codec.Tags;
@@ -259,7 +259,7 @@ public class LogTest {
             return;
         }
         byte[] ac = Responses.parseAc(first).ac;
-        SmCrypto.ScriptSession session = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession session = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         session.start(ac);
         Checks.check("APPLICATION BLOCK",
                 terminal.transmit(session.command(0x1E, 0x00, 0x00).getBytes()).getSW(),
@@ -274,7 +274,7 @@ public class LogTest {
         terminal.select(CONTACT_AID);
         terminal.gpo(pdol);
         ResponseAPDU aac = terminal.generateAc((byte) 0x80, cdol1DataLength);
-        SmCrypto.ScriptSession unblock = new SmCrypto.ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
+        ScriptSession unblock = new ScriptSession(SM_MAC_KEY, SM_ENC_KEY);
         unblock.start(Responses.parseAc(aac).ac);
         Checks.check("APPLICATION UNBLOCK",
                 terminal.transmit(unblock.command(0x18, 0x00, 0x00).getBytes()).getSW(),

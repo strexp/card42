@@ -3,7 +3,7 @@ package card42.test;
 import card42.host.emv.kernel.data.Cvm;
 import card42.host.emv.crypto.AcCrypto;
 import card42.host.emv.kernel.analysis.CvmList;
-import card42.host.emv.kernel.analysis.CvmPerformer;
+import card42.host.emv.kernel.core.CvmPerformer;
 import card42.host.emv.kernel.core.OnlinePinProvider;
 import card42.host.emv.kernel.core.SignatureProvider;
 import card42.host.emv.kernel.core.TransactionResult;

@@ -13,6 +13,7 @@ import static card42.host.emv.kernel.data.Cvm.RESULT_FAILED;
 import static card42.host.emv.kernel.data.Cvm.RESULT_SUCCESSFUL;
 import static card42.host.emv.kernel.data.Cvm.RESULT_UNKNOWN;
 
+import card42.host.emv.kernel.core.CvmPerformer;
 import card42.host.emv.kernel.data.Tvr;
 
 /**

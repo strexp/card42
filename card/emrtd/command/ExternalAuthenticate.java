@@ -17,9 +17,9 @@ import javacard.framework.Util;
 public final class ExternalAuthenticate {
 
     /* The BAC scratch (E_IFD, K_IC, S2, session seed) is the package-shared
-     * transient {@link EmrtdScratch}: it used to be static persistent arrays,
-     * so every BAC handshake wrote 96 bytes to EEPROM for state that lives
-     * only for the command (docs/specs/common/risks.md §2). */
+     * transient {@link EmrtdScratch}: keeping it transient avoids writing 96
+     * bytes to EEPROM per BAC handshake for state that lives only for the
+     * command (docs/specs/common/risks.md §2). */
 
     private ExternalAuthenticate() {
     }
