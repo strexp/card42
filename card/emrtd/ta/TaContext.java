@@ -32,41 +32,49 @@ public final class TaContext {
     /** Reused TLV search result; a per-command array would leak persistent memory. */
     private static final short[] FIND = new short[2];
 
+    /*
+     * The TA state is package-shared: every eMRTD instance shares the card's
+     * single CVCA trust point and current date, and only one instance is
+     * selected at a time, so a per-instance copy only wastes the scarce J3R180
+     * persistent heap (three extra copies made eMRTD personalization fail with
+     * 6F00).  It follows the EmrtdScratch / SmScratch package-shared pattern.
+     */
+
     /** CVCA trust point (personalization DGI FF07); permanent. */
-    final byte[] trustPointW = new byte[KEY_LENGTH];
-    final byte[] trustPointRef = new byte[REFERENCE_LENGTH];
-    short trustPointRefLength;
-    boolean trustPointValid;
+    static final byte[] trustPointW = new byte[KEY_LENGTH];
+    static final byte[] trustPointRef = new byte[REFERENCE_LENGTH];
+    static short trustPointRefLength;
+    static boolean trustPointValid;
 
     /** The most recently verified certificate's public key (session). */
-    final byte[] importedW = new byte[KEY_LENGTH];
-    final byte[] importedRef = new byte[REFERENCE_LENGTH];
-    short importedRefLength;
-    boolean importedValid;
+    static final byte[] importedW = new byte[KEY_LENGTH];
+    static final byte[] importedRef = new byte[REFERENCE_LENGTH];
+    static short importedRefLength;
+    static boolean importedValid;
 
     /** The reference set by MSE:Set DST (session). */
-    final byte[] dstRef = new byte[REFERENCE_LENGTH];
-    short dstRefLength;
-    boolean dstSet;
+    static final byte[] dstRef = new byte[REFERENCE_LENGTH];
+    static short dstRefLength;
+    static boolean dstSet;
 
     /* Terminal Authentication challenge and the ID_IC / Comp(PKDH,IFD) inputs
      * captured from PACE/Chip Authentication (used by EXTERNAL AUTHENTICATE). */
-    final byte[] challenge = new byte[8];
-    boolean challengeValid;
-    boolean taDone;
+    static final byte[] challenge = new byte[8];
+    static boolean challengeValid;
+    static boolean taDone;
     /** True after MSE:Set AT selected the terminal key (awaiting EXTERNAL AUTHENTICATE). */
-    boolean terminalSelected;
-    final byte[] idIc = new byte[32];
-    final byte[] caKeyHash = new byte[32];
+    static boolean terminalSelected;
+    static final byte[] idIc = new byte[32];
+    static final byte[] caKeyHash = new byte[32];
 
     /**
      * Trust-point relative authorization per application (Doc 9303-10 §5.4.2):
      * [0] = ePassport CHAT byte, [1] = Travel, [2] = Visa, [3] = Biometrics.
      * Persistent (personalization DGI FF07).
      */
-    final byte[] trustPointAuth = new byte[4];
+    static final byte[] trustPointAuth = new byte[4];
     /** Session effective authorization: trust-point auth AND each verified certificate. */
-    final byte[] effectiveAuth = new byte[4];
+    static final byte[] effectiveAuth = new byte[4];
 
     /**
      * The ICC's approximated current date (BSI TR-03110-3 §2.5): 6 octets,
@@ -74,12 +82,12 @@ public final class TaContext {
      * ever advanced to the most recent valid CVCA/DV/Accurate-Terminal Effective
      * Date; it is used to reject expired DV/terminal certificates.
      */
-    final byte[] currentDate = new byte[6];
-    boolean currentDateValid;
+    static final byte[] currentDate = new byte[6];
+    static boolean currentDateValid;
     /** Role of the certificate whose public key is the current DST target. */
-    private byte dstIssuerRole;
+    private static byte dstIssuerRole;
     /** Role of the most recently imported certificate. */
-    private byte importedRole;
+    private static byte importedRole;
 
     /* Certificate-holder roles (CHAT bits b8/b7, BSI TR-03110-4 §2.1.3.2). */
     private static final byte ROLE_IS = 0;
@@ -96,10 +104,10 @@ public final class TaContext {
         0x67, (byte) 0x81, 0x08, 0x01, 0x01, 0x09, 0x03 };
 
     /** ID_IC || rIC || Comp(PKDH,IFD) (32 + 8 + 32). */
-    private final byte[] signatureInput = new byte[72];
+    private static final byte[] signatureInput = new byte[72];
 
-    private ECPublicKey ecKey;
-    private Signature ecSig;
+    private static ECPublicKey ecKey;
+    private static Signature ecSig;
 
     public TaContext() {
     }
@@ -150,6 +158,8 @@ public final class TaContext {
                 || (short) (KEY_LENGTH + 1 + refLen) > len) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
+        // Build the shared verification key/Signature here, at personalization,
+        // so no command path ever allocates (docs/specs/common/risks.md §2).
         ensureEc();
         Util.arrayCopyNonAtomic(src, off, trustPointW, (short) 0, KEY_LENGTH);
         Util.arrayCopyNonAtomic(src, (short) (off + KEY_LENGTH + 1),
@@ -545,7 +555,12 @@ public final class TaContext {
                 && Util.arrayCompare(data, off, oid, (short) 0, len) == 0;
     }
 
-    private void ensureEc() {
+    /**
+     * Builds the shared EC verification key and Signature once (at install, so
+     * no persistent allocation happens inside the Security Domain's
+     * personalization transaction).
+     */
+    static void ensureEc() {
         if (ecKey == null) {
             ecKey = (ECPublicKey) KeyBuilder.buildKey(
                     KeyBuilder.TYPE_EC_FP_PUBLIC, KeyBuilder.LENGTH_EC_FP_256, false);

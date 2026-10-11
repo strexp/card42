@@ -44,10 +44,12 @@ final class EmrtdTaCardTest {
 
     static void run() throws Exception {
         System.out.println("EmrtdTaCard");
+        // The TA state is package-shared, so this must run before any test sets a
+        // trust point.
+        rejectsWithoutTrustPoint();
         verifyChain();
         rejectsTamperedCertificate();
         rejectsUnknownReference();
-        rejectsWithoutTrustPoint();
         fullTerminalAuthentication();
         rejectsBadTerminalSignature();
         rejectsExternalAuthenticateWithoutMseAt();
@@ -269,6 +271,8 @@ final class EmrtdTaCardTest {
     /** Personalizes the LDS1 trust point (FF07) and current date (FF08). */
     private static void personalizeLds1Ta(EmrtdApplet applet, byte[] w, byte[] car,
                                           String currentDate) throws Exception {
+        // The TA state is package-shared; reset the session before re-personalizing.
+        taOf(applet).clearSession();
         ByteArrayOutputStream trustPoint = new ByteArrayOutputStream();
         trustPoint.write(w, 0, w.length);
         trustPoint.write(car.length);
@@ -295,6 +299,7 @@ final class EmrtdTaCardTest {
     /** Personalizes the LDS2 trust point (FF07) with the given Travel authorization. */
     private static void setTravelTrustPoint(EmrtdApplet applet, TaChain.Chain chain, byte travel)
             throws Exception {
+        taOf(applet).clearSession();
         byte[] w = chain.cvca.ecPublicKey();
         byte[] car = chain.cvca.certificateHolderReference().encode();
         ByteArrayOutputStream value = new ByteArrayOutputStream();
@@ -339,6 +344,8 @@ final class EmrtdTaCardTest {
 
     /** Writes the CVCA trust point DGI (FF07 = W(65) || refLen(1) || CAR). */
     private static void setTrustPoint(EmrtdApplet applet, TaChain.Chain chain) throws Exception {
+        // The TA state is package-shared; reset the session before re-personalizing.
+        taOf(applet).clearSession();
         byte[] cvcaW = chain.cvca.ecPublicKey();
         byte[] car = chain.cvca.certificateHolderReference().encode();
         ByteArrayOutputStream value = new ByteArrayOutputStream();
