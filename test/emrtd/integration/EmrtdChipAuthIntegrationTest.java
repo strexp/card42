@@ -85,8 +85,14 @@ public final class EmrtdChipAuthIntegrationTest {
         Checks.check("EF.CardSecurity CA public key is an uncompressed P-256 point",
                 chipPublicKeyW != null && chipPublicKeyW.length == 65 && chipPublicKeyW[0] == 0x04);
 
-        ChipAuth.authenticate(terminal, chipPublicKeyW, caInfo);
+        ChipAuth.Result ca = ChipAuth.authenticateResult(terminal, chipPublicKeyW, caInfo);
         Checks.check("Chip Authentication re-keyed the secure messaging", true);
+
+        // The Travel records require Terminal Authentication (Doc 9303-10 §5.4).
+        TaSupport.terminalAuthentication(terminal, pace,
+                card42.host.emrtd.ta.TerminalAuth.chipAuthenticationKeyHash(ca.terminalPublicKeyW),
+                new java.security.SecureRandom());
+        Checks.check("Terminal Authentication on the Travel application", true);
 
         byte[] record = LdsReader.readRecord(terminal, LdsFileUtil.sfi(FID_ENTRY), 1);
         Checks.check("entry record 1 readable under the CA secure messaging",

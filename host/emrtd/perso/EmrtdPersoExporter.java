@@ -222,6 +222,8 @@ public final class EmrtdPersoExporter {
         for (Map.Entry<Integer, byte[]> file : entry.transparent.entrySet()) {
             writeDgi(out, file.getKey(), file.getValue());
         }
+        writeDgi(out, DGI_TA_TRUST_POINT, trustPointValue());
+        writeDgi(out, DGI_TA_CURRENT_DATE, taCurrentDate());
         return out.toByteArray();
     }
 
@@ -329,6 +331,7 @@ public final class EmrtdPersoExporter {
         sb.append("@doc ").append(DOCUMENT_NUMBER).append('\n');
         sb.append("@dob ").append(DATE_OF_BIRTH).append('\n');
         sb.append("@doe ").append(DATE_OF_EXPIRY).append('\n');
+        sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@record 0103 ").append(Hex.format(sampleVisaRecord("JPN", "20260401")))
                 .append('\n');
 
@@ -340,6 +343,7 @@ public final class EmrtdPersoExporter {
         sb.append("@doc ").append(DOCUMENT_NUMBER).append('\n');
         sb.append("@dob ").append(DATE_OF_BIRTH).append('\n');
         sb.append("@doe ").append(DATE_OF_EXPIRY).append('\n');
+        sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@transparent 0201 ").append(Hex.format(sampleBiometric())).append('\n');
         return sb.toString();
     }

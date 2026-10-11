@@ -107,16 +107,15 @@
 - [~] **E5.9 Terminal Authentication (TAv2)**：LDS2 各 EF 的访问条件为 PACE+TA（ICAO Doc 9303-11
   §7.1：TA 对 LDS2 **REQUIRED**），授权位来自 IS/DV/CVCA 证书的 CHAT 扩展
   （Doc 9303-10 §5.4 Table 96/97/98）。当前仅强制 PACE。
-  **P0–P5 已完成**（[`docs/specs/emrtd/terminal-authentication.md`](docs/specs/emrtd/terminal-authentication.md)）：
+  **P0–P6 + 时间递进 + E6 已完成**（[`docs/specs/emrtd/terminal-authentication.md`](docs/specs/emrtd/terminal-authentication.md)）：
   P0–P4 见上；P5 卡侧 CHAT/扩展有效授权（`TaContext.effectiveAuth`，逐位 AND）、
   `LDS2 EF` 按授权门控（`requireLds2Access`）、DGI `FF07` 扩展（含授权）、EF.CardAccess/DG14
-  宣告 `TerminalAuthenticationInfo`、LDS1 个性化注入信任点；卡侧单测
-  `EmrtdTaCardTest` 覆盖全流程与授权正/负。**时间递进机制已实现**：DGI `FF08` 注入当前
-  日期，`PSO:Verify Certificate` 拒过期 DV/Terminal 证书并把 Effective Date 前移
-  （BSI TR-03110-3 §2.5/§2.6）。
-  **剩余**：TA 端到端（jcsl/真卡）**阻塞于扩展长度命令 APDU**（TA 的 `PSO` 数据 SM 封装后
-  >255B；真卡支持、jcsl/主机见 `TODO.emv.md` E6）。LDS2 默认个性化暂不注入 FF07（保持
-  PACE-only 不回归），LDS2 TA 门控由卡侧单测覆盖；E6 完成后补 jcsl/真卡 TA 端到端。
+  宣告 `TerminalAuthenticationInfo`；时间递进（DGI `FF08` 当前日期、过期拒绝、Effective 前移，
+  §2.5/§2.6）；**E6 扩展长度命令接收**（`EmrtdApplet.receiveCommand`）——TA 的
+  `PSO:Verify Certificate` 在 jcsl 上端到端通过（`EmrtdTerminalAuthIntegrationTest`），
+  LDS2 套件均加入 CA+TA；卡侧单测 `EmrtdTaCardTest` 覆盖全流程/授权正负/日期。
+  **残余（非阻塞）**：① 真卡 J3R180 TA 复测；② LDS1 DG3/DG4 读按 CHAT 位门控；③ 信任点
+  「最多两点 + CVCA Link 永久导入 + 按日期启用/禁用」(§2.5.1)；④ EAC 1.11/TAv1。
 - [ ] **Chip Authentication AES profile（`id-CA-*-AES-CBC-CMAC-*`）**：主机 `ChipAuth` 仅
   ECDH+3DES；AES CA 需 MSE:Set AT + GENERAL AUTHENTICATE 流程（Doc 9303-11 §6.2.4.2），
   卡侧亦仅 3DES CA。

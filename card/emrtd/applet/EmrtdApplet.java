@@ -269,6 +269,14 @@ public final class EmrtdApplet extends AppletBase
         short cdataOff = apdu.getOffsetCdata();
         requestMoreTime(ins);
 
+        // Assemble the full command (header + data) into the shared scratch: an
+        // extended-length command such as Terminal Authentication's
+        // PSO:Verify Certificate, whose SM envelope exceeds the JCRE buffer,
+        // arrives in several chunks.  The 4 header bytes stay at offset 0 (the
+        // SM unwrap reads CLA/INS/P1/P2 from there); the data starts at offset 4.
+        byte[] raw = receiveCommand(apdu, apduBuffer, cdataOff, incoming);
+        short rawLen = apdu.getIncomingLength();
+
         byte[] data;
         short dataOff;
         short dataLen;
@@ -276,14 +284,13 @@ public final class EmrtdApplet extends AppletBase
         if (smActive) {
             data = plain;
             dataOff = 0;
-            dataLen = sm.unwrap(ksEnc, ksMac, ssc, apduBuffer,
-                    cdataOff, incoming, plain, (short) 0);
+            dataLen = sm.unwrap(ksEnc, ksMac, ssc, raw, (short) 4, rawLen, plain, (short) 0);
             le = sm.getLe();
         } else {
-            data = apduBuffer;
-            dataOff = cdataOff;
-            dataLen = incoming;
-            le = incoming == 0 ? readLe(apduBuffer, cdataOff) : -1;
+            data = raw;
+            dataOff = 4;
+            dataLen = rawLen;
+            le = rawLen == 0 ? readLe(apduBuffer, cdataOff) : -1;
         }
 
         short respLen;
@@ -360,6 +367,45 @@ public final class EmrtdApplet extends AppletBase
         }
         return (short) (((apduBuffer[ISO7816.OFFSET_LC + 1] & 0xFF) << 8)
                 | (apduBuffer[ISO7816.OFFSET_LC + 2] & 0xFF));
+    }
+
+    /**
+     * Receives the command data field into the shared scratch
+     * ({@link EmrtdScratch#raw}) and returns it (the first
+     * {@code getIncomingLength()} bytes are the data).  Short APDUs arrive in
+     * one chunk; extended-length commands (e.g. Terminal Authentication's
+     * {@code PSO:Verify Certificate}, whose SM envelope exceeds the JCRE buffer)
+     * are pulled with {@code receiveBytes} until the declared Lc is complete.
+     */
+    private static byte[] receiveCommand(APDU apdu, byte[] apduBuffer, short cdataOff,
+                                         short firstChunk) {
+        short lc = apdu.getIncomingLength();
+        byte[] target = EmrtdScratch.raw;
+        if (lc < 0 || (short) (lc + 4) > (short) target.length) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        // Keep the 4 header bytes at offset 0 (the SM unwrap reads CLA/INS/P1/P2
+        // from there); the command data follows at offset 4.
+        Util.arrayCopyNonAtomic(apduBuffer, (short) 0, target, (short) 0, (short) 4);
+        short received = firstChunk > lc ? lc : firstChunk;
+        if (received > 0) {
+            Util.arrayCopyNonAtomic(apduBuffer, cdataOff, target, (short) 4, received);
+        }
+        while (received < lc) {
+            short more = apdu.receiveBytes(cdataOff);
+            if (more <= 0) {
+                break;
+            }
+            if ((short) (received + more) > lc) {
+                more = (short) (lc - received);
+            }
+            Util.arrayCopyNonAtomic(apduBuffer, cdataOff, target, (short) (4 + received), more);
+            received += more;
+        }
+        if (received < lc) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        return target;
     }
 
     /** Runs one command, writing its response data to {@link #response}. */

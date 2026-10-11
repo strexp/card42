@@ -14,7 +14,7 @@
 # with the eMRTD host module.
 EMV_SUITES   := EmvFlowTest ContactKernelTest DirectoryTest BoundaryTest LogTest VelocityTest \
                 AesFlowTest ContactlessTest OnlineClosedLoopTest TerminalCliTest IssuerScriptTest
-EMRTD_SUITES := EmrtdBacTest EmrtdLds2IntegrationTest EmrtdLds2AppsIntegrationTest EmrtdPaceIntegrationTest EmrtdChipAuthIntegrationTest EmrtdLds1ChipAuthIntegrationTest
+EMRTD_SUITES := EmrtdBacTest EmrtdLds2IntegrationTest EmrtdLds2AppsIntegrationTest EmrtdPaceIntegrationTest EmrtdChipAuthIntegrationTest EmrtdLds1ChipAuthIntegrationTest EmrtdTerminalAuthIntegrationTest
 
 
 test-emv: test-emv-sim

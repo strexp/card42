@@ -50,14 +50,17 @@
   `GET CHALLENGE`/`EXTERNAL AUTHENTICATE`/`PSO`；EF.CardAccess/DG14 宣告
   `TerminalAuthenticationInfo`；个性化对 LDS1 注入 FF07（demo CVCA `TaChain.demo`）。
 - **P6（测试/文档）**：卡侧单测覆盖授权正/负路径（有授权读达记录 EF `6A83`、无授权 `6982`）。
-  **jcsl 的 TA 端到端受"扩展长度命令 APDU"未支持阻塞**：TA 的 `PSO:Verify Certificate` 数据
-  ~275 B，SM 封装后 >255，需扩展命令 APDU（J3R180 支持，jcsl/主机侧见 `TODO.emv.md` E6）；
-  故 LDS2 默认个性化不注入 FF07（保持既有 PACE-only 套件不回归），LDS2 TA 门控由卡侧单测
-  覆盖。真卡/扩展 APDU 到位后再补 jcsl/真卡 TA 端到端。
+  **E6 已落地**（卡侧扩展长度命令接收：`EmrtdApplet.receiveCommand` 用 `getIncomingLength`/
+  `receiveBytes` 把命令装配进 `EmrtdScratch.raw`，保留 4 字节头给 SM 解包；主机 `CommandAPDU`
+  按需扩展）。**TA 端到端在 jcsl 通过**：`EmrtdTerminalAuthIntegrationTest` 演示
+  PACE→CA→TA 后 LDS2 Travel 记录的读/追加放行、TA 前 `6982`；LDS2 套件均加入 CA+TA。
 - **时间递进机制已实现（BSI TR-03110-3 §2.5/§2.6）**：`TaContext.currentDate`（6 octet 未打包
   BCD YYMMDD）由个性化 DGI `FF08` 注入；`PSO:Verify Certificate` 对**非 CVCA Link** 证书做
   过期判断（`Expiration < current` → `6A80`），并把 `Effective Date` 前移当前日期（CVCA/DV，
   以及由**本国 DV** 签发的 Accurate Terminal 证书）；卡侧单测覆盖"日期前移"与"过期拒绝"。
+- **残余（非阻塞）**：① 真卡 J3R180 上的 TA 复测（接触/非接触）；② LDS1 的 DG3/DG4 读尚未按
+  CHAT 位门控（当前仅 LDS2 门控）；③ 信任点安全存储为单点、未实现「最多两点 + CVCA Link
+  永久导入 + 按 Effective Date 启用/禁用」的完整 §2.5.1；④ EAC 1.11（TAv1/EF.CVCA）。
 
 ## 2. 平台实测（一次性探针，探针已移除）
 

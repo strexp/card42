@@ -68,7 +68,10 @@ EF.COM 由卡侧根据数据组索引（E1.6）按规范形式
 生成（Doc 9303-10 §4.6.1 Table 35）；EF.COM 内没有 `5F37`。
 
 applet 实现 `javacardx.apdu.ExtendedLength`，故扩展长度 APDU 能到达 applet（符合规范的
-读卡器做 RSA-2048 Active Authentication 时需要）。
+读卡器做 RSA-2048 Active Authentication 时需要）。`processCommand` 用
+`getIncomingLength`/`receiveBytes` 把命令数据装配进瞬态 `EmrtdScratch.raw`（超过 JCRE 缓冲的
+扩展命令，如 Terminal Authentication 的 `PSO:Verify Certificate`，其 SM 封装 >255 B），并把
+4 字节头保留在偏移 0 供 SM 解包（[terminal-authentication.md](terminal-authentication.md)）。
 
 ## 3. 命令
 

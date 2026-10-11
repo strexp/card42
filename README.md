@@ -37,9 +37,11 @@ sharing one `TransactionFlow`.
 Control**, **ISO/IEC 7816-4 secure messaging**, **Passive Authentication**,
 **Active Authentication**, the LDS2 applications (Travel/Visa/Additional
 Biometrics records and transparent files), **EF.CardAccess/EF.CardSecurity**
-parsing and **Chip Authentication** (ECDH); plus **PACE** (ECDH generic mapping,
-3DES and AES-128, MRZ password).  See [`docs/specs/emrtd/`](docs/specs/emrtd/);
-EAC 1.11 is the remaining optional item (see [`TODO.emrtd.md`](TODO.emrtd.md)).
+parsing, **Chip Authentication** (ECDH), **PACE** (ECDH generic mapping, 3DES
+and AES-128, MRZ password) and **Terminal Authentication (TAv2, ECDSA-SHA-256)**
+with the ICC current-date/expiry handling and LDS2 authorization gating.  See
+[`docs/specs/emrtd/`](docs/specs/emrtd/); EAC 1.11 is the remaining optional
+item (see [`TODO.emrtd.md`](TODO.emrtd.md)).
 
 ## Prerequisites
 
