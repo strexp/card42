@@ -20,9 +20,12 @@ import card42.common.TransientBuffers;
  * response that {@code wrap} reads while writing {@link #io}, so it must stay
  * a distinct array.
  *
- * <p>Both buffers are allocated once, in {@link #init()} during installation;
- * no command path allocates a transient array.  The total (576 B) is part of
- * the J3R180 budget documented in docs/specs/common/risks.md §2.
+ * <p>{@link #io} and {@link #response} (576 B) are allocated once, in
+ * {@link #init()} during installation; no command path allocates them.
+ * {@link #raw} (320 B, extended commands only) is allocated last, by
+ * {@link #initExtended()}, so it takes the EEPROM fallback if the transient
+ * budget runs short.  The total (896 B) is part of the J3R180 budget
+ * documented in docs/specs/common/risks.md §2.
  *
  * @author card42
  */
@@ -45,6 +48,14 @@ final class EmrtdScratch {
      * buffer (an extended-length command whose secure-messaging envelope
      * exceeds 255 bytes).  Distinct from {@link #io}, which holds the unwrapped
      * plaintext.
+     *
+     * <p>Allocated by {@link #initExtended()} <em>after</em> {@link #io},
+     * {@link #response} and {@code SmScratch}: if the J3R180's transient budget
+     * does not stretch to this 320-byte buffer, this is the one that degrades to
+     * a persistent (EEPROM) array.  Only the rare extended command touches it,
+     * whereas {@code SmScratch} writes on every secure-messaging response, so
+     * the wrong degradation would cost ~4x on the READ BINARY hot path
+     * (630 ms vs 150 ms per 231-byte block).
      */
     static byte[] raw;
 
@@ -53,14 +64,28 @@ final class EmrtdScratch {
     private EmrtdScratch() {
     }
 
-    /** Allocates the shared buffers once, at install; idempotent. */
+    /**
+     * Allocates the hot-path buffers ({@link #io}, {@link #response}) once, at
+     * install; idempotent.  Call before {@code SmScratch.init()} so the buffers
+     * used by every secure-messaging command get the transient budget first.
+     */
     static void init() {
         if (initialized) {
             return;
         }
         io = TransientBuffers.makeByteArray((short) 320);
         response = TransientBuffers.makeByteArray((short) 256);
-        raw = TransientBuffers.makeByteArray((short) 320);
         initialized = true;
+    }
+
+    /**
+     * Allocates {@link #raw}, once, after {@code SmScratch.init()}; idempotent.
+     * It is the last transient request, so it is the one that falls back to
+     * EEPROM when the context budget is exhausted.
+     */
+    static void initExtended() {
+        if (raw == null) {
+            raw = TransientBuffers.makeByteArray((short) 320);
+        }
     }
 }

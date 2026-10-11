@@ -116,9 +116,13 @@ public final class EmrtdApplet extends AppletBase
         this.dfNameLength = dfNameLength;
         // Allocate the package-shared transient session buffers and the SM
         // scratch once, at install: no command path allocates a transient array
-        // (docs/specs/common/risks.md).
+        // (docs/specs/common/risks.md).  Order matters: io/response then
+        // SmScratch (all used by every secure-messaging command) get the
+        // transient budget first; raw (extended commands only) is requested
+        // last so it, not SmScratch, is the one that degrades to EEPROM.
         EmrtdScratch.init();
         SmScratch.init();
+        EmrtdScratch.initExtended();
         plain = EmrtdScratch.io;
         response = EmrtdScratch.response;
         boolean lds1Role = role == EmrtdInstallParameters.ROLE_LDS1;
@@ -261,16 +265,27 @@ public final class EmrtdApplet extends AppletBase
         // 5 for a short APDU, 7 for an extended one (the applet implements
         // ExtendedLength so the JCRE delivers extended APDUs).
         short cdataOff = apdu.getOffsetCdata();
+        short rawLen = apdu.getIncomingLength();
 
-        // Assemble the full command (header + data) into the shared scratch: an
-        // extended-length command whose secure-messaging envelope exceeds the
-        // JCRE buffer arrives in several chunks.  The 4 header bytes stay at
-        // offset 0 (the SM unwrap reads CLA/INS/P1/P2 from there); the data
+        // The READ BINARY / READ RECORD hot path uses the JCRE buffer in place:
+        // a command whose data (header included) fits the buffer is already
+        // complete there, exactly as before extended-command support, so no RAM
+        // scratch is touched per chunk.  Only an extended-length command whose
+        // secure-messaging envelope exceeds the JCRE buffer is assembled in
+        // several chunks into EmrtdScratch.raw; the 4 header bytes stay at
+        // offset 0 (the SM unwrap reads CLA/INS/P1/P2 there) and the data
         // starts at offset 4.
         // (APDU.waitExtension must come after the last receiveBytes: the J3R180
         // rejects receiveBytes once a wait-extension has been requested.)
-        byte[] raw = receiveCommand(apdu, apduBuffer, cdataOff, incoming);
-        short rawLen = apdu.getIncomingLength();
+        byte[] cmd;
+        short cmdOff;
+        if (rawLen <= (short) (apduBuffer.length - cdataOff) && incoming >= rawLen) {
+            cmd = apduBuffer;
+            cmdOff = cdataOff;
+        } else {
+            cmd = receiveExtended(apdu, apduBuffer, cdataOff, incoming, rawLen);
+            cmdOff = (short) 4;
+        }
         requestMoreTime(ins);
 
         byte[] data;
@@ -280,11 +295,11 @@ public final class EmrtdApplet extends AppletBase
         if (smActive) {
             data = plain;
             dataOff = 0;
-            dataLen = sm.unwrap(ksEnc, ksMac, ssc, raw, (short) 4, rawLen, plain, (short) 0);
+            dataLen = sm.unwrap(ksEnc, ksMac, ssc, cmd, cmdOff, rawLen, plain, (short) 0);
             le = sm.getLe();
         } else {
-            data = raw;
-            dataOff = 4;
+            data = cmd;
+            dataOff = cmdOff;
             dataLen = rawLen;
             le = rawLen == 0 ? readLe(apduBuffer, cdataOff) : -1;
         }
@@ -365,18 +380,17 @@ public final class EmrtdApplet extends AppletBase
     }
 
     /**
-     * Receives the command data field into the shared scratch
-     * ({@link EmrtdScratch#raw}) and returns it (the first
-     * {@code getIncomingLength()} bytes are the data).  Short APDUs arrive in
-     * one chunk; extended-length commands (whose secure-messaging envelope
-     * exceeds the JCRE buffer) are pulled with {@code receiveBytes} until the
-     * declared Lc is complete.
+     * Receives an extended-length command into the shared scratch
+     * ({@link EmrtdScratch#raw}) and returns it.  The first
+     * {@code getIncomingLength()} bytes after the 4 header bytes are the data.
+     * Called only when the command does not fit the JCRE buffer (e.g. a command
+     * whose secure-messaging envelope exceeds it); the remainder is pulled with
+     * {@code receiveBytes}.
      */
-    private static byte[] receiveCommand(APDU apdu, byte[] apduBuffer, short cdataOff,
-                                         short firstChunk) {
-        short lc = apdu.getIncomingLength();
+    private static byte[] receiveExtended(APDU apdu, byte[] apduBuffer, short cdataOff,
+                                          short firstChunk, short lc) {
         byte[] target = EmrtdScratch.raw;
-        if (lc < 0 || (short) (lc + 4) > (short) target.length) {
+        if (target == null || lc < 0 || (short) (lc + 4) > (short) target.length) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
         // Keep the 4 header bytes at offset 0 (the SM unwrap reads CLA/INS/P1/P2
