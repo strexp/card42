@@ -80,7 +80,7 @@ public final class Main {
 
     private static void usage(java.io.PrintStream out) {
         out.println("usage: card42.host.emrtd.cli.Main <command> <subcommand> [options]");
-        out.println("  terminal emrtd read|inspect|lds2|apdu   eMRTD LDS1/LDS2 reader (BAC/PACE + SM)");
+        out.println("  terminal emrtd read|inspect|lds2|apdu|ta-export   eMRTD LDS1/LDS2 reader (BAC/PACE + SM + CA + TA)");
         out.println("  version                            print the host CLI version");
         out.println("  help                               show help");
     }

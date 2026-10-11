@@ -160,9 +160,12 @@ EMV Contactless Book C-8 v1.2（`tools/specs-contactless-c8-1.2/`）以 **ECC + 
 - **Java Card 3.0.5 classic API 提供部分 ECC 原语但无 BDH/EC-SDSA**：
   `api_classic-3.0.5.jar` 实测提供 `KeyPair.ALG_EC_FP`/`ALG_EC_F2M`、
   `Signature.ALG_ECDSA_SHA`（及 SHA-224/256/384/512）、`KeyBuilder.TYPE_EC_FP_PUBLIC/PRIVATE`
-  （API 存在性已核实，运行期未验证）；但 Book E 所需的 **BDH（EC Diffie-Hellman 共享密钥）**
-  与 Book C-8 的 EC-SDSA 签名方案不在 classic API 中。
-- **J3R180 默认 ECC 不可用于 C-8**（融合位/个人化限制），且无法自行切换。
+  （运行期已在 jcsl 与 J3R180 验证，见 §15）；但 Book E 所需的 **BDH（EC Diffie-Hellman
+  共享密钥）** 与 Book C-8 的 EC-SDSA 签名方案不在 classic API 中（EC-SDSA/Schnorr 是 3.1+
+  才有的 `SIG_CIPHER_ECSDSA`，3.0.5 无）。
+- **J3R180 默认 ECC 不可用于 C-8**（融合位/个人化限制），且无法自行切换。此处仅指 C-8 的
+  Book E/EC-SDSA 路径；**classic ECC（`KeyAgreement`、`KeyPair`）与 ECDSA 验签 J3R180
+  实测可用**（§15），二者不矛盾。
 - jcsl（本项目使用的 3.0.5 模拟器）亦不承载 C-8 的 ECC/Book E 路径。
 
 因此终端内核实际以 **EMV v4.4 Book 3/4 通用终端流程**实现（Entry Point → GPO →
@@ -221,3 +224,39 @@ context 共享）。因此"把照片放进内存"的正确目标是**持久**且
 （默认 `perso/emrtd/portrait.png`），
 裁到 4:5、最长边缩到 512 px 后编码（约 8 KB），足以覆盖流式/分页路径又不挤占与 EMV 共存的
 jcsl 预算（见 [../emrtd/emrtd.md](../emrtd/emrtd.md) §2/§8/§11）。
+
+## 15. Terminal Authentication 平台能力（P0 探针）
+
+为评估 eMRTD Terminal Authentication（[../emrtd/terminal-authentication.md](../emrtd/terminal-authentication.md)）
+的可行性，用一次性命令/个性化探针在 jcsl 与真卡 J3R180（ACR1581 PICC 非接触口）上实测；
+探针已删除，结论保留于此：
+
+| 能力 | jcsl v26.0 | J3R180 |
+|------|-----------|--------|
+| `Signature.ALG_ECDSA_SHA` / `_224` / `_256` / `_384` / `_512` 验签（两参 `getInstance`） | ✓ | ✓ |
+| ECDSA 两参 `getInstance` 签名编码 | DER（X9.62） | DER（X9.62） |
+| `getInstance(ALG_SHA_256, SIG_CIPHER_ECDSA_PLAIN, PAD_NULL)` → plain r‖s | ✓ | ✓ |
+| `getInstance(ALG_NULL, SIG_CIPHER_ECDSA_PLAIN, PAD_NULL)` + `verifyPreComputedHash` | ✗ | ✗ |
+| `ALG_RSA_SHA_PKCS1` / `_256_PKCS1` / `_512_PKCS1` | ✓ | ✓ |
+| `ALG_RSA_SHA_256_PKCS1_PSS`（ICAO Doc 9303-11 Table 7） | ✓ | ✓ |
+| `MessageDigest.ALG_SHA/224/256/384/512` | ✓ | ✓ |
+| `KeyBuilder.TYPE_EC_FP_PUBLIC` + 显式 P-256 域参数 + `setW` | ✓ | ✓ |
+
+关键事实与注记：
+
+- **ECDSA 的两种编码**：两参 `getInstance(ALG_ECDSA_*)` 产出/校验的是 ANSI X9.62 **DER**
+  签名（Java Card API 规范如此）；TA/TR-03111 线上是 **plain（r‖s）**，用四参
+  `getInstance(MessageDigest.ALG_SHA_256, SIG_CIPHER_ECDSA_PLAIN, Cipher.PAD_NULL, false)`
+  可直接验 plain（jcsl 与 J3R180 均通过），**无需 plain→DER 转换、也无需自实现 P-256**。
+  `ALG_NULL` + `verifyPreComputedHash` 组合两平台均 `NO_SUCH_ALGORITHM`（不使用）。
+- **RSA-PSS 可用**：Java Card API 常量 `ALG_RSA_SHA_256_PKCS1_PSS` 在 J3R180 上运行期
+  可用（此前仅有 API 存在性结论，见 [cryptography.md](cryptography.md) §1），ICAO 的 RSA
+  TA profile 因此可作为 ECDSA 的备选。
+- **真卡余量**：清理探针后 `JCSystem.getAvailableMemory` 持久约 13.6–14.9 KB、瞬态
+  `CLEAR_ON_DESELECT` 约 2.4–4 KB、`RESET` 约 256 B。探针若在命令路径 `new`/`buildKey`
+  会持续泄漏且 Java Card 不回收，`DELETE` 包后余量恢复——印证「命令路径不分配」约定
+  （[risks.md](risks.md) §2）。
+- **ACR1581 非接触**在连续 ECC 运算下偶发 `SCARD_E_NO_SMARTCARD`（掉卡），与
+  [TODO.emrtd.md](../../../TODO.emrtd.md) T5.3 同源；测试需重试，非卡逻辑问题。
+- 复现探针时主机同时需要 JDK 的 `jdk.crypto.ec`（JCE EC 向量生成）；用 GPPro 连接真卡
+  PICC 口需 `--reader` 按名匹配（如 `--reader PICC`），按索引会落到 SAM 槽。

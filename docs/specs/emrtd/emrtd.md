@@ -3,7 +3,8 @@
 > eMRTD 实现的当前设计：LDS1 + BAC + ISO/IEC 7816-4 安全报文 + Passive Authentication +
 > Active Authentication，以及 LDS2 应用、EF.CardAccess/SecurityInfo 解析、Chip
 > Authentication（ECDH）与 PACE（ECDH 通用映射，3DES 宣告 / AES-128 卡侧支持，MRZ 与 CAN）。EAC 1.11 仍为可选待办
-> （[`TODO.emrtd.md`](../../../TODO.emrtd.md)）。
+> （[`TODO.emrtd.md`](../../../TODO.emrtd.md)）；**Terminal Authentication（TAv2）已完成 P0
+> 可行性确认**（[terminal-authentication.md](terminal-authentication.md)），实现见 P1–P7。
 
 ## 1. 范围与 AID
 
@@ -241,6 +242,8 @@ host/emrtd/
 ├── access/    MrzKeySeed, Bac, Iso7816Sm, Iso7816SmAes, SecureMessaging, ChipAuth, Pace
 ├── pa/        CscaKeyStore, DscVerifier, PassiveAuthentication
 ├── aa/        ActiveAuthentication
+├── ta/        CvcPrincipal, Chat, CvCertificate(Codec/Builder), CvChainVerifier,
+│              TerminalAuth, TaChain  (Terminal Authentication, P1/P2)
 ├── perso/     EmrtdPersoExporter, SodBuilder, Dg2Builder, CardSecurityBuilder, LdsScript
 ├── report/    PassportReport
 └── cli/       Main, command/EmrtdCommand

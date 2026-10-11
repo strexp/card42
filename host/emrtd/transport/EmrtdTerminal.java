@@ -117,6 +117,40 @@ public final class EmrtdTerminal {
     }
 
     /**
+     * MSE:Set DST (P1/P2=0x81B6): the DO'83' reference of the public key used to
+     * verify a CV certificate (ICAO Doc 9303-11 §7.1.5.1).
+     */
+    public ResponseAPDU mseSetDst(byte[] reference) throws Exception {
+        return transmit(0x00, 0x22, 0x81, 0xB6, doTag(0x83, reference), 0);
+    }
+
+    /**
+     * PSO:Verify Certificate (P1/P2=0x00BE): the certificate body TLV (7F4E...)
+     * followed by the signature TLV (5F37...) (ICAO Doc 9303-11 §7.1.5.2).
+     */
+    public ResponseAPDU psoVerifyCertificate(byte[] bodyTlv, byte[] signatureTlv) throws Exception {
+        return transmit(0x00, 0x2A, 0x00, 0xBE,
+                card42.host.common.util.Bytes.concat(bodyTlv, signatureTlv), 0);
+    }
+
+    /**
+     * MSE:Set AT (P1/P2=0x81A4): the DO'83' reference of the terminal public key
+     * for Terminal Authentication (ICAO Doc 9303-11 §7.1.5.3).
+     */
+    public ResponseAPDU mseSetAt(byte[] reference) throws Exception {
+        return transmit(0x00, 0x22, 0x81, 0xA4, doTag(0x83, reference), 0);
+    }
+
+    /** A single data object {@code tag len value} (short length). */
+    private static byte[] doTag(int tag, byte[] value) {
+        byte[] out = new byte[2 + value.length];
+        out[0] = (byte) tag;
+        out[1] = (byte) value.length;
+        System.arraycopy(value, 0, out, 2, value.length);
+        return out;
+    }
+
+    /**
      * Sends one command, wrapping/unwrapping with SM when it is active.  The
      * returned APDU carries the plaintext response data and the real status
      * word.

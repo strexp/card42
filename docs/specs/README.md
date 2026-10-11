@@ -7,7 +7,7 @@
   构建工具链、密码学原语、调研事实与风险。
 - [`emv/`](emv/) — EMV 业务：个性化、交易链路、接触/非接触终端内核。
 - [`emrtd/`](emrtd/) — eMRTD（ICAO 9303）：LDS1/LDS2、BAC、ISO/IEC 7816-4 安全报文、
-  PA、AA、Chip Authentication、PACE。
+  PA、AA、Chip Authentication、PACE、Terminal Authentication（TAv2，P0 可行性已确认）。
 
 未完成计划见仓库根 [`../../TODO.emv.md`](../../TODO.emv.md) /
 [`../../TODO.emrtd.md`](../../TODO.emrtd.md)。参考标准与工具链版本见
@@ -57,6 +57,7 @@
 | 文档 | 内容 |
 |------|------|
 | [emrtd/emrtd.md](emrtd/emrtd.md) | LDS1/LDS2 文件系统、BAC、ISO/IEC 7816-4 SM、PA、AA、Chip Authentication、PACE、个性化、主机模块 |
+| [emrtd/terminal-authentication.md](emrtd/terminal-authentication.md) | Terminal Authentication（TAv2）：P0 可行性、算法/版本/信任点决策、协议/APDU、卡侧/主机侧设计要点、计划与风险 |
 
 ## 约定
 

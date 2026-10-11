@@ -4,9 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Minimal DER (X.690) reader for the eMRTD Passive Authentication objects
- * (CMS SignedData, LDS Security Object, X.509).  It handles single-byte tags
- * and definite lengths, which is all the LDS1 SOD uses.
+ * Minimal DER/BER (X.690) reader for the eMRTD Passive Authentication objects
+ * (CMS SignedData, LDS Security Object, X.509) and for the CV certificate
+ * objects of Terminal Authentication (BSI TR-03110-3 Appendix D).  It handles
+ * one- and two-byte tags ({@code 7Fxx} / {@code 5Fxx}) and definite lengths.
  */
 public final class Der {
 
@@ -33,6 +34,14 @@ public final class Der {
     public static Tlv read(byte[] buf, int off) {
         int tag = buf[off] & 0xFF;
         int p = off + 1;
+        if ((tag & 0x1F) == 0x1F) {
+            // High-tag-number form: subsequent octets until the high bit clears.
+            int b;
+            do {
+                b = buf[p++] & 0xFF;
+                tag = (tag << 8) | b;
+            } while ((b & 0x80) != 0);
+        }
         int len = buf[p] & 0xFF;
         p++;
         if ((len & 0x80) != 0) {

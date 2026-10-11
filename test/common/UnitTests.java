@@ -1,19 +1,18 @@
 package card42.test;
 
 /**
- * Runner for the pure-JVM unit tests (docs/specs/common/toolchain.md §6).  It does not need
- * the Java Card simulator: the card-side classes are linked against the small
- * {@code javacard.framework.Util}/{@code ISOException} stubs in test/common/stubs
- * and the host-side classes run directly.  Exits non-zero on the first failing
- * suite so {@code make test-unit} can gate on it.
+ * Shared runner for the pure-JVM unit tests (docs/specs/common/toolchain.md §6).
+ * It is module-neutral and dispatches both the EMV suites and the eMRTD suites;
+ * it does not need the Java Card simulator: the card-side classes are linked
+ * against the small {@code javacard.framework.Util}/{@code ISOException} stubs in
+ * {@code test/common/stubs} and the host-side classes run directly.  Exits
+ * non-zero on the first failing suite so {@code make test-unit} can gate on it.
  *
- * <p>The suites live in functional subdirectories but share package
- * {@code card42.test} (see README.md): card-side suites under
- * {@code test/emv/unit/card/} ({@code tlv/}, {@code data/}, {@code state/},
- * {@code risk/}, {@code perso/}, {@code crypto/}) and host-only suites under
- * {@code test/emv/unit/host/} ({@code codec/}, {@code crypto/}, {@code perso/},
- * {@code clearing/}, {@code kernel/}).
- * All assertions are reported through {@link Asserts} (in {@code test/emv/unit/support/}).
+ * <p>The suites are grouped by directory (card-side under
+ * {@code test/emv/unit/card/} and {@code test/emrtd/unit/card/}, host-side under
+ * {@code test/emv/unit/host/} and {@code test/emrtd/unit/host/}) but all share
+ * package {@code card42.test}.  All assertions are reported through
+ * {@link Asserts} (in {@code test/emv/unit/support/}).
  */
 public final class UnitTests {
 
@@ -50,6 +49,7 @@ public final class UnitTests {
         EmrtdCliTest.run();
         PassportReportTest.run();
         EmrtdCardAccessTest.run();
+        EmrtdTaTest.run();
 
         System.out.println();
         System.out.println("== host ==");

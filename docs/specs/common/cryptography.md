@@ -30,6 +30,14 @@
 > `01 00`，真卡实测接触交易 CVM Results `01 00 02`；见
 > [personalization.md](../emv/personalization.md) §6 的 `@sda records pin`）。
 
+**ECDSA / RSA-PSS（Terminal Authentication 用）实测**（详见 [research-notes.md](research-notes.md)
+§15）：jcsl 与 J3R180 均支持 `Signature.ALG_ECDSA_SHA/_224/_256/_384/_512` 验签与
+`ALG_RSA_SHA_256_PKCS1_PSS`；`KeyBuilder.TYPE_EC_FP_PUBLIC` + 显式 P-256 域参数 + `setW`
+可导入验签公钥。**编码**：两参 `getInstance(ALG_ECDSA_*)` 是 ANSI X9.62 **DER**（API 规范），
+而 TA 的 TR-03111 **plain（r‖s）** 用四参
+`getInstance(MessageDigest.ALG_SHA_256, Signature.SIG_CIPHER_ECDSA_PLAIN, Cipher.PAD_NULL, false)`
+直接校验（两平台实测通过），无需格式转换。
+
 ## 2. 会话密钥派生（`card/emv/crypto/SessionKey.java`）
 
 `SK_AC`/`SK_MAC`/`SK_ENC` 共用同一派生函数，分别作用于独立的 AC / SM-MAC / SM-ENC 主密钥

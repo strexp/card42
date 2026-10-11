@@ -8,6 +8,7 @@ import javax.smartcardio.ResponseAPDU;
 import card42.host.common.cli.CliSupport;
 import card42.host.common.transport.TerminalSession;
 import card42.host.common.util.Args;
+import card42.host.common.util.Bytes;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.access.Bac;
 import card42.host.emrtd.access.ChipAuth;
@@ -28,6 +29,10 @@ import card42.host.emrtd.lds.Sod;
 import card42.host.emrtd.pa.CscaKeyStore;
 import card42.host.emrtd.pa.PassiveAuthentication;
 import card42.host.emrtd.report.PassportReport;
+import card42.host.emrtd.ta.CvCertificate;
+import card42.host.emrtd.ta.CvCertificateCodec;
+import card42.host.emrtd.ta.TaChain;
+import card42.host.emrtd.ta.TerminalAuth;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**
@@ -55,6 +60,8 @@ public final class EmrtdCommand {
             return lds2(args);
         case "apdu":
             return apdu(args);
+        case "ta-export":
+            return taExport(args);
         default:
             usage(System.err);
             return CliSupport.EXIT_USAGE;
@@ -117,8 +124,9 @@ public final class EmrtdCommand {
 
     private static int read(String[] args, boolean inspectOnly) throws Exception {
         Args parsed = new Args(args,
-                new String[] { "host", "doc", "dob", "doe", "can", "csca", "json" },
-                new String[] { "pace", "ca" });
+                new String[] { "host", "doc", "dob", "doe", "can", "csca", "json",
+                        "ta-chain", "ta-key" },
+                new String[] { "pace", "ca", "ta" });
         String host = parsed.get("host", "socket:localhost:9025");
         boolean json = "1".equals(parsed.get("json", "0"));
         try (TerminalSession session = TerminalSession.open(host, 0, false, System.out)) {
@@ -167,15 +175,16 @@ public final class EmrtdCommand {
             }
             boolean aa = activeAuthentication(terminal, clearDg15);
 
+            Pace.Session paceSession = null;
             if (can != null) {
                 // PACE with the Card Access Number (password reference 0x02)
                 // replaces BAC/PACE-MRZ.
-                Pace.Session pace = Pace.authenticateCan(terminal, can);
-                terminal.setSecureMessaging(pace.secureMessaging());
+                paceSession = Pace.authenticateCan(terminal, can);
+                terminal.setSecureMessaging(paceSession.secureMessaging());
             } else if (parsed.has("pace")) {
                 // PACE (ECDH generic mapping, 3DES, MRZ) replaces BAC.
-                Pace.Session pace = Pace.authenticate(terminal, doc, dob, doe);
-                terminal.setSecureMessaging(pace.secureMessaging());
+                paceSession = Pace.authenticate(terminal, doc, dob, doe);
+                terminal.setSecureMessaging(paceSession.secureMessaging());
             } else {
                 byte[] seed = MrzKeySeed.seed(doc, dob, doe);
                 Bac.Session bac = Bac.authenticate(terminal, seed);
@@ -184,7 +193,29 @@ public final class EmrtdCommand {
             // Optional Chip Authentication: re-key the secure messaging with the
             // chip's static key (Doc 9303-11 §6.2).  EF.CardSecurity requires
             // PACE (Doc 9303-10 §3.11.4 Table 34).
-            boolean caOk = ca && chipAuthentication(terminal);
+            ChipAuth.Result caResult = ca ? chipAuthentication(terminal) : null;
+            boolean caOk = caResult != null;
+
+            // Optional Terminal Authentication (Doc 9303-11 §7.1): on top of CA,
+            // send the CV certificate chain and answer the chip challenge.  The
+            // signed message is ID_IC || rIC || Comp(PKDH,IFD).
+            if (parsed.has("ta")) {
+                String chainFile = parsed.get("ta-chain", null);
+                String keyHex = parsed.get("ta-key", null);
+                if (paceSession == null || caResult == null || chainFile == null || keyHex == null) {
+                    return CliSupport.fail("read -ta needs -pace (or -can), -ca, "
+                            + "-ta-chain=<file> and -ta-key=<hex>");
+                }
+                java.util.List<CvCertificate> chain = CvCertificateCodec.parseChain(
+                        java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(chainFile)));
+                byte[] identifier = TerminalAuth.chipIdentifier(paceSession.piccPublicKey);
+                byte[] keyHash =
+                        TerminalAuth.chipAuthenticationKeyHash(caResult.terminalPublicKeyW);
+                TerminalAuth.authenticate(terminal, chain,
+                        new java.math.BigInteger(keyHex, 16), identifier, keyHash,
+                        new java.security.SecureRandom());
+                System.out.println("Terminal Authentication: OK");
+            }
             byte[] dg1Bytes = LdsReader.read(terminal, LdsFileUtil.FID_DG1);
             Dg1 dg1 = Dg1.parse(dg1Bytes);
             Com com = Com.parse(LdsReader.read(terminal, LdsFileUtil.FID_COM));
@@ -240,28 +271,52 @@ public final class EmrtdCommand {
      * Chip Authentication (ICAO Doc 9303-11 §6.2): read the LDS1 EF.CardAccess,
      * then the master-file EF.CardSecurity (SELECT MF followed by SELECT 011D;
      * Doc 9303-10 §3.11.4) and re-key the secure messaging with the chip's
-     * static public key.  Returns false when the card does not advertise a
+     * static public key.  Returns null when the card does not advertise a
      * usable ECDH/3DES Chip Authentication profile.
      */
-    private static boolean chipAuthentication(EmrtdTerminal terminal) throws Exception {
+    private static ChipAuth.Result chipAuthentication(EmrtdTerminal terminal) throws Exception {
         CardAccess cardAccess = CardAccess.parse(
                 LdsReader.read(terminal, LdsFileUtil.FID_CARD_ACCESS));
         if (cardAccess.chipAuthenticationInfos().isEmpty()) {
-            return false;
+            return null;
         }
         CardSecurity cardSecurity = CardSecurity.parse(
                 readMasterFile(terminal, LdsFileUtil.FID_CARD_SECURITY));
         if (cardSecurity.publicKeyInfos().isEmpty()) {
-            return false;
+            return null;
         }
         ChipAuthenticationPublicKeyInfo caKey = cardSecurity.publicKeyInfos().get(0);
         byte[] chipPublicKeyW = caKey.rawPoint();
         if (chipPublicKeyW == null) {
-            return false;
+            return null;
         }
-        ChipAuth.authenticate(terminal, chipPublicKeyW,
+        return ChipAuth.authenticateResult(terminal, chipPublicKeyW,
                 cardAccess.chipAuthenticationInfos().get(0));
-        return true;
+    }
+
+    /**
+     * {@code terminal emrtd ta-export}: writes a demo Terminal Authentication CV
+     * certificate chain (CVCA trust anchor, DV, IS), the concatenated chain to
+     * send and the terminal private key, for use with {@code read -ta}.
+     */
+    private static int taExport(String[] args) throws Exception {
+        Args parsed = new Args(args, new String[] { "dir" }, new String[0]);
+        java.nio.file.Path dir = java.nio.file.Paths.get(parsed.get("dir", "."));
+        java.nio.file.Files.createDirectories(dir);
+        TaChain.Chain chain = TaChain.create(new java.security.SecureRandom());
+        java.nio.file.Files.write(dir.resolve("cvca.der"), chain.cvca.encoded());
+        java.nio.file.Files.write(dir.resolve("dv.der"), chain.dv.encoded());
+        java.nio.file.Files.write(dir.resolve("is.der"), chain.terminal.encoded());
+        java.nio.file.Files.write(dir.resolve("chain.der"),
+                Bytes.concat(chain.dv.encoded(), chain.terminal.encoded()));
+        byte[] key = new byte[32];
+        byte[] raw = chain.terminalPrivateScalar.toByteArray();
+        System.arraycopy(raw, Math.max(0, raw.length - 32), key,
+                Math.max(0, 32 - raw.length), Math.min(32, raw.length));
+        java.nio.file.Files.write(dir.resolve("terminal-key.hex"),
+                Hex.format(key).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        System.out.println("wrote cvca.der, dv.der, is.der, chain.der, terminal-key.hex to " + dir);
+        return CliSupport.EXIT_OK;
     }
 
     /** Reads a master-file EF: SELECT MF then SELECT FILE by FID (Doc 9303-10 §3.11). */
@@ -295,10 +350,12 @@ public final class EmrtdCommand {
     }
 
     public static void usage(PrintStream out) {
-        out.println("usage: Main terminal emrtd <read|inspect|lds2|apdu> [options]");
-        out.println("  read    -host=... -doc=... -dob=YYMMDD -doe=YYMMDD [-pace] [-can=<6 digits>] [-ca] [-csca=<cert>] [-json=1]");
+        out.println("usage: Main terminal emrtd <read|inspect|lds2|apdu|ta-export> [options]");
+        out.println("  read    -host=... -doc=... -dob=YYMMDD -doe=YYMMDD [-pace] [-can=<6 digits>] [-ca]");
+        out.println("          [-ta -ta-chain=<file> -ta-key=<hex>] [-csca=<cert>] [-json=1]");
         out.println("  inspect -host=... [-json=1]");
         out.println("  lds2    -host=... [-app=travel|visa|biometrics] [-json=1]");
         out.println("  apdu    -host=... -apdu=<hex>");
+        out.println("  ta-export -dir=<path>   write a demo CV certificate chain + terminal key");
     }
 }
