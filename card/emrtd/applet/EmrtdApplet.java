@@ -125,6 +125,7 @@ public final class EmrtdApplet extends AppletBase
         // first, then the session state.  raw is persistent (see EmrtdScratch).
         EmrtdScratch.init();
         SmScratch.init();
+        MacEngines.init();
         EmrtdScratch.initSession();
         EmrtdScratch.initExtended();
         plain = EmrtdScratch.io;

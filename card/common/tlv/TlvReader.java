@@ -9,11 +9,18 @@ import javacard.framework.ISOException;
  * repeated in the payment configuration, the directory entry and the
  * personalization handler.  Typical use:
  *
- *   TlvReader r = new TlvReader(buf, off, len);
+ *   TlvReader r = reader.reset(buf, off, len);
  *   while (r.hasNext()) {
  *       r.next();
  *       switch (r.tag()) { ... r.valueOffset() ... r.valueLength() ... }
  *   }
+ *
+ * The cursor is reusable: {@link #reset} rebinds it to a new range and returns
+ * the same instance, so a long-lived reader can serve every DGI/record of a
+ * personalization without allocating (Java Card {@code new} is persistent heap
+ * and is not reclaimed promptly, docs/specs/common/risks.md §2).  Callers that
+ * nest two walks (an outer sequence and an inner entry) must use two distinct
+ * instances.
  *
  * A malformed or truncated TLV aborts the walk with 6A80, so callers never
  * have to bounds-check themselves.  The cursor keeps no reference to the
@@ -25,18 +32,29 @@ import javacard.framework.ISOException;
 
 public final class TlvReader implements ISO7816 {
 
-    private final byte[] buf;
-    private final short end;
+    private byte[] buf;
+    private short end;
     private short pos;
 
     private short tag;
     private short valueOffset;
     private short valueLength;
 
+    /** An unbound cursor; call {@link #reset} before the first walk. */
+    public TlvReader() {
+        reset(null, (short) 0, (short) 0);
+    }
+
     public TlvReader(byte[] buf, short off, short len) {
+        reset(buf, off, len);
+    }
+
+    /** Rebinds the cursor to buf[off..off+len) and returns this instance. */
+    public TlvReader reset(byte[] buf, short off, short len) {
         this.buf = buf;
         this.pos = off;
         this.end = (short) (off + len);
+        return this;
     }
 
     /** True while another TLV starts before the end of the range. */

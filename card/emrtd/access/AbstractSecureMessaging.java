@@ -118,21 +118,26 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         short do87Start = -1;
         short do87Val = -1;
         short do87Len = 0;
+        short do87Total = 0;
         short do85Start = -1;
         short do85Val = -1;
         short do85Len = 0;
+        short do85Total = 0;
         short do97Start = -1;
         short do97Val = -1;
         short do97Len = 0;
+        short do97Total = 0;
         short do8eVal = -1;
         short do8eLen = 0;
 
         short p = dataOff;
         short end = (short) (dataOff + dataLen);
         while (p < end) {
+            // Parse the tag/length once: the total is kept so the MAC-input
+            // assembly below does not re-decode the same length field.
             short tagLen = Tlv.tagLength(apdu, p);
             short lenOff = (short) (p + tagLen);
-            if ((short) (p + tagLen) >= end) {
+            if (lenOff >= end) {
                 ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
             }
             short lfLen = Tlv.lengthFieldLength(apdu, lenOff);
@@ -150,14 +155,17 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
                 do87Start = p;
                 do87Len = len;
                 do87Val = valOff;
+                do87Total = total;
             } else if (tag == (short) 0x85) {
                 do85Start = p;
                 do85Len = len;
                 do85Val = valOff;
+                do85Total = total;
             } else if (tag == (short) 0x97) {
                 do97Start = p;
                 do97Len = len;
                 do97Val = valOff;
+                do97Total = total;
             } else if (tag == (short) 0x8E) {
                 do8eVal = valOff;
                 do8eLen = len;
@@ -177,12 +185,12 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         scratch[n++] = apdu[ISO7816.OFFSET_P2];
         n = pad(scratch, n);
         if (do87Start >= 0) {
-            n = append(scratch, n, apdu, do87Start, Tlv.totalLength(apdu, do87Start));
+            n = append(scratch, n, apdu, do87Start, do87Total);
         } else if (do85Start >= 0) {
-            n = append(scratch, n, apdu, do85Start, Tlv.totalLength(apdu, do85Start));
+            n = append(scratch, n, apdu, do85Start, do85Total);
         }
         if (do97Start >= 0) {
-            n = append(scratch, n, apdu, do97Start, Tlv.totalLength(apdu, do97Start));
+            n = append(scratch, n, apdu, do97Start, do97Total);
         }
         n = pad(scratch, n);
 
@@ -221,11 +229,14 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         short do87Len = 0;
         if (respLen > 0) {
             short padLen = paddedLength(respLen);
-            encrypt(ksEnc, response, (short) 0, respLen, scratch, (short) 0);
             out[n++] = (byte) 0x87;
             n = Tlv.appendLength((short) (padLen + 1), out, n);
             out[n++] = (byte) 0x01;
-            Util.arrayCopyNonAtomic(scratch, (short) 0, out, n, padLen);
+            // Encrypt straight into the envelope.  The encryption input
+            // (scratch) and output (out) are distinct arrays, which the jcsl
+            // AES doFinal requires, so no second staging region is needed and
+            // the scratch only has to hold the padded plaintext.
+            encrypt(ksEnc, response, (short) 0, respLen, out, n);
             n += padLen;
             do87Len = (short) (n - outOff);
         }
@@ -298,12 +309,12 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
                          byte[] out, short outOff) {
         byte[] scratch = SmScratch.get();
         short padded = paddedLength(inLen);
-        Util.arrayCopyNonAtomic(in, inOff, scratch, (short) 512, inLen);
-        scratch[(short) (512 + inLen)] = (byte) 0x80;
-        for (short i = (short) (512 + inLen + 1); i < (short) (512 + padded); i++) {
+        Util.arrayCopyNonAtomic(in, inOff, scratch, (short) 0, inLen);
+        scratch[inLen] = (byte) 0x80;
+        for (short i = (short) (inLen + 1); i < padded; i++) {
             scratch[i] = 0;
         }
-        encryptBlock(k, scratch, (short) 512, padded, out, outOff);
+        encryptBlock(k, scratch, (short) 0, padded, out, outOff);
     }
 
     /** Length after M2 padding: append 0x80 and zeros to a block multiple. */

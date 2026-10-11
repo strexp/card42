@@ -42,7 +42,7 @@ public final class BacCrypto {
 
     public BacCrypto() {
         kdf = new Sha1Kdf();
-        retailMac = new RetailMac();
+        retailMac = MacEngines.retailMac();
         des3 = Cipher.getInstance(Cipher.ALG_DES_CBC_NOPAD, false);
         key = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES,
                 KeyBuilder.LENGTH_DES3_2KEY, false);

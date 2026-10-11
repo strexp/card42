@@ -35,6 +35,9 @@ public class PersoHandler implements ISO7816 {
     private final byte[] buffer;
     private short bufferLength;
 
+    /** Reused DGI cursor, so a personalization allocates no persistent object. */
+    private final DgiReader dgiReader = new DgiReader();
+
     /** Expected P2 of the next block; the first block must be P2=0
      * (EMV CPS v2.0 §4.3.4.6). */
     private short expectedBlock;
@@ -156,7 +159,7 @@ public class PersoHandler implements ISO7816 {
     private short applyAll() {
         short dgiCount = 0;
         try {
-            DgiReader reader = new DgiReader(buffer, (short) 0, bufferLength);
+            DgiReader reader = dgiReader.reset(buffer, (short) 0, bufferLength);
             while (reader.hasNext()) {
                 reader.next();
                 applet.applyPersoDgi(reader.dgi(), buffer,

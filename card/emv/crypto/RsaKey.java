@@ -33,7 +33,17 @@ public final class RsaKey {
     private static final short KEY_TAG_N = (short) 0x86;
     private static final short KEY_TAG_D = (short) 0x87;
 
+    /** Reused cursor: RsaKey.parse is never reentrant, so one static instance is enough. */
+    private static TlvReader reusedCursor;
+
     private RsaKey() {
+    }
+
+    private static TlvReader cursor() {
+        if (reusedCursor == null) {
+            reusedCursor = new TlvReader();
+        }
+        return reusedCursor;
     }
 
     /**
@@ -63,7 +73,7 @@ public final class RsaKey {
         short dOff = 0;
         short dLen = 0;
 
-        TlvReader reader = new TlvReader(buf, off, len);
+        TlvReader reader = cursor().reset(buf, off, len);
         while (reader.hasNext()) {
             reader.next();
             short tag = reader.tag();

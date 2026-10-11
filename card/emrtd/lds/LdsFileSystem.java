@@ -26,6 +26,14 @@ public final class LdsFileSystem {
     private final LdsFile[] files;
 
     /**
+     * SFI (0-31) to {@code files} index plus one, or 0 when the SFI is not an
+     * LDS1 file.  Built once from the file table so the short-EF-identifier
+     * READ BINARY hot path (the mandatory eMRTD form) is an O(1) lookup instead
+     * of a linear scan of all 19 files (docs/specs/common/risks.md §2).
+     */
+    private final short[] bySfi;
+
+    /**
      * Index of the current EF plus one (0 = no current EF).  RAM (transient
      * CLEAR_ON_DESELECT) so a READ BINARY that switches EF does not write
      * EEPROM; the platform clears it when the applet context is deselected, so
@@ -55,6 +63,10 @@ public final class LdsFileSystem {
                 new LdsFile(EmrtdTags.FID_SOD),
                 new LdsFile(EmrtdTags.FID_COM),
         };
+        bySfi = new short[32];
+        for (short i = 0; i < files.length; i++) {
+            bySfi[(short) (files[i].getFid() & EmrtdTags.SFI_MASK)] = (short) (i + 1);
+        }
         selection = TransientBuffers.makeShortArray((short) 1);
     }
 
@@ -102,12 +114,8 @@ public final class LdsFileSystem {
      * low 5 bits of the FID.  Used by the short-EF-identifier READ BINARY form.
      */
     public LdsFile getBySfi(short sfi) {
-        for (short i = 0; i < files.length; i++) {
-            if ((short) (files[i].getFid() & EmrtdTags.SFI_MASK) == sfi) {
-                return files[i];
-            }
-        }
-        return null;
+        short v = sfiLookup(sfi);
+        return v == 0 ? null : files[(short) (v - 1)];
     }
 
     /**
@@ -116,12 +124,19 @@ public final class LdsFileSystem {
      * as current).  Returns the EF, or null when the SFI is unknown.
      */
     public LdsFile selectBySfi(short sfi) {
-        for (short i = 0; i < files.length; i++) {
-            if ((short) (files[i].getFid() & EmrtdTags.SFI_MASK) == sfi) {
-                selection[0] = (short) (i + 1);
-                return files[i];
-            }
+        short v = sfiLookup(sfi);
+        if (v == 0) {
+            return null;
         }
-        return null;
+        selection[0] = v;
+        return files[(short) (v - 1)];
+    }
+
+    /** The SFI table entry (files index plus one), or 0 for an out-of-range SFI. */
+    private short sfiLookup(short sfi) {
+        if ((sfi & ~EmrtdTags.SFI_MASK) != 0) {
+            return 0;
+        }
+        return bySfi[sfi];
     }
 }

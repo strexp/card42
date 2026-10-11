@@ -15,7 +15,39 @@ import javacard.framework.ISOException;
 
 public final class PersoRules implements ISO7816 {
 
+    /*
+     * Reused cursors: one for a single-level walk, one for the inner walk of a
+     * nested validation (validatePseEntry inside validatePseRecord,
+     * validatePpseEntries inside validatePpseTemplate).  PersoRules is static
+     * and single-threaded (one command at a time), so two package-level
+     * instances replace a per-call {@code new} that would grow the persistent
+     * heap during personalization (docs/specs/common/risks.md §2).  Every
+     * method completes its own walk before calling another PersoRules walk that
+     * would reuse the same slot.
+     *
+     * The cursors are created lazily rather than in a static initializer: the
+     * Java Card converter rejects a {@code new} in {@code <clinit>}.  The first
+     * personalization walk allocates each one once; no per-DGI/per-record
+     * allocation remains.
+     */
+    private static TlvReader outerReader;
+    private static TlvReader innerReader;
+
     private PersoRules() {
+    }
+
+    private static TlvReader outer() {
+        if (outerReader == null) {
+            outerReader = new TlvReader();
+        }
+        return outerReader;
+    }
+
+    private static TlvReader inner() {
+        if (innerReader == null) {
+            innerReader = new TlvReader();
+        }
+        return innerReader;
     }
 
     /**
@@ -80,7 +112,7 @@ public final class PersoRules implements ISO7816 {
         if (valueLength < 0 || (short) (valueOffset + valueLength) > (short) (off + len)) {
             return false; // the A5 value runs past the container
         }
-        TlvReader reader = new TlvReader(buf, valueOffset, valueLength);
+        TlvReader reader = outer().reset(buf, valueOffset, valueLength);
         boolean found = false;
         while (reader.hasNext()) {
             reader.next();
@@ -112,7 +144,7 @@ public final class PersoRules implements ISO7816 {
         short lengthField = Tlv.lengthFieldLength(buf, lenOffset);
         short valueOffset = (short) (lenOffset + lengthField);
         short valueLength = Tlv.getLength(buf, lenOffset);
-        TlvReader reader = new TlvReader(buf, valueOffset, valueLength);
+        TlvReader reader = outer().reset(buf, valueOffset, valueLength);
         while (reader.hasNext()) {
             reader.next();
             if (reader.tag() == TlvTags.TAG_SFI) {
@@ -136,7 +168,7 @@ public final class PersoRules implements ISO7816 {
         short lengthField = Tlv.lengthFieldLength(buf, lenOffset);
         short valueOffset = (short) (lenOffset + lengthField);
         short valueLength = Tlv.getLength(buf, lenOffset);
-        TlvReader reader = new TlvReader(buf, valueOffset, valueLength);
+        TlvReader reader = outer().reset(buf, valueOffset, valueLength);
         while (reader.hasNext()) {
             reader.next();
             if (reader.tag() == TlvTags.TAG_SFI) {
@@ -163,7 +195,7 @@ public final class PersoRules implements ISO7816 {
         short valueOffset = (short) (lenOffset + lengthField);
         short valueLength = Tlv.getLength(buf, lenOffset);
         boolean anyEntry = false;
-        TlvReader reader = new TlvReader(buf, valueOffset, valueLength);
+        TlvReader reader = outer().reset(buf, valueOffset, valueLength);
         while (reader.hasNext()) {
             reader.next();
             if (reader.tag() != TlvTags.TAG_DIRECTORY_ENTRY) {
@@ -197,7 +229,7 @@ public final class PersoRules implements ISO7816 {
     private static void validatePseEntry(byte[] buf, short off, short len) {
         boolean hasAdf = false;
         boolean hasLabel = false;
-        TlvReader entry = new TlvReader(buf, off, len);
+        TlvReader entry = inner().reset(buf, off, len);
         while (entry.hasNext()) {
             entry.next();
             short tag = entry.tag();
@@ -270,21 +302,28 @@ public final class PersoRules implements ISO7816 {
         short lengthField = Tlv.lengthFieldLength(buf, lenOffset);
         short valueOffset = (short) (lenOffset + lengthField);
         short valueLength = Tlv.getLength(buf, lenOffset);
-        TlvReader reader = new TlvReader(buf, valueOffset, valueLength);
+        // Find BF0C and release the cursor before the nested entry walk reuses it.
+        short bf0cOff = -1;
+        short bf0cLen = 0;
+        TlvReader reader = outer().reset(buf, valueOffset, valueLength);
         while (reader.hasNext()) {
             reader.next();
             if (reader.tag() == TlvTags.TAG_FCI_ISSUER_DISCRETIONARY) {
-                validatePpseEntries(buf, reader.valueOffset(), reader.valueLength());
-                return;
+                bf0cOff = reader.valueOffset();
+                bf0cLen = reader.valueLength();
+                break;
             }
         }
-        ISOException.throwIt(SW_WRONG_DATA); // BF0C missing (unreachable)
+        if (bf0cOff < 0) {
+            ISOException.throwIt(SW_WRONG_DATA); // BF0C missing
+        }
+        validatePpseEntries(buf, bf0cOff, bf0cLen);
     }
 
     /** Validates the Directory Entries inside the PPSE 'BF0C' value. */
     private static void validatePpseEntries(byte[] buf, short off, short len) {
         boolean anyEntry = false;
-        TlvReader reader = new TlvReader(buf, off, len);
+        TlvReader reader = outer().reset(buf, off, len);
         while (reader.hasNext()) {
             reader.next();
             if (reader.tag() != TlvTags.TAG_DIRECTORY_ENTRY) {
@@ -293,7 +332,7 @@ public final class PersoRules implements ISO7816 {
             anyEntry = true;
             short adfLength = -1;
             short extendedLength = 0;
-            TlvReader entry = new TlvReader(buf, reader.valueOffset(), reader.valueLength());
+            TlvReader entry = inner().reset(buf, reader.valueOffset(), reader.valueLength());
             while (entry.hasNext()) {
                 entry.next();
                 short tag = entry.tag();

@@ -37,7 +37,7 @@ public final class Iso7816SmAes extends AbstractSecureMessaging {
                 SmScratch.macBuffer(), SmScratch.loadedEncAes());
         aesCbc = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_CBC_NOPAD, false);
         aesEcb = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, false);
-        aesMac = new AesCmac();
+        aesMac = MacEngines.aesCmac();
         ssc16 = SmScratch.ssc16();
         iv = SmScratch.iv();
     }

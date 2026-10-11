@@ -106,8 +106,8 @@ public final class Pace implements PaceSeedSink {
 
     public Pace() {
         kdf = new Sha1Kdf();
-        mac = new RetailMac();
-        aesMac = new AesCmac();
+        mac = MacEngines.retailMac();
+        aesMac = MacEngines.aesCmac();
         des3 = Cipher.getInstance(Cipher.ALG_DES_CBC_NOPAD, false);
         desKey = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES,
                 KeyBuilder.LENGTH_DES3_2KEY, false);

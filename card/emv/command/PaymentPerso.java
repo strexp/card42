@@ -48,6 +48,9 @@ public class PaymentPerso implements ISO7816 {
     private short pinExponentLength;
     private final byte[] keyContainer = new byte[(short) 530];
 
+    /** Reused TLV cursor for the personalization walks, so no per-DGI object is allocated. */
+    private final TlvReader tlvReader = new TlvReader();
+
     public PaymentPerso(EMVStaticData staticData, EMVProtocolState protocolState,
             OfflineRisk offlineRisk, TransactionLog transactionLog, OfflinePinState pin,
             EMVCrypto theCrypto, SecureMessaging secureMessaging,
@@ -209,7 +212,7 @@ public class PaymentPerso implements ISO7816 {
         // later DGI '3001' does not overwrite it with the default when it
         // (re)applies the log format (EMV CPS v2.0 Annex A Table A-17).
         staticData.applyPaymentConfig(buf, off, len);
-        TlvReader reader = new TlvReader(buf, off, len);
+        TlvReader reader = tlvReader.reset(buf, off, len);
         while (reader.hasNext()) {
             reader.next();
             if (reader.tag() == TlvTags.TAG_ATC) {
@@ -257,7 +260,7 @@ public class PaymentPerso implements ISO7816 {
             // (docs/specs/emv/personalization.md §3).
             ISOException.throwIt(SW_WRONG_DATA);
         }
-        TlvReader reader = new TlvReader(buf, off, len);
+        TlvReader reader = tlvReader.reset(buf, off, len);
         byte cv = CryptoProfile.CV5;
         short keyLength = (short) 16;
         while (reader.hasNext()) {

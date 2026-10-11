@@ -114,6 +114,9 @@ public class PaymentData implements ISO7816 {
     /** Reused DOL cursor, so the transaction path allocates nothing (EMV v4.4 Book 3 §5.4). */
     private final DolReader dolReader = new DolReader();
 
+    /** Reused TLV cursor for the personalization walks, so no per-DGI object is allocated. */
+    private final TlvReader tlvReader = new TlvReader();
+
     public PaymentData() {
         // A 32-byte Format Code 'A' IAD template with a zero CVR (EMV v4.4 Book 3 Annex C §C9).
         Util.arrayCopyNonAtomic(Defaults.IAD, (short) 0, iad, (short) 0, Iad.LENGTH);
@@ -123,7 +126,7 @@ public class PaymentData implements ISO7816 {
 
     /** Applies the structured tags of the EMV CPS v2.0 Annex A DGIs '3001'/'9104' or record 1. */
     public void applyPaymentConfig(byte[] buf, short off, short len) {
-        TlvReader reader = new TlvReader(buf, off, len);
+        TlvReader reader = tlvReader.reset(buf, off, len);
         while (reader.hasNext()) {
             reader.next();
             short tag = reader.tag();
@@ -275,7 +278,7 @@ public class PaymentData implements ISO7816 {
             short valueLen = Tlv.getLength(buf, Tlv.lengthOffset(buf, off));
             if (valueOff >= 0 && valueLen > 0
                     && (short) (valueOff + valueLen) <= (short) (off + len)) {
-                TlvReader reader = new TlvReader(buf, valueOff, valueLen);
+                TlvReader reader = tlvReader.reset(buf, valueOff, valueLen);
                 while (reader.hasNext()) {
                     reader.next();
                     if (reader.tag() == TlvTags.TAG_PDOL) {

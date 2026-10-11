@@ -38,14 +38,24 @@ import card42.common.TransientBuffers;
 final class SmScratch {
 
     /**
-     * Largest area used by a wrapper: the encryption input starts at offset 512
-     * and holds the response plus M2 padding (512 + 272 = 784 for a 256-byte
-     * response), and the MAC input starts at 0 and holds SSC + the wrapped
-     * response + status object (< 320).  800 covers both.
+     * The wrapping scratch is used in two phases that never overlap, so one
+     * region serves both (docs/specs/common/risks.md §2):
+     *
+     *   - MAC input: SSC (16) + the largest DO'87'/DO'85' (the extended-command
+     *     envelope, up to the 320-byte {@code EmrtdScratch.raw} including its
+     *     4 header bytes) + DO'99' (4), M2-padded to a 16-byte boundary = 352;
+     *   - encryption input: the plaintext response plus M2 padding (272 for a
+     *     256-byte AA signature).
+     *
+     * The ciphertext is written straight to the caller's output buffer, so the
+     * two phases share offset 0 and no second staging region is needed.  352
+     * replaces the earlier 800-byte buffer (which held the encryption input at
+     * offset 512 while also reserving ~320 for the MAC input) and returns about
+     * 448 bytes to the exhausted eMRTD transient context (TODO.emrtd.md §A3).
      */
-    private static final short SIZE = (short) 800;
+    private static final short SIZE = (short) 352;
 
-    /** The 800-byte framing scratch handed out by {@link #get()}. */
+    /** The framing scratch handed out by {@link #get()} (see {@link #SIZE}). */
     private static byte[] buffer;
 
     /** Reused MAC output: 8 bytes for the retail MAC, 16 for AES-CMAC. */
@@ -86,7 +96,7 @@ final class SmScratch {
         }
     }
 
-    /** The shared 800-byte framing scratch array, allocated on first use. */
+    /** The shared framing scratch array, allocated on first use. */
     static byte[] get() {
         byte[] b = buffer;
         if (b == null) {

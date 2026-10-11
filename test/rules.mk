@@ -215,6 +215,7 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_EMRTD_DIR)/access/SecureMessaging.java \
                  $(CARD_EMRTD_DIR)/access/AbstractSecureMessaging.java \
                  $(CARD_EMRTD_DIR)/access/SmScratch.java \
+                 $(CARD_EMRTD_DIR)/access/MacEngines.java \
                  $(CARD_EMRTD_DIR)/crypto/AaCrypto.java \
                  $(CARD_EMRTD_DIR)/lds/LdsFile.java \
                  $(CARD_EMRTD_DIR)/lds/LdsFileSystem.java \

@@ -33,7 +33,7 @@ public final class Iso7816Sm extends AbstractSecureMessaging {
                 KeyBuilder.LENGTH_DES3_2KEY, false), (short) 8,
                 SmScratch.macBuffer(), SmScratch.loadedEnc3des());
         des3 = Cipher.getInstance(Cipher.ALG_DES_CBC_NOPAD, false);
-        retailMac = new RetailMac();
+        retailMac = MacEngines.retailMac();
     }
 
     protected short blockSize() {

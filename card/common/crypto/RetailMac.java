@@ -239,6 +239,11 @@ public class RetailMac implements MacAlgorithm {
      * is safe at a session boundary.
      */
     public void zeroize() {
+        if (!keyLoaded) {
+            // The key schedule was never loaded (or was already cleared), so
+            // the fills below would rewrite zeros; skip the EEPROM write cycles.
+            return;
+        }
         if (cbcKey.isInitialized()) {
             cbcKey.clearKey();
         }

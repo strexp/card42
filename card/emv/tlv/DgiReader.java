@@ -13,23 +13,38 @@ import javacard.framework.ISOException;
  * 2 bytes) and only the value itself uses BER-TLV.  The cursor is a thin
  * wrapper over DGI/Tlv.
  *
+ * The cursor is reusable ({@link #reset}) so PersoHandler holds one instance
+ * instead of allocating a fresh one per personalization (Java Card {@code new}
+ * is persistent heap, docs/specs/common/risks.md §2).
+ *
  * @author card42
  */
 
 public final class DgiReader implements ISO7816 {
 
-    private final byte[] buf;
-    private final short end;
+    private byte[] buf;
+    private short end;
     private short pos;
 
     private short dgi;
     private short valueOffset;
     private short valueLength;
 
+    /** An unbound cursor; call {@link #reset} before the first walk. */
+    public DgiReader() {
+        reset(null, (short) 0, (short) 0);
+    }
+
     public DgiReader(byte[] buf, short off, short len) {
+        reset(buf, off, len);
+    }
+
+    /** Rebinds the cursor to buf[off..off+len) and returns this instance. */
+    public DgiReader reset(byte[] buf, short off, short len) {
         this.buf = buf;
         this.pos = off;
         this.end = (short) (off + len);
+        return this;
     }
 
     /** True while another DGI container starts before the end of the range. */

@@ -130,6 +130,21 @@ final class CardCryptoVectorTest {
         Asserts.bytes(Arrays.copyOf(cmacOut, 16), Arrays.copyOf(cmacStreamed, n),
                 "AesCmac streaming equals one-shot");
 
+        // A message longer than the CBC staging chunk (256 B = 16 blocks) must
+        // chain across chunks: 336 B = 21 blocks -> 16 + 5.
+        byte[] msgLong = new byte[336];
+        for (short i = 0; i < (short) msgLong.length; i++) {
+            msgLong[i] = (byte) (i * 7 + 3);
+        }
+        n = cmac.mac(cmacKey, (short) 0, (short) 16, msgLong, (short) 0,
+                (short) msgLong.length, cmacOut, (short) 0);
+        Asserts.bytes(cmacJce(cmacKey, msgLong), Arrays.copyOf(cmacOut, n),
+                "AesCmac chunked CBC (>256 B) agrees with JCE CMAC");
+        n = cmac.macAligned(cmacKey, (short) 0, (short) 16, msgLong, (short) 0,
+                (short) msgLong.length, cmacOut, (short) 0);
+        Asserts.bytes(cmacJce(cmacKey, msgLong), Arrays.copyOf(cmacOut, n),
+                "AesCmac.macAligned chunked CBC (>256 B) agrees with JCE CMAC");
+
         // macAligned adds no padding to a block-aligned message.
         byte[] cmacAligned = Hex.parse("00112233445566778899AABBCCDDEEFF");
         n = cmac.macAligned(cmacKey, (short) 0, (short) 16, cmacAligned, (short) 0,
