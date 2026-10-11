@@ -6,6 +6,7 @@ import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.transport.Terminal;
+import card42.host.common.util.Sw;
 import card42.host.emrtd.access.SecureMessaging;
 
 /**
@@ -101,7 +102,7 @@ public final class EmrtdTerminal {
         ResponseAPDU r = transmit(0x00, 0x84, 0x00, 0x00, null, 8);
         if (r.getSW() != 0x9000 || r.getData().length != 8) {
             throw new IllegalStateException("GET CHALLENGE failed: "
-                    + Integer.toHexString(r.getSW()));
+                    + Sw.format(r.getSW()));
         }
         return r.getData();
     }
@@ -139,7 +140,7 @@ public final class EmrtdTerminal {
             plain = sm.unwrapResponse(raw.getData(), sw);
         } catch (RuntimeException e) {
             throw new IllegalStateException("SM unwrap failed (SW="
-                    + Integer.toHexString(raw.getSW()) + ", data="
+                    + Sw.format(raw.getSW()) + ", data="
                     + card42.host.common.util.Hex.format(raw.getData()) + ")", e);
         }
         byte[] out = Arrays.copyOf(plain, plain.length + 2);

@@ -10,6 +10,7 @@ import card42.host.emv.lib.IssuerKey;
 import card42.host.emv.lib.Terminal;
 import card42.host.common.util.Bytes;
 import card42.host.common.util.Digests;
+import card42.host.common.util.Sw;
 import card42.host.common.codec.Tags;
 
 /**
@@ -123,7 +124,7 @@ public final class SdaVerifier {
                     // return 9000 terminates the transaction; do not skip it
                     // (docs/specs/common/toolchain.md §6).
                     return new Result(false, "SDA READ RECORD SFI " + sfi + " rec " + record
-                            + " -> " + sw(rr.getSW()), null);
+                            + " -> " + Sw.format(rr.getSW()), null);
                 }
                 byte[] data = rr.getData();
                 if (oda > 0) {
@@ -310,7 +311,7 @@ public final class SdaVerifier {
         ResponseAPDU rec = terminal.readRecord(record, 1);
         if (rec.getSW() != 0x9000) {
             return new Result(false,
-                    "READ RECORD " + recordLabel + " certificate -> " + sw(rec.getSW()), null);
+                    "READ RECORD " + recordLabel + " certificate -> " + Sw.format(rec.getSW()), null);
         }
         byte[] cert = Tags.find(rec.getData(), certTag);
         byte[] remainder = Tags.find(rec.getData(), remainderTag);
@@ -466,9 +467,5 @@ public final class SdaVerifier {
         }
         int v = b[idx] & 0xFF;
         return (nibble & 1) == 0 ? (v >> 4) & 0x0F : v & 0x0F;
-    }
-
-    private static String sw(int sw) {
-        return String.format("%04X", sw & 0xFFFF);
     }
 }

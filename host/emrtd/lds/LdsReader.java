@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 
 import javax.smartcardio.ResponseAPDU;
 
+import card42.host.common.util.Sw;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**
@@ -27,8 +28,8 @@ public final class LdsReader {
             throws Exception {
         ResponseAPDU r = terminal.readRecord(sfi, number, false, CHUNK);
         if (r.getSW() != 0x9000) {
-            throw new IllegalStateException("READ RECORD " + Integer.toHexString(sfi)
-                    + "/" + number + " failed: " + Integer.toHexString(r.getSW()));
+            throw new IllegalStateException("READ RECORD " + String.format("%02X", sfi)
+                    + "/" + number + " failed: " + Sw.format(r.getSW()));
         }
         return r.getData();
     }
@@ -47,7 +48,7 @@ public final class LdsReader {
             }
             if (r.getSW() != 0x9000) {
                 throw new IllegalStateException("READ RECORD " + number + " failed: "
-                        + Integer.toHexString(r.getSW()));
+                        + Sw.format(r.getSW()));
             }
             out.add(r.getData());
         }
@@ -58,8 +59,8 @@ public final class LdsReader {
     public static byte[] read(EmrtdTerminal terminal, int fid) throws Exception {
         ResponseAPDU selected = terminal.selectFile(fid);
         if (selected.getSW() != 0x9000) {
-            throw new IllegalStateException("SELECT FILE " + Integer.toHexString(fid)
-                    + " failed: " + Integer.toHexString(selected.getSW()));
+            throw new IllegalStateException("SELECT FILE " + String.format("%04X", fid)
+                    + " failed: " + Sw.format(selected.getSW()));
         }
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         int offset = 0;
@@ -78,7 +79,7 @@ public final class LdsReader {
             }
             if (sw != 0x9000) {
                 throw new IllegalStateException("READ BINARY failed: "
-                        + Integer.toHexString(sw));
+                        + Sw.format(sw));
             }
             byte[] data = r.getData();
             if (data.length == 0) {

@@ -112,67 +112,42 @@ public final class TlvDump {
     }
 
     private static void append(StringBuilder out, byte[] buf, int off, int len, int depth) {
-        int p = off;
-        int end = off + len;
-        while (p < end) {
-            for (int i = 0; i < depth; i++) {
-                out.append("  ");
-            }
-            int start = p;
-            int b = buf[p] & 0xFF;
-            int tag;
-            if ((b & 0x1F) == 0x1F) {
-                if (p + 1 >= end) {
-                    out.append("<truncated tag>\n");
-                    return;
-                }
-                tag = (b << 8) | (buf[p + 1] & 0xFF);
-                p += 2;
-            } else {
-                tag = b;
-                p += 1;
-            }
+        TlvCursor cursor = new TlvCursor(buf, off, len);
+        TlvCursor.Status status;
+        while ((status = cursor.next()) == TlvCursor.Status.OK) {
+            indent(out, depth);
+            int tag = cursor.tag();
             out.append(String.format("%0" + ((tag > 0xFF) ? 4 : 2) + "X", tag));
-            int lb = p < end ? buf[p] & 0xFF : -1;
-            if (lb < 0) {
-                out.append(" <truncated length>\n");
-                return;
-            }
-            p++;
-            int vLen;
-            if ((lb & 0x80) == 0) {
-                vLen = lb;
-            } else {
-                int n = lb & 0x7F;
-                if (n == 0 || p + n > end) {
-                    out.append(" <truncated length>\n");
-                    return;
-                }
-                vLen = 0;
-                for (int i = 0; i < n; i++) {
-                    vLen = (vLen << 8) | (buf[p++] & 0xFF);
-                }
-            }
-            if (p + vLen > end) {
-                out.append(" <truncated value>\n");
-                return;
-            }
+            out.append(' ').append(String.format("%02X", cursor.valueLength()));
             String name = tagName(tag);
-            out.append(' ').append(String.format("%02X", vLen));
             if (name != null) {
                 out.append(" (").append(name).append(')');
             }
-            boolean constructed = (b & 0x20) != 0;
-            if (constructed && vLen > 0) {
+            if (cursor.constructed() && cursor.valueLength() > 0) {
                 out.append('\n');
-                append(out, buf, p, vLen, depth + 1);
+                append(out, buf, cursor.valueOffset(), cursor.valueLength(), depth + 1);
             } else {
-                out.append("  ").append(hex(buf, p, vLen)).append('\n');
+                out.append("  ").append(hex(buf, cursor.valueOffset(), cursor.valueLength()))
+                        .append('\n');
             }
-            p += vLen;
-            if (p <= start) {
-                return; // defensive: never loop on malformed input
-            }
+        }
+        if (status == TlvCursor.Status.END) {
+            return;
+        }
+        indent(out, depth);
+        if (status == TlvCursor.Status.TRUNCATED_TAG) {
+            out.append("<truncated tag>\n");
+            return;
+        }
+        int tag = cursor.tag();
+        out.append(String.format("%0" + ((tag > 0xFF) ? 4 : 2) + "X", tag));
+        out.append(status == TlvCursor.Status.TRUNCATED_LENGTH
+                ? " <truncated length>\n" : " <truncated value>\n");
+    }
+
+    private static void indent(StringBuilder out, int depth) {
+        for (int i = 0; i < depth; i++) {
+            out.append("  ");
         }
     }
 

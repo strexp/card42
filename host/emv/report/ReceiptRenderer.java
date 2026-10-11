@@ -55,33 +55,36 @@ public interface ReceiptRenderer {
     final class JsonRenderer implements ReceiptRenderer {
         @Override
         public String render(Receipt r) {
-            StringBuilder out = new StringBuilder();
-            out.append('{');
-            field(out, "approved", String.valueOf(r.approved));
-            field(out, "aid", r.aidHex == null ? null : Json.quote(r.aidHex));
-            field(out, "pan", r.panMasked == null ? null : Json.quote(r.panMasked));
-            field(out, "amount", String.valueOf(r.amountMinor()));
-            field(out, "currency", r.currency == null ? null : Json.quote(Hex.format(r.currency)));
-            field(out, "date", r.date == null ? null : Json.quote(Hex.format(r.date)));
-            field(out, "time", r.time == null ? null : Json.quote(Hex.format(r.time)));
-            field(out, "cvmResults", r.cvmResults == null ? null : Json.quote(r.cvmResults));
-            field(out, "arc", r.arc == null ? null : Json.quote(r.arc));
-            field(out, "terminalId", r.terminalId == null ? null : Json.quote(r.terminalId));
-            field(out, "merchantName",
-                    r.merchantName == null ? null : Json.quote(r.merchantName));
-            // Drop the trailing comma and close.
-            if (out.charAt(out.length() - 1) == ',') {
-                out.setLength(out.length() - 1);
+            Json.Obj out = new Json.Obj().put("approved", r.approved);
+            if (r.aidHex != null) {
+                out.put("aid", r.aidHex);
             }
-            out.append('}');
-            return out.toString();
-        }
-
-        private static void field(StringBuilder out, String name, String value) {
-            if (value == null) {
-                return;
+            if (r.panMasked != null) {
+                out.put("pan", r.panMasked);
             }
-            out.append(Json.quote(name)).append(':').append(value).append(',');
+            out.put("amount", r.amountMinor());
+            if (r.currency != null) {
+                out.put("currency", Hex.format(r.currency));
+            }
+            if (r.date != null) {
+                out.put("date", Hex.format(r.date));
+            }
+            if (r.time != null) {
+                out.put("time", Hex.format(r.time));
+            }
+            if (r.cvmResults != null) {
+                out.put("cvmResults", r.cvmResults);
+            }
+            if (r.arc != null) {
+                out.put("arc", r.arc);
+            }
+            if (r.terminalId != null) {
+                out.put("terminalId", r.terminalId);
+            }
+            if (r.merchantName != null) {
+                out.put("merchantName", r.merchantName);
+            }
+            return out.build();
         }
     }
 

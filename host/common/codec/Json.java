@@ -65,9 +65,86 @@ public final class Json {
         return sb.toString();
     }
 
+    /**
+     * A minimal ordered JSON object builder.  Fields are emitted in insertion
+     * order with a single separator, so a report cannot produce a dangling
+     * comma whatever subset of fields is present.
+     */
+    public static final class Obj {
+        private final StringBuilder sb = new StringBuilder("{");
+        private boolean empty = true;
+
+        public Obj put(String key, String value) {
+            sep();
+            sb.append(quote(key)).append(':').append(value == null ? "null" : quote(value));
+            return this;
+        }
+
+        public Obj put(String key, long value) {
+            sep();
+            sb.append(quote(key)).append(':').append(value);
+            return this;
+        }
+
+        public Obj put(String key, boolean value) {
+            sep();
+            sb.append(quote(key)).append(':').append(value);
+            return this;
+        }
+
+        /** Embeds an already-rendered JSON value (nested object, array or literal). */
+        public Obj raw(String key, String json) {
+            sep();
+            sb.append(quote(key)).append(':').append(json);
+            return this;
+        }
+
+        public String build() {
+            return sb.append('}').toString();
+        }
+
+        private void sep() {
+            if (empty) {
+                empty = false;
+            } else {
+                sb.append(',');
+            }
+        }
+    }
+
+    /** A minimal ordered JSON array builder. */
+    public static final class Arr {
+        private final StringBuilder sb = new StringBuilder("[");
+        private boolean empty = true;
+
+        public Arr add(String value) {
+            sep();
+            sb.append(value == null ? "null" : quote(value));
+            return this;
+        }
+
+        /** Appends an already-rendered JSON value. */
+        public Arr raw(String json) {
+            sep();
+            sb.append(json);
+            return this;
+        }
+
+        public String build() {
+            return sb.append(']').toString();
+        }
+
+        private void sep() {
+            if (empty) {
+                empty = false;
+            } else {
+                sb.append(',');
+            }
+        }
+    }
+
     /** The string value of a key, or null. */
-    public static String string(Map<String, Object> object, String key) {
-        Object value = object.get(key);
+    public static String string(Map<String, Object> object, String key) {        Object value = object.get(key);
         return value == null ? null : String.valueOf(value);
     }
 

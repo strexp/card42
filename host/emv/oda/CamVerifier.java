@@ -6,6 +6,7 @@ import java.util.Arrays;
 import card42.host.common.util.Bytes;
 import card42.host.common.util.Digests;
 import card42.host.common.codec.Tags;
+import card42.host.common.codec.TlvCursor;
 import card42.host.emv.lib.IssuerKey;
 
 /**
@@ -180,51 +181,12 @@ public final class CamVerifier {
         byte[] body = Tags.find(responseData, 0x77);
         byte[] buf = body != null ? body : responseData;
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        int p = 0;
-        while (p < buf.length) {
-            int start = p;
-            int b = buf[p] & 0xFF;
-            int tag;
-            int tagLen;
-            if ((b & 0x1F) == 0x1F) {
-                if (p + 2 > buf.length) {
-                    break;
-                }
-                tag = (b << 8) | (buf[p + 1] & 0xFF);
-                tagLen = 2;
-            } else {
-                tag = b;
-                tagLen = 1;
+        TlvCursor cursor = new TlvCursor(buf);
+        while (cursor.next() == TlvCursor.Status.OK) {
+            if (cursor.tag() != excludeTag) {
+                byte[] element = cursor.encoded();
+                out.write(element, 0, element.length);
             }
-            int lOff = p + tagLen;
-            if (lOff >= buf.length) {
-                break;
-            }
-            int lb = buf[lOff] & 0xFF;
-            int lLen;
-            int vLen;
-            if ((lb & 0x80) == 0) {
-                lLen = 1;
-                vLen = lb;
-            } else {
-                int n = lb & 0x7F;
-                if (n == 0 || lOff + 1 + n > buf.length) {
-                    break;
-                }
-                lLen = 1 + n;
-                vLen = 0;
-                for (int i = 0; i < n; i++) {
-                    vLen = (vLen << 8) | (buf[lOff + 1 + i] & 0xFF);
-                }
-            }
-            int end = lOff + lLen + vLen;
-            if (end > buf.length) {
-                break;
-            }
-            if (tag != excludeTag) {
-                out.write(buf, start, end - start);
-            }
-            p = end;
         }
         return out.toByteArray();
     }

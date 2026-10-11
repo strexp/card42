@@ -21,6 +21,7 @@ import card42.host.emv.lib.Terminal;
 import card42.host.common.transport.TerminalSession;
 import card42.host.common.util.Args;
 import card42.host.common.util.Hex;
+import card42.host.common.util.Sw;
 
 /**
  * The {@code card} command family (docs/specs/common/toolchain.md §7.1): card-side
@@ -268,20 +269,20 @@ public final class CardCommand {
                     pdol == null ? new byte[0] : pdol);
             ResponseAPDU gpo = terminal.gpo(pdolData);
             if (gpo.getSW() != 0x9000) {
-                throw new IllegalStateException("GPO -> " + sw(gpo.getSW()));
+                throw new IllegalStateException("GPO -> " + Sw.format(gpo.getSW()));
             }
         } else if (sel.getSW() != 0x6283) {
-            throw new IllegalStateException("SELECT " + aid + " -> " + sw(sel.getSW()));
+            throw new IllegalStateException("SELECT " + aid + " -> " + Sw.format(sel.getSW()));
         }
         ResponseAPDU record = terminal.readRecord(1, 1);
         if (record.getSW() != 0x9000) {
-            throw new IllegalStateException("READ RECORD 1 -> " + sw(record.getSW()));
+            throw new IllegalStateException("READ RECORD 1 -> " + Sw.format(record.getSW()));
         }
         byte[] cdol1 = Tags.find(record.getData(), 0x8C);
         int length = cdol1 == null ? 0 : AcCrypto.dolDataLength(cdol1);
         ResponseAPDU first = terminal.generateAc((byte) 0x80, length);
         if (first.getSW() != 0x9000) {
-            throw new IllegalStateException("first GENERATE AC -> " + sw(first.getSW()));
+            throw new IllegalStateException("first GENERATE AC -> " + Sw.format(first.getSW()));
         }
         byte[] arqc = Responses.parseAc(first).ac;
         if (arqc == null || arqc.length != 8) {
@@ -316,11 +317,7 @@ public final class CardCommand {
     private static void print(String name, ResponseAPDU r) {
         String data = r.getData() == null || r.getData().length == 0
                 ? "" : " " + Hex.format(r.getData());
-        System.out.println(name + ": SW=" + sw(r.getSW()) + data);
-    }
-
-    private static String sw(int sw) {
-        return String.format("%04X", sw & 0xFFFF);
+        System.out.println(name + ": SW=" + Sw.format(r.getSW()) + data);
     }
 
     private static boolean isHelp(String arg) {

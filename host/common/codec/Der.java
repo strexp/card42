@@ -31,18 +31,12 @@ public final class Der {
     }
 
     public static Tlv read(byte[] buf, int off) {
-        int tag = buf[off] & 0xFF;
-        int p = off + 1;
-        int len = buf[p] & 0xFF;
-        p++;
-        if ((len & 0x80) != 0) {
-            int n = len & 0x7F;
-            len = 0;
-            for (int i = 0; i < n; i++) {
-                len = (len << 8) | (buf[p++] & 0xFF);
-            }
+        TlvCursor cursor = new TlvCursor(buf, off, buf.length - off);
+        if (cursor.next() != TlvCursor.Status.OK) {
+            throw new IllegalArgumentException("truncated DER element at offset " + off);
         }
-        return new Tlv(tag, off, p, len, p + len);
+        return new Tlv(cursor.tag(), cursor.start(), cursor.valueOffset(),
+                cursor.valueLength(), cursor.end());
     }
 
     public static List<Tlv> children(byte[] buf, Tlv parent) {

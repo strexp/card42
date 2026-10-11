@@ -76,59 +76,66 @@ public final class TransactionReport {
     public static String json(TransactionResult r, TransactionRequest data,
                               String iface, String reader, long elapsedMillis) {
         byte[] label = displayName(r.fci());
-        StringBuilder out = new StringBuilder();
-        out.append('{');
-        field(out, "interface", Json.quote(iface)).append(',');
-        field(out, "reader", Json.quote(reader)).append(',');
-        field(out, "aid", Json.quote(nullToEmpty(r.aidHex()))).append(',');
-        field(out, "label", label == null ? "null" : Json.quote(ascii(label))).append(',');
-        field(out, "aip", "{\"hex\":" + Json.quote(String.format("%04X", r.aip()))
-                + ",\"sda\":" + ((r.aip() & 0x4000) != 0)
-                + ",\"dda\":" + ((r.aip() & 0x2000) != 0)
-                + ",\"cvm\":" + ((r.aip() & 0x1000) != 0)
-                + ",\"cda\":" + ((r.aip() & 0x0100) != 0)
-                + ",\"issuerAuth\":" + ((r.aip() & 0x0400) != 0)
-                + ",\"trm\":" + ((r.aip() & 0x0800) != 0) + "}").append(',');
-        field(out, "afl", Json.quote(nullToEmpty(hex(r.afl())))).append(',');
-        field(out, "pdol", Json.quote(nullToEmpty(hex(r.pdolData())))).append(',');
-        field(out, "oda", "{\"sdaPerformed\":" + r.sdaPerformed()
-                + ",\"sdaFailed\":" + r.sdaFailed()
-                + ",\"ddaPerformed\":" + r.ddaPerformed()
-                + ",\"ddaFailed\":" + r.ddaFailed()
-                + ",\"cdaPerformed\":" + r.cdaPerformed()
-                + ",\"cdaFailed\":" + r.cdaFailed() + "}").append(',');
-        field(out, "tvr", "{\"hex\":" + Json.quote(nullToEmpty(hex(r.tvr())))
-                + ",\"bits\":" + jsonStrings(tvrNames(r.tvr())) + "}").append(',');
-        field(out, "tsi", "{\"hex\":" + Json.quote(nullToEmpty(hex(r.tsi())))
-                + ",\"bits\":" + jsonStrings(tsiNames(r.tsi())) + "}").append(',');
-        field(out, "cvmResults", cvmJson(r.cvmResults())).append(',');
-        field(out, "requestedFirstAc", Json.quote(cidName(r.requestedFirstAc()))).append(',');
-        field(out, "firstAc", acJson(r.firstCid(), r.firstAc())).append(',');
-        field(out, "secondAc", r.secondAc() == null ? "null" : acJson(r.secondCid(), r.secondAc())).append(',');
-        field(out, "arc", Json.quote(nullToEmpty(hex(r.arc())))).append(',');
-        field(out, "wentOnline", String.valueOf(r.wentOnline())).append(',');
-        field(out, "issuerAuthPerformed", String.valueOf(r.issuerAuthPerformed())).append(',');
-        field(out, "issuerScriptResults", r.issuerScriptResults() == null
-                ? "null" : Json.quote(hex(r.issuerScriptResults()))).append(',');
-        field(out, "referralRequested", String.valueOf(r.referralRequested())).append(',');
-        field(out, "attendantForcedAcceptance", String.valueOf(r.attendantForcedAcceptance())).append(',');
-        field(out, "cardCaptureRequested", String.valueOf(r.cardCaptureRequested())).append(',');
-        field(out, "adviceRequired", String.valueOf(r.adviceRequired())).append(',');
-        field(out, "serviceNotAllowed", String.valueOf(r.serviceNotAllowed())).append(',');
-        field(out, "reversalRequired", String.valueOf(r.reversalRequired())).append(',');
-        field(out, "decision", Json.quote(decisionName(r.decision()))).append(',');
-        field(out, "approved", String.valueOf(
-                r.decision() == TransactionResult.Decision.APPROVE)).append(',');
-        field(out, "declined", String.valueOf(
-                r.decision() == TransactionResult.Decision.DECLINE)).append(',');
+        Json.Obj out = new Json.Obj()
+                .put("interface", iface)
+                .put("reader", reader)
+                .put("aid", nullToEmpty(r.aidHex()))
+                .raw("label", label == null ? "null" : Json.quote(ascii(label)))
+                .raw("aip", new Json.Obj()
+                        .put("hex", String.format("%04X", r.aip()))
+                        .put("sda", (r.aip() & 0x4000) != 0)
+                        .put("dda", (r.aip() & 0x2000) != 0)
+                        .put("cvm", (r.aip() & 0x1000) != 0)
+                        .put("cda", (r.aip() & 0x0100) != 0)
+                        .put("issuerAuth", (r.aip() & 0x0400) != 0)
+                        .put("trm", (r.aip() & 0x0800) != 0)
+                        .build())
+                .put("afl", nullToEmpty(hex(r.afl())))
+                .put("pdol", nullToEmpty(hex(r.pdolData())))
+                .raw("oda", new Json.Obj()
+                        .put("sdaPerformed", r.sdaPerformed())
+                        .put("sdaFailed", r.sdaFailed())
+                        .put("ddaPerformed", r.ddaPerformed())
+                        .put("ddaFailed", r.ddaFailed())
+                        .put("cdaPerformed", r.cdaPerformed())
+                        .put("cdaFailed", r.cdaFailed())
+                        .build())
+                .raw("tvr", new Json.Obj()
+                        .put("hex", nullToEmpty(hex(r.tvr())))
+                        .raw("bits", jsonStrings(tvrNames(r.tvr())))
+                        .build())
+                .raw("tsi", new Json.Obj()
+                        .put("hex", nullToEmpty(hex(r.tsi())))
+                        .raw("bits", jsonStrings(tsiNames(r.tsi())))
+                        .build())
+                .raw("cvmResults", cvmJson(r.cvmResults()))
+                .put("requestedFirstAc", cidName(r.requestedFirstAc()))
+                .raw("firstAc", acJson(r.firstCid(), r.firstAc()))
+                .raw("secondAc", r.secondAc() == null
+                        ? "null" : acJson(r.secondCid(), r.secondAc()))
+                .put("arc", nullToEmpty(hex(r.arc())))
+                .put("wentOnline", r.wentOnline())
+                .put("issuerAuthPerformed", r.issuerAuthPerformed())
+                .raw("issuerScriptResults", r.issuerScriptResults() == null
+                        ? "null" : Json.quote(hex(r.issuerScriptResults())))
+                .put("referralRequested", r.referralRequested())
+                .put("attendantForcedAcceptance", r.attendantForcedAcceptance())
+                .put("cardCaptureRequested", r.cardCaptureRequested())
+                .put("adviceRequired", r.adviceRequired())
+                .put("serviceNotAllowed", r.serviceNotAllowed())
+                .put("reversalRequired", r.reversalRequired())
+                .put("decision", decisionName(r.decision()))
+                .put("approved", r.decision() == TransactionResult.Decision.APPROVE)
+                .put("declined", r.decision() == TransactionResult.Decision.DECLINE);
         if (r.outcome() != null) {
-            field(out, "outcome", "{\"final\":\"" + outcomeName(r.outcome().finalOutcome)
-                    + "\",\"start\":" + r.outcome().start
-                    + ",\"restart\":" + r.outcome().restart + "}").append(',');
+            out.raw("outcome", new Json.Obj()
+                    .put("final", outcomeName(r.outcome().finalOutcome))
+                    .put("start", r.outcome().start)
+                    .put("restart", r.outcome().restart)
+                    .build());
         }
-        field(out, "elapsedMillis", String.valueOf(elapsedMillis));
-        out.append('}');
-        return out.toString();
+        out.put("elapsedMillis", elapsedMillis);
+        return out.build();
     }
 
     // --- Decoders ------------------------------------------------------------
@@ -332,10 +339,6 @@ public final class TransactionReport {
         if (set) {
             names.add(name);
         }
-    }
-
-    private static StringBuilder field(StringBuilder out, String key, String value) {
-        return out.append(Json.quote(key)).append(':').append(value);
     }
 
     private static void line(StringBuilder out, String key, String value) {

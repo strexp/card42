@@ -15,6 +15,7 @@ import card42.host.common.util.Bcd;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.lib.Terminal;
 import card42.host.common.util.Hex;
+import card42.host.common.util.Sw;
 
 /**
  * Contactless Entry Point: SELECT the PPSE, optionally send SEND POI INFORMATION
@@ -74,7 +75,7 @@ public final class PpseSelection implements Selection {
         if (ppse.getSW() != 0x9000) {
             // Book B §3.3.2.3: a PPSE that cannot be selected adds no
             // Combinations and proceeds to Step 3 (End Application).
-            throw new EndApplicationException("SELECT PPSE -> " + sw(ppse.getSW())
+            throw new EndApplicationException("SELECT PPSE -> " + Sw.format(ppse.getSW())
                     + " (build with TEST_CONTACTLESS=1 to exercise the contactless flow)");
         }
         byte[] fci = ppse.getData();
@@ -86,7 +87,7 @@ public final class PpseSelection implements Selection {
             ResponseAPDU spi = Spi.send(terminal, fci, data, result, config);
             if (spi.getSW() != 0x9000 || spi.getData().length == 0) {
                 throw new EndApplicationException("SEND POI INFORMATION -> "
-                        + sw(spi.getSW()) + " (Book B §3.3.2.3b)");
+                        + Sw.format(spi.getSW()) + " (Book B §3.3.2.3b)");
             }
             fci = Spi.stripAdvertisement(spi.getData());
         }
@@ -253,9 +254,5 @@ public final class PpseSelection implements Selection {
     private EntryPointConfiguration configFor(EntryPoint.Candidate candidate) {
         EntryPointConfiguration cfg = table.configFor(candidate.combination);
         return cfg != null ? cfg : config;
-    }
-
-    private static String sw(int sw) {
-        return String.format("%04X", sw & 0xFFFF);
     }
 }

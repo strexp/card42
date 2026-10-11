@@ -1,7 +1,5 @@
 package card42.host.common.codec;
 
-import java.util.Arrays;
-
 /**
  * Host-side BER-TLV search over EMV response buffers.
  *
@@ -66,160 +64,40 @@ public final class Tags {
      */
     public static java.util.List<byte[]> findAllDirect(byte[] buf, int tag) {
         java.util.List<byte[]> out = new java.util.ArrayList<byte[]>();
-        int p = 0;
-        int end = buf.length;
-        while (p < end) {
-            int b = buf[p] & 0xFF;
-            int t;
-            int tagLen;
-            if ((b & 0x1F) == 0x1F) {
-                if (p + 2 > end) {
-                    return out; // truncated two-byte tag
-                }
-                t = (b << 8) | (buf[p + 1] & 0xFF);
-                tagLen = 2;
-            } else {
-                t = b;
-                tagLen = 1;
+        TlvCursor cursor = new TlvCursor(buf);
+        while (cursor.next() == TlvCursor.Status.OK) {
+            if (cursor.tag() == tag) {
+                out.add(cursor.value());
             }
-            int lOff = p + tagLen;
-            if (lOff >= end) {
-                return out; // tag without a length field
-            }
-            int lb = buf[lOff] & 0xFF;
-            int lLen;
-            int vLen;
-            if ((lb & 0x80) == 0) {
-                lLen = 1;
-                vLen = lb;
-            } else {
-                int n = lb & 0x7F;
-                if (n == 0 || lOff + 1 + n > end) {
-                    return out; // unsupported or truncated length field
-                }
-                lLen = 1 + n;
-                vLen = 0;
-                for (int i = 0; i < n; i++) {
-                    vLen = (vLen << 8) | (buf[lOff + 1 + i] & 0xFF);
-                }
-            }
-            int vOff = lOff + lLen;
-            if (vOff + vLen > end) {
-                return out; // value runs past the buffer
-            }
-            if (t == tag) {
-                out.add(Arrays.copyOfRange(buf, vOff, vOff + vLen));
-            }
-            p = vOff + vLen;
         }
         return out;
     }
 
     private static void collect(byte[] buf, int off, int len, int tag,
                                 java.util.List<byte[]> out) {
-        int p = off;
-        int end = off + len;
-        while (p < end) {
-            int b = buf[p] & 0xFF;
-            int t;
-            int tagLen;
-            if ((b & 0x1F) == 0x1F) {
-                if (p + 2 > end) {
-                    return; // truncated two-byte tag
-                }
-                t = (b << 8) | (buf[p + 1] & 0xFF);
-                tagLen = 2;
-            } else {
-                t = b;
-                tagLen = 1;
+        TlvCursor cursor = new TlvCursor(buf, off, len);
+        while (cursor.next() == TlvCursor.Status.OK) {
+            if (cursor.tag() == tag) {
+                out.add(cursor.value());
             }
-            int lOff = p + tagLen;
-            if (lOff >= end) {
-                return; // tag without a length field
+            if (cursor.constructed()) {
+                collect(buf, cursor.valueOffset(), cursor.valueLength(), tag, out);
             }
-            int lb = buf[lOff] & 0xFF;
-            int lLen;
-            int vLen;
-            if ((lb & 0x80) == 0) {
-                lLen = 1;
-                vLen = lb;
-            } else {
-                int n = lb & 0x7F;
-                if (n == 0 || lOff + 1 + n > end) {
-                    return; // unsupported or truncated length field
-                }
-                lLen = 1 + n;
-                vLen = 0;
-                for (int i = 0; i < n; i++) {
-                    vLen = (vLen << 8) | (buf[lOff + 1 + i] & 0xFF);
-                }
-            }
-            int vOff = lOff + lLen;
-            if (vOff + vLen > end) {
-                return; // value runs past the buffer
-            }
-            if (t == tag) {
-                out.add(Arrays.copyOfRange(buf, vOff, vOff + vLen));
-            }
-            if ((b & 0x20) != 0) { // constructed
-                collect(buf, vOff, vLen, tag, out);
-            }
-            p = vOff + vLen;
         }
     }
 
     private static byte[] findValue(byte[] buf, int off, int len, int tag) {
-        int p = off;
-        int end = off + len;
-        while (p < end) {
-            int b = buf[p] & 0xFF;
-            int t;
-            int tagLen;
-            if ((b & 0x1F) == 0x1F) {
-                if (p + 2 > end) {
-                    return null; // truncated two-byte tag
-                }
-                t = (b << 8) | (buf[p + 1] & 0xFF);
-                tagLen = 2;
-            } else {
-                t = b;
-                tagLen = 1;
+        TlvCursor cursor = new TlvCursor(buf, off, len);
+        while (cursor.next() == TlvCursor.Status.OK) {
+            if (cursor.tag() == tag) {
+                return cursor.value();
             }
-            int lOff = p + tagLen;
-            if (lOff >= end) {
-                return null; // tag without a length field
-            }
-            int lb = buf[lOff] & 0xFF;
-            int lLen;
-            int vLen;
-            if ((lb & 0x80) == 0) {
-                lLen = 1;
-                vLen = lb;
-            } else {
-                int n = lb & 0x7F;
-                if (n == 0 || lOff + 1 + n > end) {
-                    return null; // unsupported or truncated length field
-                }
-                lLen = 1 + n;
-                vLen = 0;
-                for (int i = 0; i < n; i++) {
-                    vLen = (vLen << 8) | (buf[lOff + 1 + i] & 0xFF);
-                }
-            }
-            int vOff = lOff + lLen;
-            if (vOff + vLen > end) {
-                return null; // value runs past the buffer
-            }
-            if (t == tag) {
-                return Arrays.copyOfRange(buf, vOff, vOff + vLen);
-            }
-            if ((b & 0x20) != 0) { // constructed
-                byte[] inner = find(buf, vOff, vLen, tag);
+            if (cursor.constructed()) {
+                byte[] inner = find(buf, cursor.valueOffset(), cursor.valueLength(), tag);
                 if (inner != null) {
                     return inner;
                 }
             }
-            p = vOff + vLen;
         }
         return null;
     }

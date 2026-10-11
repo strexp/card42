@@ -10,6 +10,7 @@ import javax.crypto.Cipher;
 import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.codec.DerWriter;
+import card42.host.common.util.Sw;
 import card42.host.emrtd.lds.Dg15;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
@@ -42,7 +43,7 @@ public final class ActiveAuthentication {
         ResponseAPDU r = terminal.internalAuthenticate(challenge);
         if (r.getSW() != 0x9000) {
             throw new IllegalStateException("INTERNAL AUTHENTICATE failed: "
-                    + Integer.toHexString(r.getSW()));
+                    + Sw.format(r.getSW()));
         }
         return verifySignature(dg15, challenge, r.getData());
     }

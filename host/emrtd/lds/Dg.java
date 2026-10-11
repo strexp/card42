@@ -35,7 +35,7 @@ public final class Dg {
         int expected = LdsFileUtil.dgTag(number);
         if (expected != 0 && bytes.length > 0 && (bytes[0] & 0xFF) != expected) {
             throw new IllegalArgumentException("DG" + number + " outer tag is not "
-                    + Integer.toHexString(expected));
+                    + String.format("%02X", expected));
         }
         return new Dg(number, bytes.length > 0 ? (bytes[0] & 0xFF) : expected, bytes);
     }

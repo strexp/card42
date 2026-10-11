@@ -149,16 +149,19 @@ public final class TerminalEntryPointCommand {
 
     private static String json(KernelActivation activation) {
         PreProcessingIndicators p = activation.indicators;
-        return "{\"adfName\":" + Json.quote(activation.adfName)
-                + ",\"aid\":" + Json.quote(activation.aid)
-                + ",\"kernelId\":" + activation.kernelId
-                + ",\"indicators\":{"
-                + "\"statusCheck\":" + p.statusCheckRequested
-                + ",\"appNotAllowed\":" + p.contactlessApplicationNotAllowed
-                + ",\"zeroAmount\":" + p.zeroAmount
-                + ",\"cvmLimitExceeded\":" + p.readerCvmRequiredLimitExceeded
-                + ",\"floorLimitExceeded\":" + p.readerContactlessFloorLimitExceeded + "}"
-                + ",\"ttq\":" + Json.quote(Hex.format(p.ttq)) + "}";
+        return new Json.Obj()
+                .put("adfName", activation.adfName)
+                .put("aid", activation.aid)
+                .put("kernelId", activation.kernelId)
+                .raw("indicators", new Json.Obj()
+                        .put("statusCheck", p.statusCheckRequested)
+                        .put("appNotAllowed", p.contactlessApplicationNotAllowed)
+                        .put("zeroAmount", p.zeroAmount)
+                        .put("cvmLimitExceeded", p.readerCvmRequiredLimitExceeded)
+                        .put("floorLimitExceeded", p.readerContactlessFloorLimitExceeded)
+                        .build())
+                .put("ttq", Hex.format(p.ttq))
+                .build();
     }
 
     public static void usage(PrintStream out) {

@@ -9,6 +9,7 @@ import java.security.interfaces.ECPublicKey;
 import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.crypto.P256;
+import card42.host.common.util.Sw;
 import card42.host.emrtd.lds.ChipAuthenticationInfo;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
@@ -56,7 +57,7 @@ public final class ChipAuth {
         ResponseAPDU r = terminal.transmit(0x00, 0x22, 0x41, 0xA6, data.toByteArray(), 0);
         if (r.getSW() != 0x9000) {
             throw new IllegalStateException("MSE:SET KAT failed: "
-                    + Integer.toHexString(r.getSW()));
+                    + Sw.format(r.getSW()));
         }
 
         P256.Point z = P256.scalarMult(ephemeral, P256.decode(chipPublicKeyW));

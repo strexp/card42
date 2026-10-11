@@ -1,9 +1,9 @@
 package card42.host.emrtd.report;
 
-import java.util.ArrayList;
 import java.util.List;
 
-import card42.host.common.codec.Tags;
+import card42.host.common.codec.Json;
+import card42.host.common.codec.TlvCursor;
 import card42.host.emrtd.lds.CardAccess;
 import card42.host.emrtd.lds.Com;
 import card42.host.emrtd.lds.Dg1;
@@ -67,41 +67,32 @@ public final class PassportReport {
      * has no successor).
      */
     public static String json(Dg1 dg1, Com com, Dg15 dg15, Dg2 dg2) {
-        List<String> fields = new ArrayList<String>();
+        Json.Obj out = new Json.Obj();
         if (dg1 != null) {
-            fields.add(field("documentNumber", dg1.documentNumber));
-            fields.add(field("surname", dg1.surname));
-            fields.add(field("givenNames", dg1.givenNames));
-            fields.add(field("nationality", dg1.nationality));
-            fields.add(field("issuingState", dg1.issuingState));
-            fields.add(field("dateOfBirth", dg1.dateOfBirth));
-            fields.add(field("sex", dg1.sex));
-            fields.add(field("dateOfExpiry", dg1.dateOfExpiry));
+            out.put("documentNumber", dg1.documentNumber)
+                    .put("surname", dg1.surname)
+                    .put("givenNames", dg1.givenNames)
+                    .put("nationality", dg1.nationality)
+                    .put("issuingState", dg1.issuingState)
+                    .put("dateOfBirth", dg1.dateOfBirth)
+                    .put("sex", dg1.sex)
+                    .put("dateOfExpiry", dg1.dateOfExpiry);
         }
         if (com != null) {
-            fields.add(field("ldsVersion", com.ldsVersion));
-            fields.add(field("unicodeVersion", com.unicodeVersion));
+            out.put("ldsVersion", com.ldsVersion)
+                    .put("unicodeVersion", com.unicodeVersion);
         }
         if (dg2 != null && dg2.image != null) {
-            fields.add(field("faceImageBytes", Integer.toString(dg2.image.length)));
+            out.put("faceImageBytes", dg2.image.length);
         }
         if (dg15 != null) {
             if (dg15.ecdsa) {
-                fields.add(field("aaKeyType", "ECDSA"));
+                out.put("aaKeyType", "ECDSA");
             } else {
-                fields.add(field("aaModulusBits", Integer.toString(dg15.modulus.bitLength())));
+                out.put("aaModulusBits", dg15.modulus.bitLength());
             }
         }
-        StringBuilder b = new StringBuilder("{\n");
-        for (int i = 0; i < fields.size(); i++) {
-            b.append("  ").append(fields.get(i));
-            if (i + 1 < fields.size()) {
-                b.append(',');
-            }
-            b.append('\n');
-        }
-        b.append("}\n");
-        return b.toString();
+        return out.build();
     }
 
     /**
@@ -134,105 +125,41 @@ public final class PassportReport {
 
     /** A minimal JSON object for an LDS2 read. */
     public static String lds2Json(CardAccess access, List<byte[]> records) {
-        StringBuilder b = new StringBuilder("{\n");
+        Json.Obj out = new Json.Obj();
         if (access != null) {
-            b.append("  \"securityInfos\": [\n");
-            for (int i = 0; i < access.securityInfos.size(); i++) {
-                SecurityInfo info = access.securityInfos.get(i);
-                b.append("    {\"type\": \"").append(info.typeName())
-                        .append("\", \"oid\": \"").append(info.oid).append("\"}");
-                b.append(i + 1 < access.securityInfos.size() ? ",\n" : "\n");
+            Json.Arr infos = new Json.Arr();
+            for (SecurityInfo info : access.securityInfos) {
+                infos.raw(new Json.Obj()
+                        .put("type", info.typeName())
+                        .put("oid", info.oid)
+                        .build());
             }
-            b.append("  ]");
-            if (records != null) {
-                b.append(',');
-            }
-            b.append('\n');
+            out.raw("securityInfos", infos.build());
         }
         if (records != null) {
-            b.append("  \"recordCount\": ").append(records.size()).append(",\n");
-            b.append("  \"records\": [\n");
-            for (int i = 0; i < records.size(); i++) {
-                b.append("    {\"length\": ").append(records.get(i).length)
-                        .append(", \"tags\": \"").append(outerTags(records.get(i))).append("\"}");
-                b.append(i + 1 < records.size() ? ",\n" : "\n");
+            out.put("recordCount", records.size());
+            Json.Arr recordArr = new Json.Arr();
+            for (byte[] record : records) {
+                recordArr.raw(new Json.Obj()
+                        .put("length", record.length)
+                        .put("tags", outerTags(record))
+                        .build());
             }
-            b.append("  ]\n");
+            out.raw("records", recordArr.build());
         }
-        b.append("}\n");
-        return b.toString();
+        return out.build();
     }
 
     private static String outerTags(byte[] record) {
         StringBuilder b = new StringBuilder();
-        int tag = record.length > 0 ? (record[0] & 0xFF) : 0;
-        b.append(String.format("%02X", tag));
-        byte[] inner = Tags.find(record, tag);
-        if (inner != null) {
-            int p = 0;
-            while (p < inner.length) {
-                int t = inner[p] & 0xFF;
-                int tagLen = ((t & 0x1F) == 0x1F) ? 2 : 1;
-                if (p + tagLen > inner.length) {
-                    break;
-                }
-                int full = tagLen == 2
-                        ? ((t << 8) | (inner[p + 1] & 0xFF)) : t;
-                b.append(' ').append(String.format("%02X", full));
-                int lOff = p + tagLen;
-                if (lOff >= inner.length) {
-                    break;
-                }
-                int lb = inner[lOff] & 0xFF;
-                int lLen = (lb & 0x80) == 0 ? 1 : 1 + (lb & 0x7F);
-                int vLen = (lb & 0x80) == 0 ? lb : 0;
-                if ((lb & 0x80) != 0) {
-                    for (int i = 0; i < (lb & 0x7F); i++) {
-                        vLen = (vLen << 8) | (inner[lOff + 1 + i] & 0xFF);
-                    }
-                }
-                p = lOff + lLen + vLen;
-            }
+        TlvCursor outer = new TlvCursor(record);
+        if (outer.next() != TlvCursor.Status.OK) {
+            return b.toString();
         }
-        return b.toString();
-    }
-
-    /** One {@code "name": "value"} pair with the value JSON-escaped. */
-    private static String field(String name, String value) {
-        return "\"" + name + "\": \"" + escape(value) + "\"";
-    }
-
-    /** Escapes the characters JSON requires to be escaped (RFC 8259 §7). */
-    private static String escape(String value) {
-        if (value == null) {
-            return "";
-        }
-        StringBuilder b = new StringBuilder(value.length());
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            switch (c) {
-            case '"':
-                b.append("\\\"");
-                break;
-            case '\\':
-                b.append("\\\\");
-                break;
-            case '\n':
-                b.append("\\n");
-                break;
-            case '\r':
-                b.append("\\r");
-                break;
-            case '\t':
-                b.append("\\t");
-                break;
-            default:
-                if (c < 0x20) {
-                    b.append(String.format("\\u%04x", (int) c));
-                } else {
-                    b.append(c);
-                }
-            }
+        b.append(String.format("%02X", outer.tag()));
+        TlvCursor inner = outer.child();
+        while (inner.next() == TlvCursor.Status.OK) {
+            b.append(' ').append(String.format("%02X", inner.tag()));
         }
         return b.toString();
     }

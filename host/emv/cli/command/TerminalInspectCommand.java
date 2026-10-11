@@ -329,18 +329,16 @@ public final class TerminalInspectCommand {
     // --- Rendering helpers ---------------------------------------------------
 
     private static String directoryJson(List<DirEntry> entries) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < entries.size(); i++) {
-            DirEntry entry = entries.get(i);
-            if (i > 0) {
-                sb.append(',');
-            }
-            sb.append("{\"aid\":").append(Json.quote(entry.aid))
-                    .append(",\"label\":").append(Json.quote(entry.label))
-                    .append(",\"priority\":").append(entry.priority)
-                    .append(",\"kernel\":").append(entry.kernel).append('}');
+        Json.Arr arr = new Json.Arr();
+        for (DirEntry entry : entries) {
+            arr.raw(new Json.Obj()
+                    .put("aid", entry.aid)
+                    .put("label", entry.label)
+                    .put("priority", entry.priority)
+                    .put("kernel", entry.kernel)
+                    .build());
         }
-        return sb.append(']').toString();
+        return arr.build();
     }
 
     private static String label(byte[] fci) {

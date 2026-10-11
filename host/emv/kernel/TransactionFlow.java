@@ -6,6 +6,7 @@ import java.util.Random;
 import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.codec.Responses;
+import card42.host.common.codec.EmvTags;
 import card42.host.emv.lib.TagPolicy;
 import card42.host.common.codec.Tags;
 import card42.host.emv.crypto.SmCrypto;
@@ -30,6 +31,7 @@ import card42.host.emv.kernel.script.IssuerScriptProcessor;
 import card42.host.emv.lib.Terminal;
 import card42.host.common.util.Hex;
 import card42.host.common.util.Reporter;
+import card42.host.common.util.Sw;
 
 /**
  * The media-neutral transaction flow shared by the contact and the contactless
@@ -139,7 +141,7 @@ final class TransactionFlow {
                 continue;
             }
             if (gpo.getSW() != 0x9000) {
-                throw new IllegalStateException("GPO -> " + sw(gpo.getSW()));
+                throw new IllegalStateException("GPO -> " + Sw.format(gpo.getSW()));
             }
             gpoData = gpo.getData();
             break;
@@ -206,15 +208,15 @@ final class TransactionFlow {
 
     /** Processing Restrictions (EMV v4.4 Book 3 §10.4): -&gt; TVR byte 2. */
     private void processingRestrictions(TransactionRequest data, TransactionResult result) {
-        byte[] cardVersion = result.firstValue(0x9F08);
-        byte[] expiry = result.firstValue(0x5F24);
-        byte[] effective = result.firstValue(0x5F25);
-        byte[] auc = result.firstValue(0x9F07);
+        byte[] cardVersion = result.firstValue(EmvTags.APPLICATION_VERSION_NUMBER_ICC);
+        byte[] expiry = result.firstValue(EmvTags.EXPIRY_DATE);
+        byte[] effective = result.firstValue(EmvTags.EFFECTIVE_DATE);
+        byte[] auc = result.firstValue(EmvTags.APPLICATION_USAGE_CONTROL);
         // Domestic when the Issuer Country Code ('5F28') matches the Terminal
         // Country Code ('9F1A') (EMV v4.4 Book 3 §10.4.2 Table 36).  The AUC
         // checks require both the AUC and the Issuer Country Code, so a card
         // without '5F28' is not geographically restricted (§10.4.2).
-        byte[] issuerCountry = result.firstValue(0x5F28);
+        byte[] issuerCountry = result.firstValue(EmvTags.ISSUER_COUNTRY_CODE);
         boolean domestic = issuerCountry != null
                 && Arrays.equals(issuerCountry, data.config.terminalCountryCode);
         ProcessingRestrictions.Result restrictions = ProcessingRestrictions.check(
@@ -237,14 +239,14 @@ final class TransactionFlow {
             CvmPerformer cvmPerformer) {
         long amount = Bcd.bcdToLong(data.amountAuthorised);
         long amountOther = Bcd.bcdToLong(data.amountOther);
-        byte[] applicationCurrency = result.firstValue(0x9F42);
+        byte[] applicationCurrency = result.firstValue(EmvTags.APPLICATION_CURRENCY_CODE);
         // Conditions 06-09 of EMV v4.4 Book 3 Table 44 require the transaction to be in
         // the application currency, i.e. Transaction Currency Code = Application
         // Currency Code ('5F2A' = '9F42').
         boolean transactionInApplicationCurrency = applicationCurrency != null
                 && Arrays.equals(applicationCurrency, data.transactionCurrencyCode);
         if ((result.aip() & 0x1000) != 0) {
-            byte[] cvmList = result.firstValue(0x8E);
+            byte[] cvmList = result.firstValue(EmvTags.CVM_LIST);
             if (cvmList == null) {
                 // AIP bit 5 says the ICC supports a CVM but the CVM List is
                 // absent: 'ICC data missing' (EMV v4.4 Book 3 §7.5 Table 35).
@@ -274,8 +276,8 @@ final class TransactionFlow {
             TransactionResult.Mutable result) throws Exception {
         // Exception file (EMV v4.4 Book 4 §6.3.5): a matching card sets the TVR
         // 'Card appears in exception file' bit regardless of the AIP.
-        byte[] pan = result.firstValue(0x5A);
-        byte[] panSequence = result.firstValue(0x5F34);
+        byte[] pan = result.firstValue(EmvTags.PAN);
+        byte[] panSequence = result.firstValue(EmvTags.PAN_SEQUENCE_NUMBER);
         if (data.config.inExceptionFile(pan, panSequence)) {
             Tvr.set(result.tvr(), 0, Tvr.CARD_ON_EXCEPTION_FILE);
             reporter.info("  kernel exception file: card matches");
@@ -289,12 +291,12 @@ final class TransactionFlow {
         // Velocity checking is performed only when both the Lower ('9F14') and
         // Upper ('9F23') Consecutive Offline Limits are present in the ICC
         // (EMV v4.4 Book 3 §10.6.3).
-        byte[] lowerLimit = result.firstValue(0x9F14);
-        byte[] upperLimit = result.firstValue(0x9F23);
+        byte[] lowerLimit = result.firstValue(EmvTags.LCOL);
+        byte[] upperLimit = result.firstValue(EmvTags.UCOL);
         if (lowerLimit != null && upperLimit != null
                 && lowerLimit.length >= 1 && upperLimit.length >= 1) {
-            int atc = getDataValue(terminal, 0x9F, 0x36, 0x9F36);
-            int lastOnlineAtc = getDataValue(terminal, 0x9F, 0x13, 0x9F13);
+            int atc = getDataValue(terminal, 0x9F, 0x36, EmvTags.ATC);
+            int lastOnlineAtc = getDataValue(terminal, 0x9F, 0x13, EmvTags.LAST_ONLINE_ATC);
             TerminalRiskManagement.velocityChecking(result.tvr(), atc >= 0, atc,
                     lastOnlineAtc >= 0, lastOnlineAtc,
                     lowerLimit[0] & 0xFF, upperLimit[0] & 0xFF);
@@ -307,13 +309,13 @@ final class TransactionFlow {
      * request in the first GENERATE AC.
      */
     private byte terminalActionAnalysis(TransactionRequest data, TransactionResult.Mutable result) {
-        byte[] iacDenial = result.firstValue(0x9F0E);
-        byte[] iacOnline = result.firstValue(0x9F0F);
+        byte[] iacDenial = result.firstValue(EmvTags.IAC_DENIAL);
+        byte[] iacOnline = result.firstValue(EmvTags.IAC_ONLINE);
         byte requestedFirstAc;
         if (data.config.isOfflineOnly()) {
             // An offline-only terminal uses the Denial pair then the Default
             // pair, skipping the Online pair (EMV v4.4 Book 3 §10.7 option 2).
-            byte[] iacDefault = result.firstValue(0x9F0D);
+            byte[] iacDefault = result.firstValue(EmvTags.IAC_DEFAULT);
             requestedFirstAc = TerminalActionAnalysis.firstAcOfflineOnly(
                     result.tvr(), data.config.tacDenial, iacDenial,
                     data.config.tacDefault, iacDefault);
@@ -343,7 +345,7 @@ final class TransactionFlow {
     private boolean firstGenerateAc(Terminal terminal, TransactionRequest data,
             TransactionResult.Mutable result, byte requestedFirstAc, boolean performCda)
             throws Exception {
-        byte[] cdol1 = result.firstValue(0x8C);
+        byte[] cdol1 = result.firstValue(EmvTags.CDOL1);
         if (cdol1 == null) {
             throw new IllegalStateException("record 1 has no CDOL1 (8C)");
         }
@@ -355,7 +357,7 @@ final class TransactionFlow {
                 | ((performCda && requestedFirstAc != TerminalActionAnalysis.AAC) ? 0x10 : 0x00));
         ResponseAPDU first = terminal.generateAc(firstP1, cdol1Data);
         if (first.getSW() != 0x9000) {
-            throw new IllegalStateException("first GENERATE AC -> " + sw(first.getSW()));
+            throw new IllegalStateException("first GENERATE AC -> " + Sw.format(first.getSW()));
         }
         result.firstResponse(first.getData());
         result.firstAc(Responses.parseAc(first));
@@ -432,7 +434,7 @@ final class TransactionFlow {
                 // 'Y3' for offline approved and 'Z3' for offline declined
                 // (EMV v4.4 Book 4 A6 Table 35).
                 result.issuerAuthData(null);
-                byte[] iacDefault = result.firstValue(0x9F0D);
+                byte[] iacDefault = result.firstValue(EmvTags.IAC_DEFAULT);
                 secondP1 = TerminalActionAnalysis.unableToGoOnline(
                         result.tvr(), data.config.tacDefault, iacDefault);
                 if ((secondP1 & 0xC0) != TerminalActionAnalysis.AAC && performCda) {
@@ -445,7 +447,7 @@ final class TransactionFlow {
             }
         }
 
-        byte[] cdol2 = result.firstValue(0x8D);
+        byte[] cdol2 = result.firstValue(EmvTags.CDOL2);
         if (cdol2 == null) {
             throw new IllegalStateException("record 1 has no CDOL2 (8D)");
         }
@@ -457,14 +459,14 @@ final class TransactionFlow {
         // (EMV v4.4 Book 3 §10.10), so a card-side state change they cause (for
         // example unblocking the offline PIN) can influence the second AC.
         IssuerScriptProcessor.Result scriptsBefore = processScripts(
-                terminal, auth, 0x71, false);
+                terminal, auth, EmvTags.ISSUER_SCRIPT_TEMPLATE_1, false);
         if (scriptsBefore != null) {
             Tsi.set(result.tsi(), Tsi.SCRIPT_PROCESSING_PERFORMED);
         }
 
         ResponseAPDU second = terminal.generateAc(secondP1, cdol2Data);
         if (second.getSW() != 0x9000) {
-            throw new IllegalStateException("second GENERATE AC -> " + sw(second.getSW()));
+            throw new IllegalStateException("second GENERATE AC -> " + Sw.format(second.getSW()));
         }
         result.secondResponse(second.getData());
         result.secondAc(Responses.parseAc(second));
@@ -504,7 +506,7 @@ final class TransactionFlow {
         // Issuer scripts tagged '72' are processed after the final GENERATE AC
         // (EMV v4.4 Book 3 §10.10).
         IssuerScriptProcessor.Result scriptsAfter = processScripts(
-                terminal, auth, 0x72, true);
+                terminal, auth, EmvTags.ISSUER_SCRIPT_TEMPLATE_2, true);
         if (scriptsAfter != null) {
             Tsi.set(result.tsi(), Tsi.SCRIPT_PROCESSING_PERFORMED);
         }
@@ -596,34 +598,34 @@ final class TransactionFlow {
      * data object that should only appear once terminate the transaction).
      */
     private static final int[] SINGLE_OCCURRENCE = {
-        0x5A,   // Application PAN
-        0x5F24, // Application Expiration Date
-        0x5F25, // Application Effective Date
-        0x5F28, // Issuer Country Code
-        0x5F34, // Application PAN Sequence Number
-        0x56,   // Track 1 Equivalent Data
-        0x57,   // Track 2 Equivalent Data
-        0x8C,   // CDOL1
-        0x8D,   // CDOL2
-        0x8E,   // CVM List
-        0x8F,   // Certification Authority Public Key Index
-        0x90,   // Issuer Public Key Certificate
-        0x92,   // Issuer Public Key Remainder
-        0x93,   // Signed Static Application Data
-        0x9F07, // Application Usage Control
-        0x9F08, // Application Version Number (ICC)
-        0x9F0D, // Issuer Action Code - Default
-        0x9F0E, // Issuer Action Code - Denial
-        0x9F0F, // Issuer Action Code - Online
-        0x9F13, // Last Online ATC Register
-        0x9F17, // PIN Try Counter
-        0x9F32, // Issuer Public Key Exponent
-        0x9F42, // Application Currency Code
-        0x9F46, // ICC Public Key Certificate
-        0x9F47, // ICC Public Key Exponent
-        0x9F48, // ICC Public Key Remainder
-        0x9F49, // Dynamic Data Authentication Data Object List (DDOL)
-        0x9F4A, // Static Data Authentication Tag List
+        EmvTags.PAN,                                // Application PAN
+        EmvTags.EXPIRY_DATE,                        // Application Expiration Date
+        EmvTags.EFFECTIVE_DATE,                     // Application Effective Date
+        EmvTags.ISSUER_COUNTRY_CODE,                // Issuer Country Code
+        EmvTags.PAN_SEQUENCE_NUMBER,                // Application PAN Sequence Number
+        EmvTags.TRACK1_DATA,                        // Track 1 Equivalent Data
+        EmvTags.TRACK2_EQUIVALENT_DATA,             // Track 2 Equivalent Data
+        EmvTags.CDOL1,                              // CDOL1
+        EmvTags.CDOL2,                              // CDOL2
+        EmvTags.CVM_LIST,                           // CVM List
+        EmvTags.CA_PUBLIC_KEY_INDEX,                // Certification Authority Public Key Index
+        EmvTags.ISSUER_PUBLIC_KEY_CERT,             // Issuer Public Key Certificate
+        EmvTags.ISSUER_PUBLIC_KEY_REMAINDER,        // Issuer Public Key Remainder
+        EmvTags.SIGNED_STATIC_APPLICATION_DATA,     // Signed Static Application Data
+        EmvTags.APPLICATION_USAGE_CONTROL,          // Application Usage Control
+        EmvTags.APPLICATION_VERSION_NUMBER_ICC,     // Application Version Number (ICC)
+        EmvTags.IAC_DEFAULT,                        // Issuer Action Code - Default
+        EmvTags.IAC_DENIAL,                         // Issuer Action Code - Denial
+        EmvTags.IAC_ONLINE,                         // Issuer Action Code - Online
+        EmvTags.LAST_ONLINE_ATC,                    // Last Online ATC Register
+        EmvTags.PIN_TRY_COUNTER,                    // PIN Try Counter
+        EmvTags.ISSUER_PUBLIC_KEY_EXPONENT,         // Issuer Public Key Exponent
+        EmvTags.APPLICATION_CURRENCY_CODE,          // Application Currency Code
+        EmvTags.ICC_PUBLIC_KEY_CERT,                // ICC Public Key Certificate
+        EmvTags.ICC_PUBLIC_KEY_EXPONENT,            // ICC Public Key Exponent
+        EmvTags.ICC_PUBLIC_KEY_REMAINDER,           // ICC Public Key Remainder
+        EmvTags.DDOL,                               // Dynamic Data Authentication Data Object List
+        EmvTags.SDA_TAG_LIST,                       // Static Data Authentication Tag List
     };
 
     private void readAfl(Terminal terminal, TransactionResult.Mutable result) throws Exception {
@@ -654,7 +656,7 @@ final class TransactionFlow {
                 ResponseAPDU r = terminal.readRecord(record, sfi);
                 if (r.getSW() != 0x9000) {
                     throw new IllegalStateException("READ RECORD SFI " + sfi + " rec " + record
-                            + " -> " + sw(r.getSW()));
+                            + " -> " + Sw.format(r.getSW()));
                 }
                 result.putRecord((sfi << 8) | record, r.getData());
             }
@@ -669,10 +671,10 @@ final class TransactionFlow {
      * terminates when any of them is absent (EMV v4.4 Book 3 §7.5/§10.2).
      */
     private static final int[] MANDATORY_ICC_OBJECTS = {
-        0x5F24, // Application Expiration Date
-        0x5A,   // Application PAN
-        0x8C,   // CDOL1
-        0x8D,   // CDOL2
+        EmvTags.EXPIRY_DATE,  // Application Expiration Date
+        EmvTags.PAN,          // Application PAN
+        EmvTags.CDOL1,        // CDOL1
+        EmvTags.CDOL2,        // CDOL2
     };
 
     private static void checkMandatoryObjects(TransactionResult result) {
@@ -730,10 +732,6 @@ final class TransactionFlow {
         byte[] un = new byte[4];
         random.nextBytes(un);
         return un;
-    }
-
-    private static String sw(int sw) {
-        return String.format("%04X", sw & 0xFFFF);
     }
 
     /**

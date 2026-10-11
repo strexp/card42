@@ -6,6 +6,7 @@ import java.util.Arrays;
 import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.crypto.Iso9797;
+import card42.host.common.util.Sw;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**
@@ -63,7 +64,7 @@ public final class Bac {
         ResponseAPDU r = terminal.externalAuthenticate(concat(eifd, mifd));
         if (r.getSW() != 0x9000 || r.getData().length != 40) {
             throw new IllegalStateException("BAC EXTERNAL AUTHENTICATE failed: "
-                    + Integer.toHexString(r.getSW()));
+                    + Sw.format(r.getSW()));
         }
         byte[] eic = Arrays.copyOfRange(r.getData(), 0, 32);
         byte[] mic = Arrays.copyOfRange(r.getData(), 32, 40);
