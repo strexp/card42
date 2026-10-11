@@ -18,7 +18,7 @@
 #
 # Commands:
 #   gp.sh load   <cap> [<cap> ...]
-#   gp.sh create <deploy-conf>
+#   gp.sh create <deploy-conf> [<deploy-conf> ...]
 #   gp.sh perso                      (reads "aid hex" lines on stdin)
 #   gp.sh delete <deploy-conf> [<package> ...]
 #
@@ -36,20 +36,23 @@ gp() {
 }
 
 create() {
-    local conf=$1
-    awk '!/^[[:space:]]*#/ && NF >= 2 { print $1, $2 }' "$conf" |
-    while read -r instance class; do
-        local pkg=${EMV_PACKAGE:?EMV_PACKAGE is required}
-        if [ -n "${EMRTD_PACKAGE:-}" ]; then
-            case "$class" in "$EMRTD_PACKAGE"*) pkg=$EMRTD_PACKAGE;; esac
-        fi
-        local privs=()
-        if [ -n "${EMRTD_AID:-}" ] && [ "$instance" = "$EMRTD_AID" ]; then
-            privs=(--privs "${EMRTD_PRIVS:?EMRTD_PRIVS is required}")
-        fi
-        echo ">>> create $instance (applet $class, package $pkg)"
-        gp --create "$instance" --applet "$class" --package "$pkg" \
-            ${privs[@]+"${privs[@]}"}
+    local conf instance class pkg
+    local privs
+    for conf in "$@"; do
+        awk '!/^[[:space:]]*#/ && NF >= 2 { print $1, $2 }' "$conf" |
+        while read -r instance class; do
+            pkg=${EMV_PACKAGE:?EMV_PACKAGE is required}
+            if [ -n "${EMRTD_PACKAGE:-}" ]; then
+                case "$class" in "$EMRTD_PACKAGE"*) pkg=$EMRTD_PACKAGE;; esac
+            fi
+            privs=()
+            if [ -n "${EMRTD_AID:-}" ] && [ "$instance" = "$EMRTD_AID" ]; then
+                privs=(--privs "${EMRTD_PRIVS:?EMRTD_PRIVS is required}")
+            fi
+            echo ">>> create $instance (applet $class, package $pkg)"
+            gp --create "$instance" --applet "$class" --package "$pkg" \
+                ${privs[@]+"${privs[@]}"}
+        done
     done
 }
 
