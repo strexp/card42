@@ -81,6 +81,7 @@ JC_SIM_CLIENT := $(JC_HOME_SIMULATOR)/client
 GP_SH         := scripts/gp.sh
 
 # Package AIDs in GPPro's plain hex form (ids.mk uses 0x-prefixed, colon-separated).
+COMMON_PACKAGE_AID_HEX := $(subst :,,$(subst 0x,,$(COMMON_PACKAGE_AID)))
 PACKAGE_AID_HEX       := $(subst :,,$(subst 0x,,$(PACKAGE_AID)))
 EMRTD_PACKAGE_AID_HEX := $(subst :,,$(subst 0x,,$(EMRTD_PACKAGE_AID)))
 
@@ -529,12 +530,15 @@ card-install: card-common card-emv card-emrtd
 # (destructive).  Java Card does not reclaim deleted objects on its own, so a
 # clean DELETE before a re-install avoids the persistent-heap leak that repeated
 # failed INSTALLs leave behind (a J3R180 then fails a later INSTALL with 6F00).
+# The common library package is deleted last, after its EMV/eMRTD clients, so a
+# re-LOAD of common.cap does not fail with 6985 (package already present).
 # Uses the same GP_ARGS keys as the other card targets (config/local.mk).
 #
 #   make card-uninstall
 card-uninstall:
 	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_TRANSPORT="$(GP_ARGS)" \
-	  $(GP_SH) delete $(DEPLOY_BOTH_CONF) $(EMRTD_PACKAGE_AID_HEX) $(PACKAGE_AID_HEX)
+	  $(GP_SH) delete $(DEPLOY_BOTH_CONF) $(EMRTD_PACKAGE_AID_HEX) \
+	    $(PACKAGE_AID_HEX) $(COMMON_PACKAGE_AID_HEX)
 
 # Personalizes every instance of $(CARD_EMV_PERSO_SCRIPT) (production set by default)
 # on a real card with GPPro's `--personalize <AID> --store-data <hex>`
