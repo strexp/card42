@@ -68,14 +68,7 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
             short rem = (short) (p % blockSize);
             short padded = (short) (p + (short) (blockSize - rem));
             short lengthValue = (short) (padded + 1);
-            short lengthField;
-            if (lengthValue <= (short) 0x7F) {
-                lengthField = (short) 1;
-            } else if (lengthValue <= (short) 0xFF) {
-                lengthField = (short) 2;
-            } else {
-                lengthField = (short) 3;
-            }
+            short lengthField = Tlv.lengthSize(lengthValue);
             short envelope = (short) (padded + lengthField);
             envelope = (short) (envelope + 16);
             if (envelope <= (short) 256) {
@@ -221,7 +214,7 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
             short padLen = paddedLength(respLen);
             encrypt(ksEnc, response, (short) 0, respLen, scratch, (short) 0);
             out[n++] = (byte) 0x87;
-            n = writeLength(out, n, (short) (padLen + 1));
+            n = Tlv.appendLength((short) (padLen + 1), out, n);
             out[n++] = (byte) 0x01;
             Util.arrayCopyNonAtomic(scratch, (short) 0, out, n, padLen);
             n += padLen;
@@ -325,23 +318,6 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
     private static short append(byte[] dst, short dstOff, byte[] src, short srcOff, short len) {
         Util.arrayCopyNonAtomic(src, srcOff, dst, dstOff, len);
         return (short) (dstOff + len);
-    }
-
-    /** Writes the BER length of len at out[off..); returns the new offset. */
-    private static short writeLength(byte[] out, short off, short len) {
-        if (len <= (short) 0x7F) {
-            out[off] = (byte) len;
-            return (short) (off + 1);
-        }
-        if (len <= (short) 0xFF) {
-            out[off] = (byte) 0x81;
-            out[(short) (off + 1)] = (byte) len;
-            return (short) (off + 2);
-        }
-        out[off] = (byte) 0x82;
-        out[(short) (off + 1)] = (byte) (len >> 8);
-        out[(short) (off + 2)] = (byte) len;
-        return (short) (off + 3);
     }
 
     /** Strips the 0x80 00.. M2 padding written by the peer. */

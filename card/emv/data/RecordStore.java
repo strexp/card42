@@ -28,29 +28,46 @@ import javacard.framework.Util;
 
 public class RecordStore implements ISO7816 {
 
-    /** Maximum number of records one payment instance can hold. */
-    private static final short MAX_RECORDS = (short) 8;
+    /** Maximum number of records this store can hold. */
+    private final short maxRecords;
 
     /**
-     * Size of the shared record pool.  Large enough for a single ~300 byte
-     * record (a 2048-bit certificate and its BER wrapper) plus the smaller
-     * records of the same instance (docs/specs/common/architecture.md §2, docs/specs/common/risks.md).
+     * Size of the shared record pool.  The payment instance needs room for a
+     * single ~300 byte record (a 2048-bit certificate and its BER wrapper) plus
+     * the smaller records of the same instance (docs/specs/common/architecture.md §2,
+     * docs/specs/common/risks.md); the directory instance only holds short records.
      */
-    private static final short POOL_SIZE = (short) 1024;
+    private final short poolSize;
 
-    private final short[] keys = new short[MAX_RECORDS];
-    private final short[] offsets = new short[MAX_RECORDS];
-    private final short[] lengths = new short[MAX_RECORDS];
-    private final boolean[] moved = new boolean[MAX_RECORDS];
-    private final byte[] pool = new byte[POOL_SIZE];
+    private final short[] keys;
+    private final short[] offsets;
+    private final short[] lengths;
+    private final boolean[] moved;
+    private final byte[] pool;
     private short poolUsed;
 
+    /** The payment-instance record table: 8 records in a 1 KB pool. */
     public RecordStore() {
+        this((short) 8, (short) 1024);
+    }
+
+    /** A keyed record store with an explicit record count and pool size. */
+    protected RecordStore(short maxRecords, short poolSize) {
+        this.maxRecords = maxRecords;
+        this.poolSize = poolSize;
+        this.keys = new short[maxRecords];
+        this.offsets = new short[maxRecords];
+        this.lengths = new short[maxRecords];
+        this.moved = new boolean[maxRecords];
+        this.pool = new byte[poolSize];
     }
 
     /** Stores or replaces the record for key; throws 6A80 when it cannot fit. */
     public void put(short key, byte[] buf, short off, short len) {
-        if (len < 0 || len > POOL_SIZE) {
+        if (key == (short) 0) {
+            ISOException.throwIt(SW_WRONG_DATA); // the zero key marks a free slot
+        }
+        if (len < 0 || len > poolSize) {
             ISOException.throwIt(SW_WRONG_DATA);
         }
         short slot = find(key);
@@ -117,10 +134,10 @@ public class RecordStore implements ISO7816 {
 
     /** Reserves len bytes in the pool, compacting first when necessary. */
     private short allocate(short len) {
-        if ((short) (poolUsed + len) > POOL_SIZE) {
+        if ((short) (poolUsed + len) > poolSize) {
             compact();
         }
-        if ((short) (poolUsed + len) > POOL_SIZE) {
+        if ((short) (poolUsed + len) > poolSize) {
             ISOException.throwIt(SW_WRONG_DATA); // pool full
         }
         short at = poolUsed;
@@ -136,7 +153,7 @@ public class RecordStore implements ISO7816 {
      */
     private void compact() {
         short remaining = 0;
-        for (short i = 0; i < MAX_RECORDS; i++) {
+        for (short i = 0; i < maxRecords; i++) {
             moved[i] = false;
             if (keys[i] != 0) {
                 remaining++;
@@ -146,7 +163,7 @@ public class RecordStore implements ISO7816 {
         while (remaining > 0) {
             // Pick the not-yet-moved record with the smallest source offset.
             short best = -1;
-            for (short i = 0; i < MAX_RECORDS; i++) {
+            for (short i = 0; i < maxRecords; i++) {
                 if (keys[i] != 0 && !moved[i]
                         && (best < 0 || offsets[i] < offsets[best])) {
                     best = i;
@@ -166,7 +183,7 @@ public class RecordStore implements ISO7816 {
     }
 
     private short find(short key) {
-        for (short i = 0; i < MAX_RECORDS; i++) {
+        for (short i = 0; i < maxRecords; i++) {
             if (keys[i] == key) {
                 return i;
             }
@@ -175,11 +192,20 @@ public class RecordStore implements ISO7816 {
     }
 
     private short freeSlot() {
-        for (short i = 0; i < MAX_RECORDS; i++) {
+        for (short i = 0; i < maxRecords; i++) {
             if (keys[i] == 0) {
                 return i;
             }
         }
         return -1;
+    }
+
+    /** Removes every record (personalization reset). */
+    public void reset() {
+        for (short i = 0; i < maxRecords; i++) {
+            keys[i] = 0;
+            lengths[i] = 0;
+        }
+        poolUsed = 0;
     }
 }

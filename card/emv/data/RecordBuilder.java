@@ -213,12 +213,6 @@ public final class RecordBuilder implements ISO7816 {
         Tlv.appendLength(bodyLength, response, (short) 1);
     }
 
-    /** Encoded size of tag || length || value for a value of valueLength. */
-    private static short tlvSize(short tag, short valueLength) {
-        short tagLength = (tag & (short) 0xFF00) != 0 ? (short) 2 : (short) 1;
-        return (short) (tagLength + Tlv.lengthSize(valueLength) + valueLength);
-    }
-
     /** Throws 6700 when a record body does not fit the response buffer. */
     private static void ensureCapacity(byte[] response, short bodyLength) {
         short total = (short) (1 + Tlv.lengthSize(bodyLength) + bodyLength);
@@ -323,12 +317,12 @@ public final class RecordBuilder implements ISO7816 {
         SdaCertificateData certs = data.getCertificates();
         short bodyLength;
         if (certs.getIssuerCertLength() > 0) {
-            bodyLength = tlvSize(TlvTags.TAG_CA_PUBLIC_KEY_INDEX, (short) 1);
-            bodyLength += tlvSize(TlvTags.TAG_ISSUER_PUBLIC_KEY_CERT, certs.getIssuerCertLength());
-            bodyLength += tlvSize(TlvTags.TAG_ISSUER_PUBLIC_KEY_REMAINDER, certs.getIssuerRemainderLength());
-            bodyLength += tlvSize(TlvTags.TAG_ISSUER_PUBLIC_KEY_EXPONENT, certs.getIssuerExponentLength());
+            bodyLength = Tlv.tlvSize(TlvTags.TAG_CA_PUBLIC_KEY_INDEX, (short) 1);
+            bodyLength += Tlv.tlvSize(TlvTags.TAG_ISSUER_PUBLIC_KEY_CERT, certs.getIssuerCertLength());
+            bodyLength += Tlv.tlvSize(TlvTags.TAG_ISSUER_PUBLIC_KEY_REMAINDER, certs.getIssuerRemainderLength());
+            bodyLength += Tlv.tlvSize(TlvTags.TAG_ISSUER_PUBLIC_KEY_EXPONENT, certs.getIssuerExponentLength());
             if (certs.getSdaTagListLength() > 0) {
-                bodyLength += tlvSize(TlvTags.TAG_SDA_TAG_LIST, certs.getSdaTagListLength());
+                bodyLength += Tlv.tlvSize(TlvTags.TAG_SDA_TAG_LIST, certs.getSdaTagListLength());
             }
         } else {
             bodyLength = 9; // empty placeholders
@@ -371,7 +365,7 @@ public final class RecordBuilder implements ISO7816 {
      */
     private static void buildDefaultRecord3(byte[] response, PaymentData data) {
         SdaCertificateData certs = data.getCertificates();
-        short bodyLength = tlvSize(TlvTags.TAG_SIGNED_STATIC_APPLICATION_DATA, certs.getSsadLength());
+        short bodyLength = Tlv.tlvSize(TlvTags.TAG_SIGNED_STATIC_APPLICATION_DATA, certs.getSsadLength());
         ensureCapacity(response, bodyLength);
 
         short p = 0;
@@ -397,9 +391,9 @@ public final class RecordBuilder implements ISO7816 {
         if (certs.getPinCertLength() == 0) {
             ISOException.throwIt(SW_RECORD_NOT_FOUND);
         }
-        short bodyLength = tlvSize(TlvTags.TAG_ICC_PIN_PUBLIC_KEY_CERT, certs.getPinCertLength());
-        bodyLength += tlvSize(TlvTags.TAG_ICC_PIN_PUBLIC_KEY_REMAINDER, certs.getPinRemainderLength());
-        bodyLength += tlvSize(TlvTags.TAG_ICC_PIN_PUBLIC_KEY_EXPONENT, certs.getPinExponentLength());
+        short bodyLength = Tlv.tlvSize(TlvTags.TAG_ICC_PIN_PUBLIC_KEY_CERT, certs.getPinCertLength());
+        bodyLength += Tlv.tlvSize(TlvTags.TAG_ICC_PIN_PUBLIC_KEY_REMAINDER, certs.getPinRemainderLength());
+        bodyLength += Tlv.tlvSize(TlvTags.TAG_ICC_PIN_PUBLIC_KEY_EXPONENT, certs.getPinExponentLength());
         ensureCapacity(response, bodyLength);
 
         short p = 0;
@@ -424,9 +418,9 @@ public final class RecordBuilder implements ISO7816 {
         if (certs.getIccCertLength() == 0) {
             ISOException.throwIt(SW_RECORD_NOT_FOUND);
         }
-        short bodyLength = tlvSize(TlvTags.TAG_ICC_PUBLIC_KEY_CERT, certs.getIccCertLength());
-        bodyLength += tlvSize(TlvTags.TAG_ICC_PUBLIC_KEY_REMAINDER, certs.getIccRemainderLength());
-        bodyLength += tlvSize(TlvTags.TAG_ICC_PUBLIC_KEY_EXPONENT, certs.getIccExponentLength());
+        short bodyLength = Tlv.tlvSize(TlvTags.TAG_ICC_PUBLIC_KEY_CERT, certs.getIccCertLength());
+        bodyLength += Tlv.tlvSize(TlvTags.TAG_ICC_PUBLIC_KEY_REMAINDER, certs.getIccRemainderLength());
+        bodyLength += Tlv.tlvSize(TlvTags.TAG_ICC_PUBLIC_KEY_EXPONENT, certs.getIccExponentLength());
         ensureCapacity(response, bodyLength);
 
         short p = 0;

@@ -177,6 +177,8 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_COMMON_DIR)/crypto/AesCmac.java \
                  $(CARD_COMMON_DIR)/crypto/MacAlgorithm.java \
                  $(CARD_COMMON_DIR)/mem/TransientBuffers.java \
+                 $(CARD_COMMON_DIR)/applet/InstallParams.java \
+                 $(CARD_COMMON_DIR)/applet/IsoStatus.java \
                  $(CARD_EMV_DIR)/tlv/DolReader.java \
                  $(CARD_EMV_DIR)/tlv/Dgi.java $(CARD_EMV_DIR)/tlv/DgiReader.java \
                  $(CARD_EMV_DIR)/tlv/TlvTags.java $(CARD_EMV_DIR)/constants/EMVCommands.java \

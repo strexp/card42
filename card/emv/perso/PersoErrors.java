@@ -35,6 +35,6 @@ public final class PersoErrors implements ISO7816 {
         if (e instanceof javacard.security.CryptoException) {
             ISOException.throwIt(SW_CONDITIONS_NOT_SATISFIED); // 6985
         }
-        ISOException.throwIt((short) 0x6F00);
+        ISOException.throwIt(ISO7816.SW_UNKNOWN);
     }
 }

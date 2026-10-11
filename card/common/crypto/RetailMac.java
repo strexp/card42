@@ -1,5 +1,6 @@
 package card42.common;
 
+import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 import javacard.security.CryptoException;
@@ -122,7 +123,7 @@ public class RetailMac implements MacAlgorithm {
      */
     public void start(byte[] key, short keyOff, short keyLen) {
         if (keyLen != 16) {
-            ISOException.throwIt((short) 0x6700);
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
         ensureNative();
         setKeyOnce(key, keyOff);
@@ -189,10 +190,10 @@ public class RetailMac implements MacAlgorithm {
     public short macAligned(byte[] key, short keyOff, short keyLen, byte[] msg,
                             short msgOff, short msgLen, byte[] out, short outOff) {
         if (keyLen != 16) {
-            ISOException.throwIt((short) 0x6700);
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
         if ((msgLen & (short) 0x0007) != 0) {
-            ISOException.throwIt((short) 0x6700);
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
         ensureNative();
         setKeyOnce(key, keyOff);

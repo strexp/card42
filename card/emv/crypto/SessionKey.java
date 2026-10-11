@@ -2,6 +2,7 @@ package card42.emv;
 
 import card42.common.*;
 
+import javacard.framework.ISO7816;
 import javacard.framework.Util;
 import javacard.security.AESKey;
 import javacard.security.DESKey;
@@ -88,7 +89,7 @@ public final class SessionKey {
     public void deriveAes(AESKey mk, short keyLength, byte[] r, short rOff,
                           byte[] out, short outOff) {
         if (keyLength != 16) {
-            javacard.framework.ISOException.throwIt((short) 0x6700);
+            javacard.framework.ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
         Util.arrayCopyNonAtomic(r, rOff, data, (short) 0, (short) 16);
         aes128.init(mk, Cipher.MODE_ENCRYPT);

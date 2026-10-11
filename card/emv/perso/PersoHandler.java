@@ -107,7 +107,7 @@ public class PersoHandler implements ISO7816 {
             applet.resetPersoState();
         }
         if (p2 != expectedBlock) {
-            ISOException.throwIt((short) 0x6A86);
+            ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
         }
         if ((short) (bufferLength + len) > BUFFER_SIZE) {
             ISOException.throwIt(SW_WRONG_LENGTH);

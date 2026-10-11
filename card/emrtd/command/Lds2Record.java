@@ -1,5 +1,6 @@
 package card42.emrtd;
 
+import card42.common.IsoStatus;
 import card42.common.Tlv;
 
 import javacard.framework.ISO7816;
@@ -238,7 +239,7 @@ public final class Lds2Record {
             }
         }
         if (matches == 0) {
-            ISOException.throwIt((short) 0x6282);
+            ISOException.throwIt(IsoStatus.SW_END_OF_FILE);
         }
         short n = Tlv.appendTag(EmrtdTags.DO_RECORD_HANDLING, out, (short) 0);
         n = Tlv.appendLength(p, out, n);

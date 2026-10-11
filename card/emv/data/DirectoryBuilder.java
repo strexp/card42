@@ -42,13 +42,13 @@ public final class DirectoryBuilder {
             byte[] label, short labelLen,
             byte priority, boolean ppse,
             byte[] kernel, short kernelLen) {
-        short valueLength = tlvSize(TlvTags.TAG_ADF_NAME, aidLen);
+        short valueLength = Tlv.tlvSize(TlvTags.TAG_ADF_NAME, aidLen);
         if (labelLen > 0) {
-            valueLength += tlvSize(TlvTags.TAG_APPLICATION_LABEL, labelLen);
+            valueLength += Tlv.tlvSize(TlvTags.TAG_APPLICATION_LABEL, labelLen);
         }
         valueLength += (short) 3; // 87 01 <priority>
         if (kernelLen > 0) {
-            valueLength += tlvSize(TlvTags.TAG_KERNEL_IDENTIFIER, kernelLen);
+            valueLength += Tlv.tlvSize(TlvTags.TAG_KERNEL_IDENTIFIER, kernelLen);
         }
 
         off = Tlv.appendTag(TlvTags.TAG_DIRECTORY_ENTRY, out, off);
@@ -84,11 +84,5 @@ public final class DirectoryBuilder {
         Util.arrayCopyNonAtomic(entries, (short) 0, out, p, entriesLength);
         p += entriesLength;
         return p;
-    }
-
-    /** Encoded size of tag || length || value for a value of valueLength. */
-    private static short tlvSize(short tag, short valueLength) {
-        short tagLength = (tag & (short) 0xFF00) != 0 ? (short) 2 : (short) 1;
-        return (short) (tagLength + Tlv.lengthSize(valueLength) + valueLength);
     }
 }

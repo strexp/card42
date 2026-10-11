@@ -128,6 +128,12 @@ public final class Tlv {
         return 3;
     }
 
+    /** Encoded size of tag || length || value for a value of valueLength. */
+    public static short tlvSize(short tag, short valueLength) {
+        short tagLength = (tag & (short) 0xFF00) != 0 ? (short) 2 : (short) 1;
+        return (short) (tagLength + lengthSize(valueLength) + valueLength);
+    }
+
     /** Writes the BER length field for len at out/outOff; returns the new offset. */
     public static short appendLength(short len, byte[] out, short outOff) {
         if (len <= 0x7F) {

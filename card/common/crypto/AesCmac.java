@@ -1,5 +1,6 @@
 package card42.common;
 
+import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -68,7 +69,7 @@ public final class AesCmac implements MacAlgorithm {
     public void start(byte[] key, short keyOff, short keyLen) {
         if (keyLen != 16) {
             // Only AES-128 is available on the simulator (docs/specs/common/cryptography.md §1).
-            ISOException.throwIt((short) 0x6700);
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
         if (!keyLoaded || !sameKey(key, keyOff)) {
             key128.setKey(key, keyOff);
@@ -145,7 +146,7 @@ public final class AesCmac implements MacAlgorithm {
                             byte[] msg, short msgOff, short msgLen,
                             byte[] out, short outOff) {
         if ((msgLen & (short) 0x000F) != 0) {
-            ISOException.throwIt((short) 0x6700);
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
         // CMAC adds no padding to an aligned message, so the one-shot MAC is
         // already the aligned form.
