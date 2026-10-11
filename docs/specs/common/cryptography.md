@@ -95,13 +95,22 @@ ISO/IEC 9797-1 Algorithm 3（ARPC Method 2、SM MAC）。CBC 段优先用平台 
 ### 4.1. AES-CMAC（`card/common/crypto/AesCmac.java`）
 
 ISO/IEC 9797-1 Algorithm 5（CMAC），CV '6' 的 AC、ARPC Method 2 与 SM MAC 均用它
-（EMV v4.4 Book 2 §A1.2.2、§8.1.2、§9.2.3）。以 `Cipher.ALG_AES_BLOCK_128_ECB_NOPAD` 手工实现：
-子密钥 `L=AES(KS)[0^16]`、`K1=L<<1`（`msb(L)=1` 时异或 `00..87`）、`K2=K1<<1`；末块按是否补
-`80..` 异或 K1/K2；CBC 后取前 s 字节（AC/ARPC s=8/4）。流式 `start/update/doFinal` 缓冲末块，
-SM 的已对齐消息不补块。瞬态缓冲在首次使用时分配（jcsl 的 AES `doFinal` 不接受输入输出
-别名，故链值与异或结果分用两块）；子密钥 `L`/`K1`/`K2` 只在会话密钥变化时重算（缓存 16 B
-会话密钥，`zeroize()` 清缓存）。主机侧 `host/common/crypto/AesCmac.java`
-以 JCE 实现，并以 RFC 4493 / NIST SP 800-38B 向量校验。
+（EMV v4.4 Book 2 §A1.2.2、§8.1.2、§9.2.3）。子密钥
+`L=AES(KS)[0^16]`（ECB）、`K1=L<<1`（`msb(L)=1` 时异或 `00..87`）、`K2=K1<<1`；末块按是否补
+`80..` 异或 K1/K2；CBC 后取前 s 字节（AC/ARPC s=8/4）。
+
+**一次性 `mac`/`macAligned`（卡上唯一使用的形式）走平台 `Cipher.ALG_AES_BLOCK_128_CBC_NOPAD`
+批量链式**：消息按 256 B（`STAGING`）分块 CBC 加密，只保留每块的最后一个密文块作为 CMAC 链值，
+末块再做一次 ECB。这样 352 B 的 eMRTD SM 消息只需 2 次 CBC + 1 次 ECB，而不是每 16 B 一次 ECB——
+后者正是 CV '6' 在 J3R180 上比 3DES 慢约 10 倍的原因（平台无 AES-CMAC `Signature`，CMAC 只能手工
+构造）。CBC 输出暂存 `cbcOut`（256 B）在构造期经 `TransientBuffers.makeByteArray` 分配，命令路径
+不再分配（jcsl 的 AES `doFinal` 不接受输入输出别名）。流式 `start/update/doFinal`（仅单测使用）
+仍按 ECB 逐块构造，因为它必须在不依赖输出暂存的情况下工作。子密钥 `L`/`K1`/`K2` 只在
+会话密钥变化时重算（缓存 16 B 会话密钥，`zeroize()` 清缓存；未装载密钥时 `zeroize()` 直接返回，避免
+重复写 EEPROM）。`AesCmac`/`RetailMac` 由调用方共享实例（eMRTD 侧为包级 `MacEngines`）。主机侧 `host/common/crypto/AesCmac.java`
+以 JCE 实现，并以 RFC 4493 / NIST SP 800-38B 向量校验（卡侧单测另加 >256 B 跨块向量）。
+`ALG_AES_BLOCK_128_CBC_NOPAD` 在 jcsl 与 J3R180 上均已实测可用（`PACE ECDH-GM AES-128` 通过；
+`AesCmac`/`Cipher.ALG_AES_BLOCK_128_CBC_NOPAD` 已是既有 SM 路径）。
 
 ## 5. ARPC 校验（`card/emv/crypto/Arpc.java`）
 

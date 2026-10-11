@@ -148,11 +148,13 @@ profile 的块大小**决定（`SecureMessaging.maxResponseData()`，构造期�
 单测用开关同时验证。这样真卡一次调用即可完成整段 CBC-MAC，避免每个 SM 包在字节码里逐块调用
 密码机的开销。
 
-**缓冲与密钥**：两个 SM 包装器共享包级 `SmScratch`（`CLEAR_ON_DESELECT` 瞬态数组，无瞬态余量时
-回退持久数组），仅在选中时首次分配、整个 package 一份，因此每个实例不再各占 1 KB 持久内存，
+**缓冲与密钥**：两个 SM 包装器共享包级 `SmScratch`（352 B，`CLEAR_ON_DESELECT` 瞬态数组，无瞬态余量时
+回退持久数组）。加密区与 MAC 输入区复用同一偏移：`wrap` 把密文直接写入调用方输出缓冲，两区不再并存，
+故 352 B 即够（原 800 B）。`RetailMac`/`AesCmac` 由包级 `MacEngines` 共享，每实例不再各建引擎。
+整个 package 一份，因此每个实例不再各占大量持久内存，
 也避免多实例各自惰性分配耗尽瞬态预算（[../common/risks.md](../common/risks.md) §2）。3DES 包装器的
 K_enc 与 MAC 的 K1/K2 只在会话密钥变化时装载一次（`Iso7816Sm.reset()` / `Iso7816SmAes.reset()`
-在应用重选时清零缓存）。
+在应用重选时清零缓存，且未装载时不再重复清零）。
 
 **等待时间**：PACE/Chip Authentication 的 EC 运算、Active Authentication 的 RSA 签名和
 BAC 握手这类可能超过非接触块等待时间的命令，在处理前调用 `APDU.waitExtension()` 申请额外时间

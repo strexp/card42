@@ -66,18 +66,23 @@
       KDD/发现上下文，jcsl 下不可达。
 - [x] **A3 瞬态余量实测（已完成）**：J3R180 上用一次性诊断（临时加 `MemDiag`，读后已移除，
       方法与结论记录在此）实测 `getAvailableMemory`。结论：瞬态**按 context 计**——EMV
-      context 余量 ~2176 B；eMRTD context 仅 ~32 B（`raw` 瞬态）/ ~352 B（`raw` 持久），即
-      eMRTD context 预算 ~2056 B。生产 eMRTD 共享（io320+response256+raw320+`SmScratch` 800
-      = 1696）+ 每实例 MAC 引擎小块（~328/4 例）已吃满该 context。
-- [!] **A4 eMRTD 命令 scratch 收口为"每包一份"——实测不可行（关闭）**：A3 实测 eMRTD context
+      context 余量 ~2176 B；eMRTD context 预算 ~2056 B。**（2026-10-11 更新）** `SmScratch`
+      800→352、MAC 引擎收为包级共享 `MacEngines` 后，eMRTD 热路径约 1218 B + 引擎 ~40 B ≈
+      1258 B，加 `AesCmac` 256 B CBC 暂存约 1514 B，余量约 540 B（A3 当时仅 ~32 B）。
+- [!] **A4 eMRTD 命令 scratch 收口为"每包一份"——曾关闭，空间已重开**：A3 实测 eMRTD context
       仅余 ~32 B，而 A4 需再放 `AaCrypto`(522)+`Pace`(481)+`ChipAuth`(64)+`BacCrypto`(8)≈1075 B，
-      放不下；即便改成共享也放不下，回退成持久等于没省，并复现安装期 `6F00`（上一轮已回退）。
-      故 `AaCrypto`/`Pace`/`ChipAuth` scratch **保持持久**。
+      放不下。**（2026-10-11）** `SmScratch` 压缩为 352 B 后 eMRTD 余量约 540 B（含 `AesCmac` 256 B CBC 暂存），A4 的 ~1075 B
+      仍放不下，但已可容纳其中一部分；`AaCrypto`/`Pace`/`ChipAuth` scratch 暂**保持持久**，待
+      真卡复测余量后再评估。
 - [x] **A5 `raw` 置换热路径共享 scratch（已完成，Plan A）**：实测 `raw` 原为瞬态；将
       `EmrtdScratch.raw`(320) 固定为**持久**，腾出的空间换成包级瞬态：会话密钥/计数器
       (`challenge/kenc/kmac/ksEnc/ksMac/ssc/caEnc/caMac` 112 B)、BAC scratch
       (`E_IFD/KIC/S2/sessionSeed` 96 B)、`SmScratch` 助手（`macBuffer`/两 `loadedEnc`/`ssc16`/`iv`
       80 B）。eMRTD 共享瞬态 1696→1664 B；BAC 读五组 DG EEPROM 基线 498→**96 B**；
+      **（2026-10-11）** `SmScratch` 再 800→352（`wrap` 密文直写输出缓冲，加密区与 MAC 输入区
+      合并复用）、MAC 引擎收为 `MacEngines`，eMRTD 共享瞬态降至 **1218 B**、加 `AesCmac` 256 B 暂存后余量约 540 B；
+      BAC 基线 state 96→167 B 为共享引擎在会话边界的清零（见 `risks.md` §2），`Util` 批量写
+      199→135 B；
       并把 `AbstractSecureMessaging.le`(2 B) 与 `LdsFileSystem` 当前 EF 选择移入瞬态，
       READ BINARY 热路径零 EEPROM 写（仅会话首个 SM 命令装载会话密钥）；
       `make test-unit`、`make test-emrtd`（模拟器）全绿。**真卡（J3R180）**：`card-install`
@@ -103,7 +108,8 @@
       直接 `makeTransient` 会在创建第 4 个 eMRTD 实例时耗尽预算抛 `SystemException` → `6F00`；
       故所有分配改走共享的 `card42.common.TransientBuffers.makeByteArray/makeShortArray`
       （`RetailMac`/`AesCmac` 小块同）——优先 `CLEAR_ON_DESELECT`，**耗尽时回退持久数组**而非
-      失败。同理 eMRTD 侧 `SmScratch` 由 1 KB 收到 800 B、`LdsCatalog` 的 COM 构造 scratch 改
+      失败。同理 eMRTD 侧 `SmScratch` 由 1 KB 收到 **352 B**（2026-10-11，`wrap` 密文直写输出
+      缓冲，两区合并）、`RetailMac`/`AesCmac` 收为包级 `MacEngines`、`LdsCatalog` 的 COM scratch 改
       包级 static、LDS2 实例不再分配只有 LDS1 用的 `LdsCatalog`/`LdsPerso`/`BacCrypto`/`AaCrypto`
       （每例省约 1.5–1.8 KB 持久堆）。**剩余仅真卡验收**：见 §A3，用生产+测试实例
       重跑 `BoundaryTest`/`AesFlowTest`/非接触第二 AC；模拟器矩阵 `make test`/`make test-emv`/

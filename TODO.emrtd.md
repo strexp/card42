@@ -45,6 +45,11 @@
     写由 4330 B 降到 498 B，AA 由 ~1100 B 降到 ~555 B；EMV 的包级共享 `EmvScratch` 见
     `TODO.emv.md` §B1。`LdsCatalog` 的 COM 构造 scratch 由运行期局部数组改为包级 `static`（LDS2
     实例不再各占 160 B）；`DdaCrypto` 重灌密钥后显式 `JCSystem.requestObjectDeletion()`。
+    **（2026-10-11）** `SmScratch` 800→**352 B**（`wrap` 密文直写调用方输出缓冲，加密区与
+    MAC 输入区合并复用）、`RetailMac`/`AesCmac` 收为包级共享 `MacEngines`；eMRTD 共享瞬态
+    1664→**1218 B**，余量回到约 540 B（含 `AesCmac` 256 B CBC 暂存；原仅 ~32 B）。BAC 基线 state 96→167 B 系共享引擎在
+    会话边界的 `AesCmac` 清零（非逐命令），`Util` 批量写 199→135 B。个性化路径的 `TlvReader`/
+    `DgiReader` 改为可复用游标，不再每次 `new`（Java Card `new` 落持久堆）。
   - **真卡持久堆修复（第 4 个实例 6F00）**：LDS2（Travel/Visa/Biometrics）实例按角色门控，
     不再创建只有 LDS1 用得到的 `LdsCatalog`（19 个 `LdsFile` + 数组）、`LdsPerso`
     （seed + 520 B scratch）、`BacCrypto` 与 2048-bit `AaCrypto`，每例省约 1.5–1.8 KB 持久堆。
@@ -52,8 +57,8 @@
     `make card-uninstall` 再 `make card-install`（新增卸载目标）。
   - **读路径性能优化**：BAC/PACE 的 Alg-3 MAC 优先用平台 `Signature`（
     `ALG_DES_MAC8_ISO9797_M2`/`ALG_DES_MAC8_NOPAD` + 两次单 DES 终变换），平台不支持时自动回退
-    到逐块手工构造，单测两条路径同向量；SM 的 1 KB scratch 改为包级共享 `SmScratch`（瞬态优先、
-    持久回退）、每实例省 ~1 KB 且不再随实例数倍增瞬态需求；会话密钥仅在变化时 `setKey`；
+    到逐块手工构造，单测两条路径同向量；SM 的 1 KB scratch 改为包级共享 `SmScratch`（**2026-10-11
+    再收到 352 B**，瞬态优先、持久回退）、每实例省 ~1 KB 且不再随实例数倍增瞬态需求；会话密钥仅在变化时 `setKey`；
     单次 `READ BINARY`/`READ RECORD` 明文上限按活动 SM profile 的块大小计算
     （`SecureMessaging.maxResponseData()`：3DES `0xE7`、AES `0xDF`），超限回车侧 `6700`；主机
     `LdsReader` 请求 `0xE7` 但以位移越过 EF 末尾判 EOF（不能以「短块」判，AES 会合法回 223）；PACE/CA/AA/BAC
@@ -88,12 +93,18 @@
   持久堆余量而非确定性逻辑；`test-emrtd-card` 暂对每个 suite 重试一次。需在真卡定位：
   失败时读 `JCSystem.getAvailableMemory(MEMORY_TYPE_PERSISTENT)`、确认是否与前置 suite 的持久写
   （LDS2 APPEND RECORD）或 PACE 会话次数相关，必要时在 `Pace`/实例初始化处进一步复用/回收对象。
-- [ ] **T5.4 PACE-AES 读性能 / 重新宣告 AES**：真卡 J3R180 上 PACE 协商 AES-128 后每个
+- [~] **T5.4 PACE-AES 读性能 / 重新宣告 AES**：真卡 J3R180 上 PACE 协商 AES-128 后每个
   ~231 B `READ BINARY` 约 1.4 s（3DES 约 0.15 s），ReadID 读 ~8 KB 的 DG2 会丢标签，故
   EF.CardAccess 暂时**只宣告 3DES**（`EmrtdPersoExporter.cardAccessInfos`；卡仍实现/接受
-  AES-128，`EmrtdPaceIntegrationTest` 显式覆盖）。需定位慢因（`AesCmac` 逐块 `Cipher.doFinal`
-  的每调用开销、AES-CBC、或平台 AES 加速缺失）并优化后再重新宣告；平台
-  `Signature.ALG_AES_CMAC_128` 在 jcsl 上运行期异常/复位，无法在模拟器验证。
+  AES-128，`EmrtdPaceIntegrationTest` 显式覆盖）。**（2026-10-11）根因已定位并改**：平台无
+  AES-CMAC `Signature`（`ALG_AES_CMAC_128`/`AES_MAC_128_NOPAD` 均不可用，探针实测 0），CMAC
+  只能手工构造，旧实现每个 16 B 块一次 ECB `doFinal`（~20 次/包）；现改为用
+  `Cipher.ALG_AES_BLOCK_128_CBC_NOPAD` 批量链式（256 B 分块，只留最后一块作链值），352 B 的
+  SM 消息降到 2 次 CBC + 1 次 ECB。**已确认 jcsl 与 J3R180 均支持
+  `ALG_AES_BLOCK_128_CBC_NOPAD`**（`PACE ECDH-GM AES-128` 在两侧均通过，见 cryptography.md
+  §4.1）。单测（含 >256 B 跨块向量）与模拟器矩阵（`make test`）全绿；**待真卡实测**新的
+  `READ BINARY` 耗时与瞬态余量（`AesCmac` 新增 256 B CBC 暂存/实例），达标后重新在
+  `EF.CardAccess` 宣告 AES-128。
 - [ ] **SEARCH RECORD 命令 DO 解析复核（命令级单测发现，待正文复核）**：
   ① 搜索窗口的两个 `DO'02'`（偏移/字节数）由 `Lds2Record.searchRecord` 固定按 2 字节
   `Util.getShort` 读取，未按 BER 长度字段解码；ICAO Doc 9303-10 §3.7.3 Table 17 与
