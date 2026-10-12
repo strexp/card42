@@ -106,7 +106,8 @@ gitignore，用于私密密钥）< 环境变量 < 命令行，如 `make JAVA_HOM
 | `DEPLOY_EMRTD_CONF` | `deploy/deploy-emrtd.conf` | eMRTD LDS1/LDS2 实例 |
 | `DEPLOY_BOTH_CONF` | `deploy/deploy.conf` | both 矩阵 |
 | `EMV_PERSO_KEYS` | `perso/emv/sample.perso.sda.keys` | 示例 SDA 密钥档案（两脚本共用） |
-| `SIM_EMV_PERSO_SCRIPT` | `perso/emv/sample-test.perso` | 模拟器个性化脚本（生产 + 测试实例） |
+| `SIM_EMV_PERSO_SCRIPT` | `perso/emv/sample-test.perso` | EMV 模拟器个性化脚本（生产 + 测试实例） |
+| `SIM_BOTH_EMV_PERSO_SCRIPT` | `perso/emv/sample.perso` | both 模拟器 EMV 脚本（仅生产实例 + DDA） |
 | `CARD_EMV_PERSO_SCRIPT` | `perso/emv/sample-j3r180.perso` | 真卡个性化脚本（仅生产实例） |
 | `BUILD_DIR` | `build` | 输出目录 |
 | `SIM_PORT` | `9025` | 模拟器端口 |
@@ -134,8 +135,10 @@ make sim-stop                                 # 停止模拟器
 make test-unit                                # 纯 JVM 单测（无需模拟器）
 ```
 
-`make test-both-sim` = 单次共存部署跑生产 EMV suite（`BOTH_EMV_SUITES` = `ContactKernelTest`/
-`DirectoryTest`；测试实例 04/06/08 未部署）+ 全部 `EMRTD_SUITES`。`make test-emv-sim` 先跑
+`make test-both-sim` = 单次共存部署跑生产 EMV suite（`BOTH_EMV_SUITES` = `EmvFlowTest`/
+`ContactKernelTest`/`DirectoryTest`/`OnlineClosedLoopTest`/`TerminalCliTest`；这些只用生产实例，
+测试实例 04/06/08 未部署，故 `BoundaryTest`/`LogTest`/`VelocityTest`/`AesFlowTest` 不在此矩阵）+
+全部 `EMRTD_SUITES`。`make test-emv-sim` 先跑
 `EMV_SUITES`（其末项 `IssuerScriptTest` 会 block 整卡），再**重启模拟器**、重新部署与个性化后跑
 `CardBlockTest`（CSU 卡级 block 路径，不可逆，须全新卡；故为 `test-emv-sim` 的第二阶段，而非独立
 target）。加 `TEST_CONTACTLESS=1` 走非接触流（经 PPSE）。
@@ -147,7 +150,7 @@ target）。加 `TEST_CONTACTLESS=1` 走非接触流（经 PPSE）。
 `perso/emrtd/csca.crt`。
 
 `make test-both-sim`：`sim-both-install` + `sim-both-perso`（加载三个 CAP，按 `deploy.conf` 创建 EMV +
-eMRTD 实例，EMV 用 `perso/emv/sample-j3r180.perso`、eMRTD 用 `perso/emrtd/sample.perso`），再跑
+eMRTD 实例，EMV 用 `perso/emv/sample.perso`（生产集 + DDA）、eMRTD 用 `perso/emrtd/sample.perso`），再跑
 `BOTH_EMV_SUITES` 与 `EMRTD_SUITES`。
 
 `make test-emv-sim-run S=<Suite>`（`S` 默认 `EmvFlowTest`）先执行 `sim-emv-install` +
@@ -171,7 +174,8 @@ eMRTD 实例，EMV 用 `perso/emv/sample-j3r180.perso`、eMRTD 用 `perso/emrtd/
    - `sim-emv-perso`：`PersoExporter` 把 `$(SIM_EMV_PERSO_SCRIPT)`（默认 `perso/emv/sample-test.perso`，
      含测试实例）每实例的 DGI 序列导出为 hex，交给 GPPro `--personalize <AID> --store-data <hex>`。
    - `sim-emrtd-perso`：`EmrtdPersoExporter -script=$(EMRTD_PERSO_SCRIPT)`。
-   - `sim-both-perso`：EMV 用 `$(CARD_EMV_PERSO_SCRIPT)`（生产集），eMRTD 用
+   - `sim-both-perso`：EMV 用 `$(SIM_BOTH_EMV_PERSO_SCRIPT)`（默认 `perso/emv/sample.perso`，
+     生产集 + DDA），eMRTD 用
      `EmrtdPersoExporter -script=$(EMRTD_PERSO_SCRIPT)`（DG1/DG2/DG15/SOD + K_seed + AA 私钥 +
      CA/PACE 密钥 + LDS2 EF）。
 

@@ -96,7 +96,7 @@ sim-emrtd-perso: $(HOST_STAMP)
 sim-both-perso: $(HOST_STAMP)
 	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_SH="$(GP_SH)" GP_TRANSPORT="$(GP_SIM)" \
 	  $(PERSO_SH) $(JAVA) -cp $(HOST_CLASSES) card42.host.emv.cli.Main perso export \
-	    -script=$(abspath $(CARD_EMV_PERSO_SCRIPT)) -keys=$(abspath $(EMV_PERSO_KEYS))
+	    -script=$(abspath $(SIM_BOTH_EMV_PERSO_SCRIPT)) -keys=$(abspath $(EMV_PERSO_KEYS))
 	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_SH="$(GP_SH)" GP_TRANSPORT="$(GP_SIM)" \
 	  $(PERSO_SH) $(JAVA) -cp $(HOST_CLASSES) card42.host.emrtd.perso.EmrtdPersoExporter \
 	    -script=$(abspath $(EMRTD_PERSO_SCRIPT))

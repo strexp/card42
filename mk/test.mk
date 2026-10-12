@@ -29,9 +29,12 @@ EMV_SUITES   := EmvFlowTest ContactKernelTest DirectoryTest BoundaryTest LogTest
                 AesFlowTest ContactlessTest OnlineClosedLoopTest TerminalCliTest IssuerScriptTest
 EMRTD_SUITES := EmrtdBacTest EmrtdLds2IntegrationTest EmrtdLds2AppsIntegrationTest EmrtdPaceIntegrationTest EmrtdChipAuthIntegrationTest EmrtdLds1ChipAuthIntegrationTest EmrtdTerminalAuthIntegrationTest
 
-# Both matrix: a single coexistence deployment runs the production EMV subset
-# (the test instances 04/06/08 are not deployed) plus the eMRTD suites.
-BOTH_EMV_SUITES := ContactKernelTest DirectoryTest
+# Both matrix: a single coexistence deployment runs the production EMV suites
+# that need only the production instances (the test instances 04/06/08 are not
+# deployed) plus the eMRTD suites.  BoundaryTest/LogTest/VelocityTest need 06,
+# AesFlowTest 08; IssuerScriptTest and CardBlockTest would block the card.
+BOTH_EMV_SUITES := EmvFlowTest ContactKernelTest DirectoryTest \
+                   OnlineClosedLoopTest TerminalCliTest
 
 # EMV suites portable to a real card: excludes the jcsl-only LogTest, the
 # contactless ContactlessTest, and every card-blocking suite (IssuerScriptTest
