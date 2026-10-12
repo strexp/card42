@@ -144,6 +144,13 @@ public final class LdsPerso extends DgiStream.Sink {
             mode = MODE_TA2;
         } else if (dgi == DGI_TA_CURRENT_DATE) {
             mode = MODE_TA_DATE;
+        } else if (dgi == EmrtdTags.FID_CARD_ACCESS) {
+            // EF.CardAccess lives in the master file (Doc 9303-10 §3.11.3), not
+            // in the LDS1 DF (where FID 011C is EF.CVCA).
+            mode = MODE_MF;
+            currentMf = LdsMfStore.file(EmrtdTags.FID_CARD_ACCESS);
+            currentMf.ensureCapacity(valueLength);
+            currentMf.beginSet();
         } else if (dgi == EmrtdTags.DGI_CARD_SECURITY) {
             // EF.CardSecurity lives in the master file (Doc 9303-10 §3.11.4),
             // so it is streamed into the shared LdsMfStore, not the LDS1

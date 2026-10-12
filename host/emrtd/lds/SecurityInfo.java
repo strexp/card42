@@ -14,7 +14,7 @@ import card42.host.common.codec.Der;
 public abstract class SecurityInfo {
 
     public static final String ID_AA = "2.23.136.1.1.5";
-    /** Terminal Authentication protocol OID (BSI TR-03110-2, TAv2). */
+    /** Terminal Authentication protocol OID (BSI TR-03110-3, ICAO Doc 9303-11 §9.2.8). */
     public static final String ID_TA = "0.4.0.127.0.7.2.2.2";
     public static final String ID_PK_DH = "0.4.0.127.0.7.2.2.1.1";
     public static final String ID_PK_ECDH = "0.4.0.127.0.7.2.2.1.2";

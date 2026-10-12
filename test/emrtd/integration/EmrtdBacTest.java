@@ -131,7 +131,7 @@ public final class EmrtdBacTest {
         Checks.check("COM LDS version", "0107".equals(parsedCom.ldsVersion));
 
         // EF.CardAccess at FID 011C advertises PACE (Doc 9303-10 §3.11.3).
-        byte[] cardAccessBytes = LdsReader.read(terminal, LdsFileUtil.FID_CARD_ACCESS);
+        byte[] cardAccessBytes = LdsReader.readMf(terminal, LdsFileUtil.FID_CARD_ACCESS);
         CardAccess cardAccess = CardAccess.parse(cardAccessBytes);
         Checks.check("LDS1 EF.CardAccess has PACE infos", !cardAccess.paceInfos().isEmpty());
         Checks.check("LDS1 EF.CardAccess selects ECDH generic mapping",
@@ -142,7 +142,7 @@ public final class EmrtdBacTest {
         // Selected on a real card).  The by-FID read must return the same file.
         ResponseAPDU mf = terminal.selectMf();
         Checks.check("SELECT MF", mf.getSW(), 0x9000);
-        byte[] mfCardAccess = LdsReader.read(terminal, LdsFileUtil.FID_CARD_ACCESS);
+        byte[] mfCardAccess = LdsReader.readMf(terminal, LdsFileUtil.FID_CARD_ACCESS);
         Checks.bytes(cardAccessBytes, mfCardAccess, "MF-level EF.CardAccess matches");
 
         // Short-EF-identifier READ BINARY through secure messaging: DG1 (SFI

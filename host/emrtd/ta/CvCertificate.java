@@ -9,8 +9,7 @@ import java.util.Map;
  * {@code 7F21 { 7F4E <body>, 5F37 <signature> }}.  The body nests the profile
  * identifier, the certification authority reference, the public key, the
  * certificate holder reference, the CHAT, the effective/expiration dates and,
- * for CVCA/DV certificates, the Terminal Authentication v2 application
- * authorization extensions.
+ * for CVCA/DV certificates, the application authorization extensions.
  */
 public final class CvCertificate {
 
@@ -18,10 +17,10 @@ public final class CvCertificate {
     public static final String OID_TA_ECDSA_SHA_256 = "0.4.0.127.0.7.2.2.2.2.3";
     public static final String OID_TA_RSA_PSS_SHA_256 = "0.4.0.127.0.7.2.2.2.1.4";
 
-    /** Application authorization extension OIDs (ICAO Doc 9303-10 §5.4.2). */
-    public static final String OID_LDS2_TRAVEL = "2.23.136.1.1.9.1";
-    public static final String OID_LDS2_VISA = "2.23.136.1.1.9.2";
-    public static final String OID_LDS2_BIOMETRICS = "2.23.136.1.1.9.3";
+    /** Application authorization extension OIDs (ICAO Doc 9303-10 Table 99, §5.4.2). */
+    public static final String OID_LDS2_TRAVEL = "2.23.136.1.1.9.1.3";
+    public static final String OID_LDS2_VISA = "2.23.136.1.1.9.2.3";
+    public static final String OID_LDS2_BIOMETRICS = "2.23.136.1.1.9.3.3";
 
     private final int profileId;
     private final CvcPrincipal car;

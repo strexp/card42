@@ -16,7 +16,7 @@ import card42.common.Tlv;
  * TR-03110-3 A.7): the CVCA trust point(s), the certificate chain verification
  * (MSE:Set DST + PSO:Verify Certificate) and the terminal key import.
  *
- * The TAv2 terminal-signature/certificate algorithm is selected per
+ * The terminal-signature/certificate algorithm is selected per
  * certificate from its public-key OID: ECDSA-SHA-256 (TR-03111 plain r||s,
  * verified directly with SIG_CIPHER_ECDSA_PLAIN) or RSA-PSS-SHA-256
  * (Signature.ALG_RSA_SHA_256_PKCS1_PSS, salt = SHA-256 length).
@@ -135,13 +135,13 @@ public final class TaContext {
     private static final byte ROLE_DV_DOMESTIC = 2;
     private static final byte ROLE_CVCA = 3;
 
-    /** Application authorization extension OIDs (ICAO Doc 9303-10 §5.4.2). */
+    /** Application authorization extension OIDs (ICAO Doc 9303-10 Table 99, §5.4.2). */
     private static final byte[] OID_TRAVEL = {
-        0x67, (byte) 0x81, 0x08, 0x01, 0x01, 0x09, 0x01 };
+        0x67, (byte) 0x81, 0x08, 0x01, 0x01, 0x09, 0x01, 0x03 };
     private static final byte[] OID_VISA = {
-        0x67, (byte) 0x81, 0x08, 0x01, 0x01, 0x09, 0x02 };
+        0x67, (byte) 0x81, 0x08, 0x01, 0x01, 0x09, 0x02, 0x03 };
     private static final byte[] OID_BIOMETRICS = {
-        0x67, (byte) 0x81, 0x08, 0x01, 0x01, 0x09, 0x03 };
+        0x67, (byte) 0x81, 0x08, 0x01, 0x01, 0x09, 0x03, 0x03 };
 
     /* Terminal-key algorithm OIDs (BSI TR-03110-3 Table 27). */
     private static final byte[] OID_TA_ECDSA_SHA_256 = {
@@ -205,6 +205,48 @@ public final class TaContext {
     }
 
     /**
+     * EF.CVCA content (ICAO Doc 9303-11 Annex K.2): the Certification Authority
+     * Reference data objects of the trust points, most recent Effective Date
+     * first, padded with 0x00 to the fixed 36-octet size.  Called on read so a
+     * runtime CVCA Link Certificate is reflected without extra state.
+     */
+    public short cvca(byte[] out, short off) {
+        short first = (short) -1;
+        short second = (short) -1;
+        for (short i = 0; i < SLOTS; i++) {
+            if (trustKind[i] == KIND_NONE) {
+                continue;
+            }
+            if (first < 0) {
+                first = i;
+            } else if (effectiveAfter(i, first)) {
+                second = first;
+                first = i;
+            } else {
+                second = i;
+            }
+        }
+        short n = writeCar(out, off, first);
+        n = (short) (n + writeCar(out, (short) (off + n), second));
+        for (short i = n; i < (short) 36; i++) {
+            out[(short) (off + i)] = 0;
+        }
+        return (short) 36;
+    }
+
+    /** Writes one CAR data object {@code 42 <len> <CAR>}; 0 for an empty slot. */
+    private static short writeCar(byte[] out, short off, short slot) {
+        if (slot < 0 || trustKind[slot] == KIND_NONE) {
+            return 0;
+        }
+        out[off] = 0x42;
+        out[(short) (off + 1)] = (byte) trustRefLength[slot];
+        Util.arrayCopyNonAtomic(trustRef, (short) (slot * REFERENCE_LENGTH),
+                out, (short) (off + 2), trustRefLength[slot]);
+        return (short) (2 + trustRefLength[slot]);
+    }
+
+    /**
      * The slot of the CVCA key currently valid for verification: the valid slot
      * with the most recent Effective Date that has been reached (BSI
      * TR-03110-3 §2.5.1).  -1 when none is usable.
@@ -243,7 +285,10 @@ public final class TaContext {
 
     /**
      * Personalization (DGI FF07): {@code W(65) || refLen(1) || CAR(refLen)
-     * || [auth(4)]} for the primary CVCA public key (B3DES or RSA).
+     * || [effective(6)] || [auth(4)]} for the primary CVCA public key.  The
+     * Effective Date and the relative authorization are optional (the legacy
+     * form carries only the authorization); the Effective Date drives trust-point
+     * selection (ICAO Doc 9303-11 §7.1.4.3.1).
      */
     public void setTrustPoint(byte[] src, short off, short len) {
         setTrustPoint(src, off, len, (short) 0);
@@ -255,13 +300,12 @@ public final class TaContext {
     }
 
     private void setTrustPoint(byte[] src, short off, short len, short slot) {
-        // FF07/FF09 carry an EC trust point: W(65) || refLen || CAR || [auth(4)].
         if (len < (short) (EC_KEY_LENGTH + 1)) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
         short refLen = (short) (src[(short) (off + EC_KEY_LENGTH)] & 0xFF);
-        if (refLen < 1 || refLen > REFERENCE_LENGTH
-                || (short) (EC_KEY_LENGTH + 1 + refLen) > len) {
+        short base = (short) (EC_KEY_LENGTH + 1 + refLen);
+        if (refLen < 1 || refLen > REFERENCE_LENGTH || (short) (off + base) > (short) (off + len)) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
         Util.arrayCopyNonAtomic(src, off, trustKey, (short) (slot * MAX_MODULUS), EC_KEY_LENGTH);
@@ -272,12 +316,24 @@ public final class TaContext {
                 trustRef, (short) (slot * REFERENCE_LENGTH), refLen);
         trustRefLength[slot] = refLen;
         trustEffectiveValid[slot] = 0;
-        byte[] slotAuth = trustAuth;
-        short authBase = (short) (slot * 4);
-        Util.arrayFillNonAtomic(slotAuth, authBase, (short) 4, (byte) 0);
-        short authOff = (short) (off + EC_KEY_LENGTH + 1 + refLen);
-        if ((short) (authOff + 4) <= (short) (off + len)) {
-            Util.arrayCopyNonAtomic(src, authOff, slotAuth, authBase, (short) 4);
+        Util.arrayFillNonAtomic(trustAuth, (short) (slot * 4), (short) 4, (byte) 0);
+        // After the CAR: optional Effective Date (6) then relative auth (4), or
+        // the legacy authorization only.
+        short rest = (short) (len - base);
+        short p = (short) (off + base);
+        if (rest >= (short) 6) {
+            for (short i = 0; i < 6; i++) {
+                if (src[(short) (p + i)] > 9) {
+                    ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+                }
+            }
+            Util.arrayCopyNonAtomic(src, p, trustEffective, (short) (slot * 6), (short) 6);
+            trustEffectiveValid[slot] = (byte) 1;
+            p += 6;
+            rest -= 6;
+        }
+        if (rest >= (short) 4) {
+            Util.arrayCopyNonAtomic(src, p, trustAuth, (short) (slot * 4), (short) 4);
         }
         seedAuthorization();
     }

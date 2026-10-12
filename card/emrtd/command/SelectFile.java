@@ -47,12 +47,15 @@ public final class SelectFile {
             selectMf(applet);
             return 0;
         }
-        // Master-file EF.CardSecurity (Doc 9303-10 §3.11.4): after SELECT MF,
-        // FID 011D is the MF EF.CardSecurity, not the DF's EF.SOD (which the
-        // LDS1 catalog serves for the same FID).
-        if (applet.atMf && fid == EmrtdTags.FID_CARD_SECURITY) {
-            // EF.CardSecurity read access is PACE (Doc 9303-10 §3.11.4 Table 34).
-            applet.requirePace();
+        // Master-file EFs (Doc 9303-10 §3.11.3/§3.11.4): after SELECT MF, FID
+        // 011D is the MF EF.CardSecurity (the DF's 011D is EF.SOD) and FID 011C
+        // is the MF EF.CardAccess (the DF's 011C is EF.CVCA).
+        if (applet.atMf && (fid == EmrtdTags.FID_CARD_SECURITY
+                || fid == EmrtdTags.FID_CARD_ACCESS)) {
+            if (fid == EmrtdTags.FID_CARD_SECURITY) {
+                // EF.CardSecurity read access is PACE (Doc 9303-10 §3.11.4 Table 34).
+                applet.requirePace();
+            }
             applet.atMf = false;
             applet.catalog.selectMf();
             applet.selectedMf = LdsMfStore.file(fid);

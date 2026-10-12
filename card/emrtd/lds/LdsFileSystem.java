@@ -59,7 +59,7 @@ public final class LdsFileSystem {
                 new LdsFile(EmrtdTags.FID_DG14),
                 new LdsFile(EmrtdTags.FID_DG15),
                 new LdsFile(EmrtdTags.FID_DG16),
-                new LdsFile(EmrtdTags.FID_CARD_ACCESS),
+                new LdsFile(EmrtdTags.FID_CVCA),
                 new LdsFile(EmrtdTags.FID_SOD),
                 new LdsFile(EmrtdTags.FID_COM),
         };

@@ -36,7 +36,7 @@ public final class CvCertificateBuilder {
 
     /**
      * Builds and signs a CV certificate whose subject public key is RSA (the
-     * TAv2 RSA-PSS-SHA-256 profile); the signature is created with the signer's
+     * RSA-PSS-SHA-256 profile); the signature is created with the signer's
      * RSA private key (BSI TR-03110-3 C.1.2.2).
      */
     public static CvCertificate buildRsa(int profileId, CvcPrincipal car, CvcPrincipal chr,

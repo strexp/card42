@@ -2,6 +2,7 @@ package card42.emrtd;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.Util;
 
 /* READ BINARY (ISO/IEC 7816-4 §6.1.1, ICAO Doc 9303-10 §3.6.3): reads a
  * window of an LDS1 transparent EF.  Two address forms are supported:
@@ -72,6 +73,9 @@ public final class ReadBinary {
         // DG3/DG4 additionally require the Terminal Authentication ePassport
         // CHAT bit once a trust point is personalized (Doc 9303-10 §5.4.2).
         applet.requireLds1ChatAccess(file.getFid());
+        if (file.getFid() == EmrtdTags.FID_CVCA) {
+            return readCvca(applet, offset, want);
+        }
         short available = (short) (file.getLength() - offset);
         if (available < 0) {
             ISOException.throwIt(ISO7816.SW_WRONG_P1P2);
@@ -87,7 +91,12 @@ public final class ReadBinary {
      * command is refused with 6982 until PACE has completed.
      */
     private static short readSelectedMf(EmrtdApplet applet, short p1, short p2, short le) {
-        applet.requirePace();
+        if (applet.selectedMf.getFid() != EmrtdTags.FID_CARD_ACCESS) {
+            // EF.CardSecurity read access is PACE (Doc 9303-10 §3.11.4); the
+            // master-file EF.CardAccess stays readable in the clear, so a
+            // terminal can learn the PACE parameters before running PACE.
+            applet.requirePace();
+        }
         short offset = (short) (((p1 & 0x7F) << 8) | p2);
         short want = le <= 0 ? (short) 256 : le;
         short cap = applet.sm.maxResponseData();
@@ -104,14 +113,33 @@ public final class ReadBinary {
     }
 
     /**
+     * EF.CVCA (ICAO Doc 9303-11 Annex K.2): the CVCA CARs, most recent first,
+     * 36 octets padded with 0x00, generated from the personalized trust points
+     * (and any runtime link certificate).  It is not a stored EF, so the content
+     * is written straight into the response buffer.
+     */
+    private static short readCvca(EmrtdApplet applet, short offset, short want) {
+        short total = applet.ta.cvca(applet.response, (short) 0);
+        short available = (short) (total - offset);
+        if (available < 0) {
+            ISOException.throwIt(ISO7816.SW_WRONG_P1P2);
+        }
+        short n = want < available ? want : available;
+        if (offset > 0) {
+            Util.arrayCopyNonAtomic(applet.response, offset, applet.response, (short) 0, n);
+        }
+        return n;
+    }
+
+    /**
      * Files a reader may read without secure messaging: EF.COM and EF.DG15
-     * (public document/AA data) and EF.CardAccess (PACE/CA negotiation).  Every
-     * other LDS1 EF requires BAC/PACE secure messaging.
+     * (public document/AA data).  EF.CardAccess is a master-file EF served in
+     * clear by {@link #readSelectedMf}; every other LDS1 EF (including
+     * EF.CVCA, PACE only) requires secure messaging.
      */
     private static boolean isPublic(short fid) {
         return fid == EmrtdTags.FID_COM
-                || fid == EmrtdTags.FID_DG15
-                || fid == EmrtdTags.FID_CARD_ACCESS;
+                || fid == EmrtdTags.FID_DG15;
     }
 
     /** True when this command arrived wrapped in an established SM session. */

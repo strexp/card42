@@ -59,7 +59,7 @@ public final class EmrtdLds1ChipAuthIntegrationTest {
 
         // EF.CardAccess (master file) advertises PACE and Chip Authentication.
         CardAccess cardAccess = CardAccess.parse(
-                LdsReader.read(terminal, LdsFileUtil.FID_CARD_ACCESS));
+                LdsReader.readMf(terminal, LdsFileUtil.FID_CARD_ACCESS));
         Checks.check("LDS1 EF.CardAccess advertises PACE", !cardAccess.paceInfos().isEmpty());
         Checks.check("LDS1 EF.CardAccess advertises Chip Authentication",
                 !cardAccess.chipAuthenticationInfos().isEmpty());

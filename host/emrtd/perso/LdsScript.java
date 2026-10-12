@@ -24,6 +24,11 @@ import card42.host.common.util.Hex;
  *   @aa &lt;hex&gt;                   AA private key (modLen || modulus || expLen || exponent)
  *   @ca &lt;hex&gt;                   Chip Authentication P-256 private scalar (DGI FF03)
  *   @cardsecurity &lt;hex&gt;         LDS1 master-file EF.CardSecurity SignedData (DGI FF05)
+ *   @ta-date &lt;YYMMDD&gt;           ICC current date (DGI FF08)
+ *   @cvca &lt;W-hex&gt; &lt;CAR&gt; &lt;YYMMDD&gt; &lt;auth-hex&gt; [secondary]
+ *                                CVCA trust point (DGI FF07, or FF09 with
+ *                                {@code secondary}): EC public point, holder
+ *                                reference, Effective Date, relative authorization
  *   @lds2 &lt;role&gt;               lds2 role: travel | visa | biometrics
  *   @record &lt;fid-hex&gt; &lt;hex&gt;     append one record to an LDS2 record EF
  *   @transparent &lt;fid-hex&gt; &lt;hex&gt;  set one LDS2 transparent EF (e.g. 0201)
@@ -63,6 +68,10 @@ public final class LdsScript {
                 new LinkedHashMap<Integer, java.util.List<byte[]>>();
         /** LDS2 transparent EF FID -> content (e.g. Additional Biometrics 0201). */
         public final Map<Integer, byte[]> transparent = new LinkedHashMap<Integer, byte[]>();
+        /** ICC current date (DGI FF08), YYMMDD; null for the demo default. */
+        public String taDate;
+        /** CVCA trust points (DGI FF07/FF09), in script order. */
+        public final List<TrustPoint> trustPoints = new ArrayList<TrustPoint>();
 
         Entry(String aid) {
             this.aid = aid;
@@ -70,6 +79,28 @@ public final class LdsScript {
 
         public boolean isLds2() {
             return !"lds1".equals(role);
+        }
+    }
+
+    /** A CVCA trust point from {@code @cvca} (ICAO Doc 9303-11 §7.1.4.3.1). */
+    public static final class TrustPoint {
+        /** EC public point W (65 bytes, {@code 04||X||Y}). */
+        public final byte[] publicKey;
+        /** Certificate Authority Reference (ISO 8859-1). */
+        public final String car;
+        /** Effective Date, 6 digits YYMMDD. */
+        public final String effective;
+        /** Relative authorization (4 bytes: ePassport CHAT + the LDS2 apps). */
+        public final byte[] authorization;
+        public final boolean secondary;
+
+        TrustPoint(byte[] publicKey, String car, String effective, byte[] authorization,
+                   boolean secondary) {
+            this.publicKey = publicKey;
+            this.car = car;
+            this.effective = effective;
+            this.authorization = authorization;
+            this.secondary = secondary;
         }
     }
 
@@ -148,6 +179,20 @@ public final class LdsScript {
             case "@cardsecurity":
                 current.cardSecurity = Hex.parse(parts[1]);
                 break;
+            case "@ta-date":
+                current.taDate = parts[1];
+                break;
+            case "@cvca": {
+                String[] a = line.split("\\s+");
+                if (a.length < 5) {
+                    throw new IllegalArgumentException(
+                            "@cvca needs <W-hex> <CAR> <YYMMDD> <auth-hex> [secondary]");
+                }
+                boolean secondary = a.length > 5 && "secondary".equals(a[5]);
+                current.trustPoints.add(new TrustPoint(
+                        Hex.parse(a[1]), a[2], a[3], Hex.parse(a[4]), secondary));
+                break;
+            }
             case "@record": {
                 int fid = Integer.parseInt(parts[1], 16);
                 java.util.List<byte[]> list = current.records.get(fid);

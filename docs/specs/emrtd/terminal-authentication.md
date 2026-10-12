@@ -103,9 +103,9 @@
 
 | 编号 | 决策 | 依据 |
 |------|------|------|
-| **A** | **TAv2**（BSI TR-03110-2 §3.3），终结签名算法 **ECDSA-SHA-256**（`id-TA-ECDSA-SHA-256`）；`RSA-PSS-SHA-256`（`id-TA-RSA-PSS-SHA-256`）为已验证备选 | Doc 9303-11 §7.1.4 Table 8；实测两者在 J3R180 均可用；ECDSA 与既有 P-256/CA 栈同族 |
+| **A** | **Terminal Authentication v1**（ICAO Doc 9303-11 §9.2.8 `version MUST be 1`），终结签名算法 **ECDSA-SHA-256**（`id-TA-ECDSA-SHA-256`）；`RSA-PSS-SHA-256`（`id-TA-RSA-PSS-SHA-256`）为已备选 | Doc 9303-11 §7.1.4 Table 7/8；实测两者在 J3R180 均可用；ECDSA 与既有 P-256/CA 栈同族 |
 | **B** | TA 必须**跟在 Chip Authentication 之后**（本项目 PACE 是通用映射而非 CAM），授权绑定到 CA 会话的终端临时公钥 | Doc 9303-11 §7.1.2/§7.1.3 |
-| **C** | **TAv2 信任点**：不使用 `EF.CVCA`（TAv1）；CVCA 公钥与引用由个性化注入、经 `TerminalAuthenticationInfo` 在 EF.CardAccess/DG14 宣告，从而避开 `EF.CVCA` 与 `EF.CardAccess` 的 `011C` FID 冲突 | BSI TR-03110-3 A.1.1.3/§A.7.2；Doc 9303-10 §3.11.3 |
+| **C** | 使用 **EF.CVCA**（LDS1 DF，默认 FID `011C`/SFI `1C`，36 B，≤2 CAR，PACE 读，Doc 9303-11 Annex K.2）；EF.CardAccess 归 MF（同 FID 不同 DF）。信任点（CVCA 公钥/引用/Effective Date/相对授权）由个性化注入，`TerminalAuthenticationInfo` 宣告 version 1（默认 FID，`efCVCA` 省略） | Doc 9303-11 §7.1.4.3.1 + Annex K.2；Doc 9303-10 §3.11.3/§3.11.4 |
 | **D** | LDS2 访问 = `PACE`（或 CA）+ **有效授权**：对 IS/DV/CVCA 的 CHAT/扩展逐位 AND，按 Doc 9303-10 §5.4 Table 96/97/98 门控读/写/追加 | Doc 9303-10 §5.4.1/§5.4.2 |
 
 ## 4. 协议与 APDU（Doc 9303-11 §7.1.5）
@@ -150,12 +150,12 @@ TA 的两动挑战-响应（§7.1.2），全程在已建立的 SM 内，命令�
 - **会话绑定**：保存 `PKDH,IFD`（CA 终端临时公钥）与 `PKDH,IC`（PACE 卡侧临时公钥），
   计算 `Comp`；会话内**只允许一次** TA（重复 → `6982`）；TA 失败不破坏 SM（§7.1.3）。
 - **授权**（`ta/Authorization.java`）：CHAT（角色 OID `0.4.0.127.0.7.3.1.2` + `id-IS`…）
-  与应用扩展（`id-icao-lds2 = 2.23.136.1.1.9`；Travel `…9.1`、Visa `…9.2`、
-  Biometrics `…9.3`）逐位 AND 求有效授权；`EmrtdApplet.requirePace()` 升级为
+  与应用扩展（`id-icao-lds2-*-access` = `2.23.136.1.1.9.1.3` / `…9.2.3` / `…9.3.3`，
+  Doc 9303-10 Table 99）逐位 AND 求有效授权；`EmrtdApplet.requirePace()` 升级为
   `requireAccess(bits)`，按 Table 96/97/98 门控 LDS2 EF 选择/读/写/追加。
 - **缓冲**：复用包级 `EmrtdScratch`/`SmScratch`，命令路径不 `new` 大数组（真卡余量实测见 §2）。
-- **SecurityInfo**：新增 `TerminalAuthenticationInfo`（protocol `id-TA = 0.4.0.127.0.7.2.2.2`，
-  TAv2 version=2，`efCVCA` 省略）。
+- **SecurityInfo**：`TerminalAuthenticationInfo`（protocol `id-TA = 0.4.0.127.0.7.2.2.2`，
+  **version 1**，默认 EF.CVCA FID 因此 `efCVCA` 省略）；`ChipAuthenticationInfo` version 1。
 
 ## 6. 主机侧设计要点（`host/emrtd/`）
 
@@ -174,7 +174,8 @@ TA 的两动挑战-响应（§7.1.2），全程在已建立的 SM 内，命令�
 1. `ID_IC` 在「PACE(GM) → CA」流程下取 PACE 还是 CA 的卡侧公钥——以 JMRTD
    （`tools/jmrtd-hostapi`，仅测试期引用）互操作定案。
 2. `Comp` 的口径（ECDSA = x 坐标）与卡侧保留位置。
-3. TAv2 信任点是否需在 `EF.CardAccess` 之外再暴露给 DGs（Doc 9303-10 §3.11.3）。
+3. EF.CVCA（LDS1 DF `011C`）与 MF EF.CardAccess（同 `011C`）已按 DF/MF 分离实现；PACE
+   数据对象下发 CAR（`0x87`/`0x88`）为 EF.CVCA 之外的补充。
 
 ## 8. 分阶段计划（P1–P7）
 

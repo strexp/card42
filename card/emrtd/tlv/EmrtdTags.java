@@ -90,13 +90,14 @@ public final class EmrtdTags {
     public static final short DGI_PACE_CAN_SEED = (short) 0xFF06;
     /**
      * Terminal Authentication CVCA trust point (project DGI FF07):
-     * {@code W(65) || refLen(1) || CAR(refLen) || [auth(4)]}.
+     * {@code W(65) || refLen(1) || CAR(refLen) || [effective(6)] || [auth(4)]}.
      */
     public static final short DGI_TA_TRUST_POINT = (short) 0xFF07;
     /**
      * Terminal Authentication secondary CVCA trust point (project DGI FF09):
-     * the same {@code W(65) || refLen(1) || CAR || [auth(4)]} layout as FF07,
-     * for a card personalized with two CVCA keys (BSI TR-03110-3 §2.5.1).
+     * the same {@code W(65) || refLen || CAR || [effective(6)] || [auth(4)]}
+     * layout as FF07, for a card personalized with two CVCA keys
+     * (ICAO Doc 9303-11 §7.1.4.3).
      */
     public static final short DGI_TA_TRUST_POINT_2 = (short) 0xFF09;
     /**

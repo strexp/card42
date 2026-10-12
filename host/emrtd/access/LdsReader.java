@@ -94,4 +94,17 @@ public final class LdsReader {
         }
         return out.toByteArray();
     }
+
+    /**
+     * Reads a master-file EF (EF.CardAccess 011C, EF.CardSecurity 011D): SELECT
+     * MF then SELECT FILE by FID (Doc 9303-10 §3.11.3/§3.11.4).  The eMRTD DF
+     * serves a different file for the same FID (EF.CVCA / EF.SOD).
+     */
+    public static byte[] readMf(EmrtdTerminal terminal, int fid) throws Exception {
+        ResponseAPDU mf = terminal.selectMf();
+        if (mf.getSW() != 0x9000) {
+            throw new IllegalStateException("SELECT MF failed: " + Sw.format(mf.getSW()));
+        }
+        return read(terminal, fid);
+    }
 }

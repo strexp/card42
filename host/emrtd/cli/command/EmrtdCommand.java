@@ -276,7 +276,7 @@ public final class EmrtdCommand {
      */
     private static ChipAuth.Result chipAuthentication(EmrtdTerminal terminal) throws Exception {
         CardAccess cardAccess = CardAccess.parse(
-                LdsReader.read(terminal, LdsFileUtil.FID_CARD_ACCESS));
+                LdsReader.readMf(terminal, LdsFileUtil.FID_CARD_ACCESS));
         if (cardAccess.chipAuthenticationInfos().isEmpty()) {
             return null;
         }
