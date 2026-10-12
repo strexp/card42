@@ -2,8 +2,10 @@
 
 > eMRTD 实现的当前设计：LDS1 + BAC + ISO/IEC 7816-4 安全报文 + Passive Authentication +
 > Active Authentication，以及 LDS2 应用、EF.CardAccess/SecurityInfo 解析、Chip
-> Authentication（ECDH）与 PACE（ECDH 通用映射，3DES 与 AES-128 宣告，MRZ 与 CAN）。EAC 1.11 仍为可选待办
-> （[`TODO.emrtd.md`](../../../TODO.emrtd.md)）。
+> Authentication（ECDH）、PACE（ECDH 通用映射，3DES 与 AES-128 宣告，MRZ 与 CAN）与
+> **Terminal Authentication（TAv2，ECDSA-SHA-256）**。EAC 1.11（TAv1/EF.CVCA）仍为可选待办
+> （[`TODO.emrtd.md`](../../../TODO.emrtd.md)）。TA 的决策与协议见
+> [terminal-authentication.md](terminal-authentication.md)。
 
 ## 1. 范围与 AID
 
@@ -420,3 +422,33 @@ PACE 密钥种子（FF04/FF06）个性化，CA 另有静态 P-256 标量（FF03�
 - 主机终端实现同一 profile（`host/emrtd/access/Pace.java`）；其通用映射 `G' = [s]G + H`
   使用 `host/common/crypto/P256.java` 的自包含 P-256 运算（仿射点加 + double-and-add 标量乘），
   无需外部 EC provider。CLI 用 `terminal emrtd read -pace` 运行。
+
+## 17. Terminal Authentication（TAv2, Doc 9303-11 §7.1, BSI TR-03110-3 A.7）
+
+TA 在 PACE 之后把终端授权绑定到 CA 会话，按 CHAT/应用授权位门控 LDS2（Doc 9303-10 §5.4）。
+算法为 **ECDSA-SHA-256**，签名在线上是 TR-03111 **plain（r‖s）**；卡侧
+`Signature.getInstance(ALG_SHA_256, SIG_CIPHER_ECDSA_PLAIN, PAD_NULL)` 直接验 plain，无需
+DER 转换。完整决策、APDU 序列与开放点见 [terminal-authentication.md](terminal-authentication.md)。
+
+- **卡侧**（`card/emrtd/ta/TaContext`）：CVCA 信任点（个性化 DGI `FF07`：
+  `W(65)‖refLen(1)‖CAR‖[auth(4)]`）、`MSE:Set DST`(`81B6`)、`PSO:Verify Certificate`
+  (`2A/00BE`)、`MSE:Set AT`(`81A4`)、`EXTERNAL AUTHENTICATE`（`ID_IC‖rIC‖Comp(PKDH,IFD)`，
+  64 B plain）。`ID_IC` 取 PACE step-3 卡侧临时公钥 x 坐标，`Comp(PKDH,IFD)` 取 CA 终端临时
+  公钥 x 坐标。当前日期 `FF08`（6 octet 未打包 BCD）用于拒绝过期证书并前移。**TA 状态为包级
+  static 共享**（一张卡一个信任点/当前日期，同一时刻只选一个实例）；EC 公钥与 `Signature`
+  在个性化 `FF07` 时建一次，命令路径不分配（`docs/specs/common/risks.md` §2）。
+- **授权**：`TaContext.effectiveAuth` = 信任点授权 ∧ 每张已验证证书的 CHAT/应用扩展逐位 AND
+  （App 序号 Travel/Visa/Bio = 1/2/3）；`EmrtdApplet.requireLds2Access(bit)` 取代
+  `requirePace()`（无信任点时仅强制 PACE，便于开发配置）。LDS1 的 DG3/DG4 CHAT 位门控尚未接线。
+- **主机**（`host/emrtd/ta/`）：`CvCertificate`/`CvCertificateCodec`/`CvcPrincipal`/`Chat`/
+  `CvCertificateBuilder`/`CvChainVerifier`/`TaChain`/`TerminalAuth`；`TerminalAuthenticationInfo`
+  接入 `SecurityInfo`/`CardAccess`；`host/common/crypto/Ecdsa` 为自包含 P-256（plain）。
+  CLI：`terminal emrtd ta-export -dir=<path>` 生成 demo 链；`terminal emrtd read -pace -ca -ta
+  -ta-chain=<file> -ta-key=<hex>` 跑完整 PACE→CA→TA。
+- **个性化**：`EmrtdPersoExporter` 对 LDS1/每个 LDS2 实例追写 `FF07` 信任点（demo CVCA
+  `TaChain.demo`）与 `FF08` 当前日期，并在 EF.CardAccess 中宣告 `TerminalAuthenticationInfo`
+  （`id-TA`，version 2，无 `efCVCA`）；`perso/emrtd/sample.perso` 用 `@ca` 为每个 LDS2 实例
+  提供 CA 静态标量。
+- **端到端**：`EmrtdTerminalAuthIntegrationTest`（PACE→CA→TA 后 LDS2 Travel 记录读/追加放行，
+  TA 前 `6982`）；`EmrtdLds2*`/`EmrtdChipAuthIntegrationTest` 均加 CA+TA。TA 的
+  `PSO:Verify Certificate`（SM 封装 >255 B）走卡侧扩展长度命令接收路径。

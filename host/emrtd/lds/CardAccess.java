@@ -42,6 +42,17 @@ public final class CardAccess {
         return out;
     }
 
+    /** All Terminal Authentication entries, in document order. */
+    public List<TerminalAuthenticationInfo> terminalAuthenticationInfos() {
+        List<TerminalAuthenticationInfo> out = new ArrayList<TerminalAuthenticationInfo>();
+        for (SecurityInfo info : securityInfos) {
+            if (info instanceof TerminalAuthenticationInfo) {
+                out.add((TerminalAuthenticationInfo) info);
+            }
+        }
+        return out;
+    }
+
     /**
      * Selects the first supported PACE protocol: ECDH generic mapping when
      * present, else DH generic mapping, else null (the PACE protocol itself is

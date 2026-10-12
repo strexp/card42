@@ -44,8 +44,9 @@ public final class Lds2File {
             applet.lds2.clearSelection();
             return 0;
         }
-        // Every DF file needs PACE.
-        applet.requirePace();
+        // Every DF file needs PACE and, when a Terminal Authentication trust
+        // point is personalized, the LDS2 read authorization (Doc 9303-10 §5.4).
+        applet.requireLds2Access(EmrtdApplet.LDS2_READ_BIT);
         applet.selectedMf = null;
         applet.lds2.select(fid);
         return 0;
@@ -86,10 +87,16 @@ public final class Lds2File {
             }
         }
         // EF.CardAccess, EF.ATR/INFO and EF.DIR are readable before PACE;
-        // EF.CardSecurity and the record EFs need PACE (Doc 9303-10 §3.11.4
-        // Table 34, §5.4).
+        // EF.CardSecurity (master file) needs PACE (Doc 9303-10 §3.11.4
+        // Table 34), the DF transparent EFs need PACE and, when a
+        // Terminal Authentication trust point is present, the read
+        // authorization (§5.4).
         if (!isPublicMf(file.getFid())) {
-            applet.requirePace();
+            if (applet.selectedMf != null) {
+                applet.requirePace();
+            } else {
+                applet.requireLds2Access(EmrtdApplet.LDS2_READ_BIT);
+            }
         }
         short want = le <= 0 ? (short) 256 : le;
         short cap = applet.sm.maxResponseData();

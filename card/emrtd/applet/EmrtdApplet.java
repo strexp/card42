@@ -52,6 +52,8 @@ public final class EmrtdApplet extends AppletBase
     final Lds2Perso lds2Perso;
     final ChipAuth chipAuth;
     final Pace pace;
+    /** Terminal Authentication state; created for every eMRTD role. */
+    final TaContext ta;
 
     /* Session keys, counters and the challenge are the package-shared
      * CLEAR_ON_DESELECT buffers of {@link EmrtdScratch}: they were per-instance
@@ -159,8 +161,9 @@ public final class EmrtdApplet extends AppletBase
         sm = sm3des;
         chipAuth = new ChipAuth();
         pace = new Pace();
-        perso = lds1Role ? new LdsPerso(catalog, aa, chipAuth, pace) : null;
-        lds2Perso = lds2 == null ? null : new Lds2Perso(lds2, chipAuth, pace);
+        ta = new TaContext();
+        perso = lds1Role ? new LdsPerso(catalog, aa, chipAuth, pace, ta) : null;
+        lds2Perso = lds2 == null ? null : new Lds2Perso(lds2, chipAuth, pace, ta);
         expectedBlock = 0;
         // EF.DIR lists every application the card hosts (Doc 9303-10 §3.11.2).
         LdsMfStore.addDirectoryEntry(dfName, dfNameLength);
@@ -243,6 +246,9 @@ public final class EmrtdApplet extends AppletBase
         smAes.reset();
         sm = sm3des;
         pace.reset();
+        if (ta != null) {
+            ta.clearSession();
+        }
     }
 
     /**
@@ -368,6 +374,7 @@ public final class EmrtdApplet extends AppletBase
         case EmrtdTags.INS_INTERNAL_AUTHENTICATE:
         case EmrtdTags.INS_EXTERNAL_AUTHENTICATE:
         case EmrtdTags.INS_MANAGE_SECURITY_ENVIRONMENT:
+        case EmrtdTags.INS_PSO:
             try {
                 APDU.waitExtension();
             } catch (APDUException e) {
@@ -462,6 +469,12 @@ public final class EmrtdApplet extends AppletBase
                         apduBuffer[ISO7816.OFFSET_P2], data, off, len);
             case EmrtdTags.INS_GENERAL_AUTHENTICATE:
                 return Mse.generalAuthenticate(this, data, off, len);
+            case EmrtdTags.INS_GET_CHALLENGE:
+                return GetChallenge.process(this);
+            case EmrtdTags.INS_EXTERNAL_AUTHENTICATE:
+                return ExternalAuthenticate.process(this, data, off, len);
+            case EmrtdTags.INS_PSO:
+                return PsoVerifyCertificate.process(this, data, off, len);
             default:
                 ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
                 return 0; // unreachable
@@ -481,6 +494,8 @@ public final class EmrtdApplet extends AppletBase
         case EmrtdTags.INS_MANAGE_SECURITY_ENVIRONMENT:
             return Mse.process(this, apduBuffer[ISO7816.OFFSET_P1],
                     apduBuffer[ISO7816.OFFSET_P2], data, off, len);
+        case EmrtdTags.INS_PSO:
+            return PsoVerifyCertificate.process(this, data, off, len);
         case EmrtdTags.INS_GENERAL_AUTHENTICATE:
             return Mse.generalAuthenticate(this, data, off, len);
         default:
@@ -497,6 +512,39 @@ public final class EmrtdApplet extends AppletBase
      */
     void requirePace() {
         if (!paceDone) {
+            ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+        }
+    }
+
+    /** LDS2 read authorization bit (b1 of the application authorization byte). */
+    static final byte LDS2_READ_BIT = 0;
+    /** LDS2 append authorization bit (b2 of the application authorization byte). */
+    static final byte LDS2_APPEND_BIT = 1;
+
+    /** The application authorization index for this LDS2 instance (1..3). */
+    private short lds2ApplicationIndex() {
+        switch (role) {
+        case EmrtdInstallParameters.ROLE_LDS2_TRAVEL:
+            return (short) 1;
+        case EmrtdInstallParameters.ROLE_LDS2_VISA:
+            return (short) 2;
+        case EmrtdInstallParameters.ROLE_LDS2_BIOMETRICS:
+            return (short) 3;
+        default:
+            return (short) 0;
+        }
+    }
+
+    /**
+     * LDS2 access control (ICAO Doc 9303-11 §1.2 Note 2 / Doc 9303-10 §5.4):
+     * PACE is required, and once a Terminal Authentication trust point is
+     * personalized the terminal must hold the requested authorization bit for
+     * this application.  A card without a trust point enforces PACE only
+     * (development configuration).
+     */
+    void requireLds2Access(byte bit) {
+        requirePace();
+        if (ta != null && ta.hasTrustPoint() && !ta.granted(lds2ApplicationIndex(), bit)) {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
     }

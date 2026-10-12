@@ -43,13 +43,21 @@ public final class Pace {
         public final byte[] ksEnc;
         public final byte[] ksMac;
         public final long ssc;
+        /**
+         * The PICC's ephemeral public key from PACE step 3 (uncompressed
+         * {@code 0x04||X||Y}).  Terminal Authentication derives the chip
+         * identifier {@code ID_IC = Comp(PKDH,IC)} (the x-coordinate) from it
+         * (ICAO Doc 9303-11 §7.1.2/§7.1.4.2.3).
+         */
+        public final byte[] piccPublicKey;
         private final boolean aes;
 
-        Session(byte[] ksEnc, byte[] ksMac, long ssc, boolean aes) {
+        Session(byte[] ksEnc, byte[] ksMac, long ssc, boolean aes, byte[] piccPublicKey) {
             this.ksEnc = ksEnc;
             this.ksMac = ksMac;
             this.ssc = ssc;
             this.aes = aes;
+            this.piccPublicKey = piccPublicKey;
         }
 
         public SecureMessaging secureMessaging() {
@@ -174,7 +182,7 @@ public final class Pace {
         if (tPicc == null || !Arrays.equals(expected, tPicc)) {
             throw new IllegalStateException("PACE PICC token mismatch");
         }
-        return new Session(ksEnc, ksMac, 0L, aes);
+        return new Session(ksEnc, ksMac, 0L, aes, pkIcc2Bytes);
     }
 
     private static byte[] clearGa(EmrtdTerminal terminal, byte[] data) throws Exception {

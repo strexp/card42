@@ -85,6 +85,8 @@ public final class EmrtdLds2IntegrationTest {
                 EmrtdPersoExporter.DATE_OF_BIRTH, EmrtdPersoExporter.DATE_OF_EXPIRY);
         terminal.setSecureMessaging(pace.secureMessaging());
         Checks.check("PACE established on the Travel application", true);
+        TaSupport.authenticate(terminal, pace, new java.security.SecureRandom());
+        Checks.check("Chip + Terminal Authentication on the Travel application", true);
 
         List<byte[]> records = LdsReader.readAllRecords(terminal, LdsFileUtil.sfi(FID_ENTRY), 1);
         Checks.check("at least the two personalized entry records (" + records.size() + ")",

@@ -34,9 +34,31 @@ public final class ChipAuth {
     private ChipAuth() {
     }
 
+    /** The CA result: the re-keyed secure messaging and the terminal's ephemeral public key. */
+    public static final class Result {
+        public final Iso7816Sm secureMessaging;
+        /**
+         * The terminal's ephemeral public key W (uncompressed {@code 0x04||X||Y}).
+         * Terminal Authentication derives {@code Comp(PKDH,IFD)} (the
+         * x-coordinate) from it (ICAO Doc 9303-11 §7.1.2/§7.1.4.2.3).
+         */
+        public final byte[] terminalPublicKeyW;
+
+        Result(Iso7816Sm secureMessaging, byte[] terminalPublicKeyW) {
+            this.secureMessaging = secureMessaging;
+            this.terminalPublicKeyW = terminalPublicKeyW;
+        }
+    }
+
     /** Runs Chip Authentication and installs the new SM session on the terminal. */
     public static Iso7816Sm authenticate(EmrtdTerminal terminal, byte[] chipPublicKeyW,
                                          ChipAuthenticationInfo info) throws Exception {
+        return authenticateResult(terminal, chipPublicKeyW, info).secureMessaging;
+    }
+
+    /** Runs Chip Authentication, returning the SM session and the terminal's ephemeral key. */
+    public static Result authenticateResult(EmrtdTerminal terminal, byte[] chipPublicKeyW,
+                                            ChipAuthenticationInfo info) throws Exception {
         if (!info.isEcdh()) {
             throw new IllegalArgumentException("only ECDH Chip Authentication is supported");
         }
@@ -65,7 +87,7 @@ public final class ChipAuth {
         byte[] ksMac = deriveKey(P256.x(z), 2);
         Iso7816Sm sm = new Iso7816Sm(ksEnc, ksMac, 0L);
         terminal.setSecureMessaging(sm);
-        return sm;
+        return new Result(sm, ephemeralW);
     }
 
     /** KDF(Z, counter) = SHA-1(Z || 00 00 00 counter), 16 bytes with DES parity. */

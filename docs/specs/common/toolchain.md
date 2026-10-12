@@ -381,9 +381,11 @@ card     block-app|unblock-app|block|pin-change|pin-unblock|get-data|atc|last-on
 version / help [command]
 
 # card42-emrtd
-terminal emrtd read    -host=... -doc=... -dob=YYMMDD -doe=YYMMDD [-pace] [-can=<6 digits>] [-json=1]  BAC/PACE+SM+PA+AA
+terminal emrtd read    -host=... -doc=... -dob=YYMMDD -doe=YYMMDD [-pace] [-can=<6 digits>] [-ca] \
+                       [-ta -ta-chain=<file> -ta-key=<hex>] [-csca=<cert>] [-json=1]  BAC/PACE+SM+CA+TA+PA+AA
 terminal emrtd inspect -host=... [-json=1]                                    只读（COM/DG15）
 terminal emrtd lds2    -host=... [-app=travel|visa|biometrics] [-json=1]      LDS2 CardAccess/记录
+terminal emrtd ta-export -dir=<path>                                          生成 demo CV 证书链 + 终端私钥
 terminal emrtd apdu    -host=... -apdu=<hex>                                  原始 APDU
 version / help
 ```

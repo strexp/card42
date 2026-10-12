@@ -14,6 +14,8 @@ import card42.host.common.codec.Der;
 public abstract class SecurityInfo {
 
     public static final String ID_AA = "2.23.136.1.1.5";
+    /** Terminal Authentication protocol OID (BSI TR-03110-2, TAv2). */
+    public static final String ID_TA = "0.4.0.127.0.7.2.2.2";
     public static final String ID_PK_DH = "0.4.0.127.0.7.2.2.1.1";
     public static final String ID_PK_ECDH = "0.4.0.127.0.7.2.2.1.2";
     public static final String ID_CA_DH_3DES = "0.4.0.127.0.7.2.2.3.1.1";
@@ -88,6 +90,12 @@ public abstract class SecurityInfo {
             return new ActiveAuthenticationInfo(oid,
                     required == null ? 0 : Der.intValue(der, required),
                     Der.oid(der, optional));
+        }
+        if (ID_TA.equals(oid)) {
+            // TerminalAuthenticationInfo: SEQUENCE { protocol id-TA, version, efCVCA OPTIONAL }.
+            return new TerminalAuthenticationInfo(oid,
+                    required == null ? 0 : Der.intValue(der, required),
+                    optional == null ? null : Der.encoded(der, optional));
         }
         if (ID_PK_DH.equals(oid) || ID_PK_ECDH.equals(oid)) {
             byte[] spki = required == null ? null : Der.encoded(der, required);

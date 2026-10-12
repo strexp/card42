@@ -64,6 +64,8 @@ public final class Pace implements PaceSeedSink {
     private byte stage;
     private boolean aes;
     private final byte[] oid = new byte[10];
+    /** Length of the PICC ephemeral point in {@link #ephPicc} (65 for P-256). */
+    private short ephPiccLen;
 
     private final byte[] kpi = new byte[16];
     private final byte[] nonce = new byte[16];
@@ -323,6 +325,7 @@ public final class Pace implements PaceSeedSink {
         // knows K_mac in step 4 (the fresh-PACE step 4 is sent in the clear, as
         // in jMRTD); only then does a plaintext APDU abort the session.
         short pl = ((ECPublicKey) ephemeralPair.getPublic()).getW(ephPicc, (short) 0);
+        ephPiccLen = pl;
         stage = STAGE_KEYED;
         return wrap(EmrtdTags.DO_PACE_EPH_PICC, ephPicc, (short) 0, pl, out);
     }
@@ -346,6 +349,11 @@ public final class Pace implements PaceSeedSink {
         // EF.CardSecurity access condition is satisfied for this session.
         applet.smEstablished = true;
         applet.paceDone = true;
+        if (applet.ta != null) {
+            // ID_IC = Comp(PKDH,IC): the x-coordinate of the PICC's PACE step-3
+            // ephemeral public key (ICAO Doc 9303-11 §7.1.2).
+            applet.ta.notePiccEphemeral(ephPicc, (short) 0, ephPiccLen);
+        }
         return wrap(EmrtdTags.DO_PACE_TOKEN_PICC, tokenMac, (short) 0, (short) 8, out);
     }
 

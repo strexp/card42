@@ -118,9 +118,15 @@
   SFI（EF.Certificates 的 `1A`），两者不一致，需按正文复核。
   （`card/emrtd/command/Lds2Record.java`；测试 `test/emrtd/unit/card/EmrtdCommandTest.java`。）
 - [ ] **C2 主机纯 JVM 卡仿真**：用第三方纯 JVM 卡仿真库跑主机 PA/读流程（无 jcsl）。
-- [ ] **LDS2 Terminal Authentication 授权位**：LDS2 各 EF 的访问条件为 PACE+TA，授权位来自
-  IS/DV/CVCA 证书的 CHAT 扩展（Doc 9303-10 §5.4 Table 96/97/98）。TA 未实现，当前仅强制
-  PACE；需要时实现 TA（CV 证书链 + CHAT）后按授权位限制选择/读写。
+- [x] **LDS2 Terminal Authentication 授权位（已实现 2026-10-12）**：TAv2 + ECDSA-SHA-256 已落地
+  （卡侧 `card/emrtd/ta/TaContext` + `MSE:Set DST`/`PSO:Verify Certificate`/`MSE:Set AT`/
+  `EXTERNAL AUTHENTICATE`，主机 `host/emrtd/ta/`，个性化 DGI `FF07`/`FF08`）。LDS2 各 EF 的
+  访问条件为 PACE+TA：`requireLds2Access(bit)` 按 `effectiveAuth`（信任点 ∧ 各证书 CHAT/应用
+  扩展逐位 AND，Doc 9303-10 §5.4 Table 96/97/98）门控选择/读/写/追加；`EmrtdTerminalAuthIntegrationTest`
+  端到端。设计见 [`docs/specs/emrtd/terminal-authentication.md`](docs/specs/emrtd/terminal-authentication.md)。
+  **残余**：① LDS1 的 DG3/DG4 读尚未按 CHAT 位门控（当前仅 LDS2）；② 信任点为单点、未实现
+  「最多两点 + CVCA Link + 按 Effective Date 启用/禁用」的完整 §2.5.1；③ 真卡 J3R180 TA 复测；
+  ④ RSA-PSS-SHA-256 备选 profile 未接线（主选 ECDSA）。
 - [ ] **Chip Authentication AES profile（`id-CA-*-AES-CBC-CMAC-*`）**：主机 `ChipAuth` 仅
   ECDH+3DES；AES CA 需 MSE:Set AT + GENERAL AUTHENTICATE 流程（Doc 9303-11 §6.2.4.2），
   卡侧亦仅 3DES CA。

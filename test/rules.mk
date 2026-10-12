@@ -14,7 +14,7 @@
 # with the eMRTD host module.
 EMV_SUITES   := EmvFlowTest ContactKernelTest DirectoryTest BoundaryTest LogTest VelocityTest \
                 AesFlowTest ContactlessTest OnlineClosedLoopTest TerminalCliTest IssuerScriptTest
-EMRTD_SUITES := EmrtdBacTest EmrtdLds2IntegrationTest EmrtdLds2AppsIntegrationTest EmrtdPaceIntegrationTest EmrtdChipAuthIntegrationTest EmrtdLds1ChipAuthIntegrationTest
+EMRTD_SUITES := EmrtdBacTest EmrtdLds2IntegrationTest EmrtdLds2AppsIntegrationTest EmrtdPaceIntegrationTest EmrtdChipAuthIntegrationTest EmrtdLds1ChipAuthIntegrationTest EmrtdTerminalAuthIntegrationTest
 
 
 test-emv: test-emv-sim
@@ -226,6 +226,7 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_EMRTD_DIR)/perso/Lds2Perso.java \
                  $(CARD_EMRTD_DIR)/access/ChipAuth.java \
                  $(CARD_EMRTD_DIR)/access/PaceSeedSink.java \
+                 $(CARD_EMRTD_DIR)/ta/TaContext.java \
                  $(CARD_COMMON_DIR)/applet/ApduIo.java \
                  $(CARD_COMMON_DIR)/applet/AppletBase.java \
                  $(CARD_EMRTD_DIR)/applet/EmrtdInstallParameters.java \
@@ -237,6 +238,7 @@ UNIT_CARD_SRC := $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReade
                  $(CARD_EMRTD_DIR)/command/Lds2Record.java \
                  $(CARD_EMRTD_DIR)/command/Lds2File.java \
                  $(CARD_EMRTD_DIR)/command/Mse.java \
+                 $(CARD_EMRTD_DIR)/command/PsoVerifyCertificate.java \
                  $(CARD_EMRTD_DIR)/command/ReadBinary.java \
                  $(CARD_EMRTD_DIR)/command/SelectFile.java
 UNIT_HOST_SRC := $(HOST_LIB_SRC)

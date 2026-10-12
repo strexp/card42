@@ -12,10 +12,13 @@ public final class DerWriter {
     private DerWriter() {
     }
 
-    /** A single-byte-tag DER TLV. */
+    /** A DER TLV whose tag is one or two bytes (e.g. {@code 06}, {@code 7F4C}). */
     public static byte[] tlv(int tag, byte[] value) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        out.write(tag);
+        if (tag > 0xFF) {
+            out.write((tag >> 8) & 0xFF);
+        }
+        out.write(tag & 0xFF);
         if (value.length < 0x80) {
             out.write(value.length);
         } else if (value.length < 0x100) {

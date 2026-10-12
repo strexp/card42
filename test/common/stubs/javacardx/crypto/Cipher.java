@@ -35,6 +35,9 @@ public class Cipher {
     public static final byte ALG_AES_BLOCK_128_ECB_NOPAD = (byte) 4;
     public static final byte ALG_RSA_NOPAD = (byte) 5;
 
+    /** Null pad selector for the ECDSA plain {@code Signature} getInstance. */
+    public static final byte PAD_NULL = (byte) 0;
+
     private final byte algorithm;
     private javax.crypto.Cipher cipher;
 

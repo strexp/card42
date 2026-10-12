@@ -32,8 +32,8 @@ public final class Lds2Perso extends DgiStream.Sink {
     private static final short DGI_RECORD_MASK = (short) 0x7000;
     private static final short DGI_RECORD_FID_MASK = (short) 0x0FFF;
 
-    /** Largest key-DGI value: the 32-byte CA scalar (PACE seed is 20). */
-    private static final short SCRATCH_SIZE = (short) 64;
+    /** Largest key-DGI value: the CA scalar (32), PACE seed (20) or trust point (<=86). */
+    private static final short SCRATCH_SIZE = (short) 96;
 
     private static final byte MODE_NONE = 0;
     private static final byte MODE_MF = 1;
@@ -42,10 +42,13 @@ public final class Lds2Perso extends DgiStream.Sink {
     private static final byte MODE_CA = 4;
     private static final byte MODE_PACE = 5;
     private static final byte MODE_PACE_CAN = 6;
+    private static final byte MODE_TA = 7;
+    private static final byte MODE_TA_DATE = 8;
 
     private final Lds2FileSystem files;
     private final ChipAuth chipAuth;
     private final PaceSeedSink pace;
+    private final TaContext ta;
     private final DgiStream stream;
 
     private final byte[] scratch = new byte[SCRATCH_SIZE];
@@ -54,10 +57,11 @@ public final class Lds2Perso extends DgiStream.Sink {
     private Lds2TransparentFile currentFile;
     private Lds2RecordFile currentRecord;
 
-    public Lds2Perso(Lds2FileSystem files, ChipAuth chipAuth, PaceSeedSink pace) {
+    public Lds2Perso(Lds2FileSystem files, ChipAuth chipAuth, PaceSeedSink pace, TaContext ta) {
         this.files = files;
         this.chipAuth = chipAuth;
         this.pace = pace;
+        this.ta = ta;
         this.stream = new DgiStream(this);
     }
 
@@ -100,6 +104,10 @@ public final class Lds2Perso extends DgiStream.Sink {
             mode = MODE_PACE;
         } else if (dgi == EmrtdTags.DGI_PACE_CAN_SEED) {
             mode = MODE_PACE_CAN;
+        } else if (dgi == EmrtdTags.DGI_TA_TRUST_POINT) {
+            mode = MODE_TA;
+        } else if (dgi == EmrtdTags.DGI_TA_CURRENT_DATE) {
+            mode = MODE_TA_DATE;
         } else if ((dgi & DGI_RECORD_MASK) == DGI_RECORD) {
             short fid = (short) (dgi & DGI_RECORD_FID_MASK);
             Lds2RecordFile file = files.record(fid);
@@ -150,6 +158,10 @@ public final class Lds2Perso extends DgiStream.Sink {
             pace.setSeed(scratch, (short) 0, scratchLen);
         } else if (mode == MODE_PACE_CAN) {
             pace.setCanSeed(scratch, (short) 0, scratchLen);
+        } else if (mode == MODE_TA) {
+            ta.setTrustPoint(scratch, (short) 0, scratchLen);
+        } else if (mode == MODE_TA_DATE) {
+            ta.setCurrentDate(scratch, (short) 0, scratchLen);
         } else if (mode == MODE_RECORD) {
             currentRecord.endRecord();
         }

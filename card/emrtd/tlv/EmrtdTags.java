@@ -88,6 +88,16 @@ public final class EmrtdTags {
     public static final short DGI_CARD_SECURITY = (short) 0xFF05;
     /** PACE password encoding f(CAN) = raw CAN octets, password reference 0x02. */
     public static final short DGI_PACE_CAN_SEED = (short) 0xFF06;
+    /**
+     * Terminal Authentication CVCA trust point (project DGI FF07):
+     * {@code W(65) || refLen(1) || CAR(refLen) || [auth(4)]}.
+     */
+    public static final short DGI_TA_TRUST_POINT = (short) 0xFF07;
+    /**
+     * Terminal Authentication current date (project DGI FF08): 6 octets of
+     * unpacked BCD YYMMDD (BSI TR-03110-3 §2.6).
+     */
+    public static final short DGI_TA_CURRENT_DATE = (short) 0xFF08;
 
     // Application/EF outer tags.
     public static final short TAG_COM = (short) 0x60;
@@ -109,6 +119,35 @@ public final class EmrtdTags {
     public static final short DO_RECORD_HANDLING = (short) 0x7F76;
     /** File and memory management response template. */
     public static final short DO_FMM = (short) 0x7F78;
+
+    // Terminal Authentication data objects and CV certificate tags
+    // (ICAO Doc 9303-11 §7.1, BSI TR-03110-3 A.7/C.1).
+    /** MSE:Set DST / MSE:Set AT key reference DO'83'. */
+    public static final short DO_KEY_REFERENCE = (short) 0x83;
+    /** PSO:Verify Certificate certificate body template 7F4E. */
+    public static final short DO_CERT_BODY = (short) 0x7F4E;
+    /** PSO:Verify Certificate signature 5F37. */
+    public static final short DO_CERT_SIGNATURE = (short) 0x5F37;
+    /** CV certificate public-key template 7F49. */
+    public static final short TAG_TA_PUBLIC_KEY = (short) 0x7F49;
+    /** CV certificate holder reference 5F20. */
+    public static final short TAG_TA_CHR = (short) 0x5F20;
+    /** CV certificate CHAT 7F4C. */
+    public static final short TAG_TA_CHAT = (short) 0x7F4C;
+    /** Certificate extension template 65. */
+    public static final short TAG_TA_EXTENSIONS = (short) 0x65;
+    /** Certificate effective date 5F25. */
+    public static final short TAG_TA_EFFECTIVE = (short) 0x5F25;
+    /** Certificate expiration date 5F24. */
+    public static final short TAG_TA_EXPIRATION = (short) 0x5F24;
+    /** EC public point 86 inside a 7F49 key. */
+    public static final short TAG_TA_EC_POINT = (short) 0x86;
+    /** CHAT / extension discretionary data 53. */
+    public static final short TAG_TA_DISCRETIONARY = (short) 0x53;
+    /** Application authorization extension template 73. */
+    public static final short TAG_TA_DISCRETIONARY_TEMPLATE = (short) 0x73;
+    /** Object identifier 06 (application authorization extension). */
+    public static final short TAG_TA_OID = (short) 0x06;
 
     // LDS1 command / status constants (ISO/IEC 7816-4 + Doc 9303-10 §5).
     public static final byte INS_SELECT_FILE = (byte) 0xA4;
@@ -132,9 +171,15 @@ public final class EmrtdTags {
 
     // MSE P1/P2 (BSI TR-03110-3 B.14.1 MSE:Set AT): set for computation / KAT.
     public static final byte MSE_P1_SET_COMPUTATION = (byte) 0x41;
+    /** MSE:Set for verification (P1) — Terminal Authentication (TR-03110-3 A.7.2). */
+    public static final byte MSE_P1_SET_VERIFICATION = (byte) 0x81;
     public static final byte MSE_P2_KAT = (byte) 0xA6;
     /** MSE:Set AT (P2) for PACE (BSI TR-03110-3 B.14.1). */
     public static final byte MSE_P2_AT = (byte) 0xA4;
+    /** MSE:Set AT (P2) for Terminal Authentication (same value as PACE). */
+    public static final byte MSE_P2_TA = (byte) 0xA4;
+    /** MSE:Set DST (P2) — Terminal Authentication certificate verification. */
+    public static final byte MSE_P2_DST = (byte) 0xB6;
 
     // PACE GENERAL AUTHENTICATE data objects (BSI TR-03110-3 B.1, Doc 9303-11
     // §4.4): DO'80' encrypted nonce, DO'81'/DO'82' mapping public keys,

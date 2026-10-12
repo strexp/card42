@@ -67,6 +67,8 @@ public final class EmrtdLds2AppsIntegrationTest {
                 EmrtdPersoExporter.DATE_OF_BIRTH, EmrtdPersoExporter.DATE_OF_EXPIRY);
         terminal.setSecureMessaging(visaPace.secureMessaging());
         Checks.check("PACE established on the Visa application", true);
+        TaSupport.authenticate(terminal, visaPace, new java.security.SecureRandom());
+        Checks.check("Chip + Terminal Authentication on the Visa application", true);
         List<byte[]> visa = LdsReader.readAllRecords(terminal,
                 LdsFileUtil.sfi(LdsFileUtil.FID_VISA_RECORDS), 1);
         Checks.check("at least the personalized visa record", visa.size() >= 1);
@@ -89,6 +91,8 @@ public final class EmrtdLds2AppsIntegrationTest {
                 EmrtdPersoExporter.DATE_OF_EXPIRY);
         terminal.setSecureMessaging(biometricsPace.secureMessaging());
         Checks.check("PACE established on the Biometrics application", true);
+        TaSupport.authenticate(terminal, biometricsPace, new java.security.SecureRandom());
+        Checks.check("Chip + Terminal Authentication on the Biometrics application", true);
         byte[] biometrics = LdsReader.read(terminal, LdsFileUtil.FID_BIOMETRICS);
         Checks.bytes(Hex.parse("7F6108020101020203040506"), biometrics,
                 "EF.Biometrics1 content");
