@@ -37,6 +37,14 @@ public final class Pace {
     public static final byte PASSWORD_MRZ = 0x01;
     public static final byte PASSWORD_CAN = 0x02;
     private static final byte PARAM_ID_P256 = 0x0C;
+    /**
+     * DO'7F4C' CHAT (id-IS, all access bits set) appended to MSE:Set AT to ask
+     * the card for the CVCA CARs in the PACE response (ICAO Doc 9303-11
+     * §4.4.4.1/§4.4.5).
+     */
+    private static final byte[] REQUEST_CARS = {
+        (byte) 0x7F, 0x4C, 0x0E, 0x06, 0x09, 0x04, 0x00, 0x7F, 0x00, 0x07,
+        0x03, 0x01, 0x02, 0x01, 0x53, 0x01, (byte) 0xFF };
 
     /** The PACE session: Ks_enc, Ks_mac and the initial SSC (0). */
     public static final class Session {
@@ -50,14 +58,24 @@ public final class Pace {
          * (ICAO Doc 9303-11 §7.1.2/§7.1.4.2.3).
          */
         public final byte[] piccPublicKey;
+        /**
+         * The CVCA Certification Authority References returned by the card in
+         * the PACE authentication response (DO'87' most recent, DO'88' previous)
+         * when the terminal requested them with DO'7F4C' (ICAO Doc 9303-11
+         * §4.4.5).  Empty when the card has no Terminal Authentication trust
+         * point.
+         */
+        public final java.util.List<byte[]> certificationAuthorityReferences;
         private final boolean aes;
 
-        Session(byte[] ksEnc, byte[] ksMac, long ssc, boolean aes, byte[] piccPublicKey) {
+        Session(byte[] ksEnc, byte[] ksMac, long ssc, boolean aes, byte[] piccPublicKey,
+                java.util.List<byte[]> certificationAuthorityReferences) {
             this.ksEnc = ksEnc;
             this.ksMac = ksMac;
             this.ssc = ssc;
             this.aes = aes;
             this.piccPublicKey = piccPublicKey;
+            this.certificationAuthorityReferences = certificationAuthorityReferences;
         }
 
         public SecureMessaging secureMessaging() {
@@ -128,10 +146,13 @@ public final class Pace {
         SecureRandom random = new SecureRandom();
         byte[] kpi = kdf(keySeed, 3, aes);
 
-        // MSE:Set AT: DO'80'(OID) || DO'83'(password reference) || DO'84'(P-256 param id).
+        // MSE:Set AT: DO'80'(OID) || DO'83'(password reference) || DO'84'(P-256 param id)
+        // || DO'7F4C'(CHAT, id-IS) to request the CVCA CARs in the response
+        // (ICAO Doc 9303-11 §4.4.4.1).
         byte[] mse = concat(new byte[] { (byte) 0x80, (byte) oid.length }, oid,
                 new byte[] { (byte) 0x83, 0x01, passwordReference,
-                        (byte) 0x84, 0x01, PARAM_ID_P256 });
+                        (byte) 0x84, 0x01, PARAM_ID_P256 },
+                REQUEST_CARS);
         check(terminal.base().transmit(new CommandAPDU(0x00, 0x22, 0xC1, 0xA4, mse)),
                 "PACE MSE:Set AT");
 
@@ -182,7 +203,16 @@ public final class Pace {
         if (tPicc == null || !Arrays.equals(expected, tPicc)) {
             throw new IllegalStateException("PACE PICC token mismatch");
         }
-        return new Session(ksEnc, ksMac, 0L, aes, pkIcc2Bytes);
+        java.util.List<byte[]> cars = new java.util.ArrayList<byte[]>();
+        byte[] car = Tags.find(step4.getData(), 0x87);
+        if (car != null) {
+            cars.add(car);
+        }
+        byte[] previousCar = Tags.find(step4.getData(), 0x88);
+        if (previousCar != null) {
+            cars.add(previousCar);
+        }
+        return new Session(ksEnc, ksMac, 0L, aes, pkIcc2Bytes, cars);
     }
 
     private static byte[] clearGa(EmrtdTerminal terminal, byte[] data) throws Exception {

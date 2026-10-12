@@ -247,6 +247,44 @@ public final class TaContext {
     }
 
     /**
+     * Appends the Certification Authority References requested during PACE as
+     * context data objects {@code 87} (most recent) and {@code 88} (previous)
+     * (ICAO Doc 9303-11 §4.4.5).  Returns the new offset; nothing is appended
+     * when no trust point is personalized.
+     */
+    public short appendCars(byte[] out, short off) {
+        short first = (short) -1;
+        short second = (short) -1;
+        for (short i = 0; i < SLOTS; i++) {
+            if (trustKind[i] == KIND_NONE) {
+                continue;
+            }
+            if (first < 0) {
+                first = i;
+            } else if (effectiveAfter(i, first)) {
+                second = first;
+                first = i;
+            } else {
+                second = i;
+            }
+        }
+        off = appendCar(out, off, (byte) 0x87, first);
+        off = appendCar(out, off, (byte) 0x88, second);
+        return off;
+    }
+
+    private static short appendCar(byte[] out, short off, byte tag, short slot) {
+        if (slot < 0 || trustKind[slot] == KIND_NONE) {
+            return off;
+        }
+        out[off] = tag;
+        out[(short) (off + 1)] = (byte) trustRefLength[slot];
+        Util.arrayCopyNonAtomic(trustRef, (short) (slot * REFERENCE_LENGTH),
+                out, (short) (off + 2), trustRefLength[slot]);
+        return (short) (off + 2 + trustRefLength[slot]);
+    }
+
+    /**
      * The slot of the CVCA key currently valid for verification: the valid slot
      * with the most recent Effective Date that has been reached (BSI
      * TR-03110-3 §2.5.1).  -1 when none is usable.

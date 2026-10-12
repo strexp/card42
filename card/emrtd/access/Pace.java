@@ -63,6 +63,8 @@ public final class Pace implements PaceSeedSink {
     private boolean canSeedSet;
     private byte stage;
     private boolean aes;
+    /** True when MSE:Set AT carried DO'7F4C: the terminal wants the CARs back. */
+    private boolean carRequested;
     private final byte[] oid = new byte[10];
     /** Length of the PICC ephemeral point in {@link #ephPicc} (65 for P-256). */
     private short ephPiccLen;
@@ -174,6 +176,7 @@ public final class Pace implements PaceSeedSink {
 
     public void reset() {
         stage = STAGE_IDLE;
+        carRequested = false;
     }
 
     /** MSE:Set AT: data = DO'80'(PACE OID) || DO'83'(password reference) || DO'84'. */
@@ -221,6 +224,9 @@ public final class Pace implements PaceSeedSink {
         if (!activeSet) {
             ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
         }
+        // DO'7F4C': the terminal requests the CVCA CARs to be returned in the
+        // PACE authentication response (ICAO Doc 9303-11 §4.4.4.1/§4.4.5).
+        carRequested = Lds2Record.find(data, off, len, EmrtdTags.TAG_TA_CHAT, r);
         derive(kpi, (short) 0, active, (short) 0, activeLen, (byte) 3);
         stage = STAGE_AT;
     }
@@ -354,7 +360,14 @@ public final class Pace implements PaceSeedSink {
             // ephemeral public key (ICAO Doc 9303-11 §7.1.2).
             applet.ta.notePiccEphemeral(ephPicc, (short) 0, ephPiccLen);
         }
-        return wrap(EmrtdTags.DO_PACE_TOKEN_PICC, tokenMac, (short) 0, (short) 8, out);
+        short p = (short) 2;
+        p = Tlv.append(EmrtdTags.DO_PACE_TOKEN_PICC, tokenMac, (short) 0, (short) 8, out, p);
+        if (carRequested && applet.ta != null) {
+            p = applet.ta.appendCars(out, p);
+        }
+        out[0] = (byte) 0x7C;
+        out[1] = (byte) (p - 2);
+        return p;
     }
 
     private void tokenMac(byte[] ksMac, short len) {

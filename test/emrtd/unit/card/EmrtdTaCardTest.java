@@ -59,6 +59,7 @@ final class EmrtdTaCardTest {
         travelAuthorization();
         currentDateMechanism();
         twoTrustPoints();
+        trustPointEffectiveDate();
         cvcaLink();
         dg3Dg4Gating();
         rsaTerminalAuthentication();
@@ -226,9 +227,67 @@ final class EmrtdTaCardTest {
                 "a certificate signed by the primary CVCA verifies");
     }
 
-    /** A CVCA Link Certificate adds a trust point, activated by its Effective Date. */
-    private static void cvcaLink() throws Exception {
+    /**
+     * Trust-point Effective Dates (ICAO Doc 9303-11 §7.1.4.3.1): a trust point
+     * whose Effective Date has not yet been reached is not usable for
+     * certificate verification.
+     */
+    private static void trustPointEffectiveDate() throws Exception {
         EmrtdApplet applet = lds1Applet();
+        resetTaState(applet);
+        SecureRandom random = new SecureRandom();
+        BigInteger a = P256.randomScalar(random);
+        BigInteger b = P256.randomScalar(random);
+        byte[] aw = P256.encode(P256.scalarMult(a, P256.generator()));
+        byte[] bw = P256.encode(P256.scalarMult(b, P256.generator()));
+        CvcPrincipal ar = CvcPrincipal.of("UTCVCA0000000001");
+        CvcPrincipal br = CvcPrincipal.of("UTCVCA0000000002");
+        CvcPrincipal dr1 = CvcPrincipal.of("UTDV000000000003");
+        CvcPrincipal dr2 = CvcPrincipal.of("UTDV000000000004");
+        byte[] auth = { 0x03, 0, 0, 0 };
+        java.util.Map<String, byte[]> noAuth = new java.util.LinkedHashMap<String, byte[]>();
+
+        // ICC current date 240101; primary effective 240101, secondary 250101.
+        setTrustPointEffective(applet, EmrtdTags.DGI_TA_TRUST_POINT, aw, ar.encode(),
+                "240101", auth);
+        setTrustPointEffective(applet, EmrtdTags.DGI_TA_TRUST_POINT_2, bw, br.encode(),
+                "250101", auth);
+        personalizeDate(applet, "240101");
+
+        byte[] dvW1 = P256.encode(P256.scalarMult(P256.randomScalar(random), P256.generator()));
+        CvCertificate byPrimary = CvCertificateBuilder.build(0, ar, dr1, Chat.Role.DV_DOMESTIC,
+                new byte[] { (byte) 0x03 }, dvW1, "240101", "300101", noAuth, a, random);
+        Asserts.noThrow(() -> importCert(applet, byPrimary),
+                "a reached Effective Date trust point verifies");
+
+        byte[] dvW2 = P256.encode(P256.scalarMult(P256.randomScalar(random), P256.generator()));
+        CvCertificate byFuture = CvCertificateBuilder.build(0, br, dr2, Chat.Role.DV_DOMESTIC,
+                new byte[] { (byte) 0x03 }, dvW2, "250101", "300101", noAuth, b, random);
+        Asserts.sw((short) 0x6A88, () -> importCert(applet, byFuture),
+                "a not-yet-reached Effective Date trust point -> 6A88");
+    }
+
+    /** Writes a trust-point DGI with an explicit Effective Date (new layout). */
+    private static void setTrustPointEffective(EmrtdApplet applet, short dgi, byte[] w,
+                                               byte[] car, String effective, byte[] auth)
+            throws Exception {
+        ByteArrayOutputStream dgis = new ByteArrayOutputStream();
+        ByteArrayOutputStream value = new ByteArrayOutputStream();
+        value.write(w, 0, w.length);
+        value.write(car.length);
+        value.write(car, 0, car.length);
+        byte[] date = new byte[6];
+        for (int i = 0; i < 6; i++) {
+            date[i] = (byte) (effective.charAt(i) - '0');
+        }
+        value.write(date, 0, 6);
+        value.write(auth, 0, auth.length);
+        writeDgi(dgis, dgi, value.toByteArray());
+        applyLds1(applet, dgis);
+    }
+
+    /** A CVCA Link Certificate adds a trust point, activated by its Effective Date. */
+    private static void cvcaLink() throws Exception {        EmrtdApplet applet = lds1Applet();
         resetTaState(applet);
         SecureRandom random = new SecureRandom();
         BigInteger a = P256.randomScalar(random);

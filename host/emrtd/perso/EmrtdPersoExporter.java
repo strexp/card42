@@ -328,6 +328,9 @@ public final class EmrtdPersoExporter {
                 .append('\n');
         sb.append("@record 0101 ").append(Hex.format(sampleTravelRecord("NLD", "20260215")))
                 .append('\n');
+        // EF.Certificates (011A, Doc 9303-10 §5.1.2): the LDS2 Travel signer
+        // certificate (the demo DSC stands in for a real LDS2 signer).
+        sb.append("@record 011A ").append(Hex.format(dscCertificate.getEncoded())).append('\n');
 
         // --- LDS2 Visa Records instance -------------------------------------
         sb.append("\n# LDS2 Visa Records instance: EF.VisaRecords 0103.\n");
@@ -339,6 +342,7 @@ public final class EmrtdPersoExporter {
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@record 0103 ").append(Hex.format(sampleVisaRecord("JPN", "20260401")))
                 .append('\n');
+        sb.append("@record 011A ").append(Hex.format(dscCertificate.getEncoded())).append('\n');
 
         // --- LDS2 Additional Biometrics instance ----------------------------
         sb.append("\n# LDS2 Additional Biometrics instance: EF.Biometrics1 0201\n");

@@ -98,6 +98,13 @@ public final class EmrtdLds2IntegrationTest {
                 new String(records.get(1), java.nio.charset.StandardCharsets.US_ASCII)
                         .contains("NLD"));
 
+        // EF.Certificates (011A, Doc 9303-10 §5.1.2): the LDS2 signer
+        // certificate record; read access is PACE+TA (Travel bit b3).
+        byte[] signer = LdsReader.readRecord(terminal,
+                LdsFileUtil.sfi(LdsFileUtil.FID_CERTIFICATES), 1);
+        Checks.check("EF.Certificates record 1 is an X.509 signer certificate",
+                signer.length > 0 && (signer[0] & 0xFF) == 0x30);
+
         byte[] appended = card42.host.common.util.Hex.parse("5F440343414E5F37083230323630333031");
         Checks.check("APPEND RECORD", terminal.appendRecord(LdsFileUtil.sfi(FID_ENTRY), appended).getSW(),
                 0x9000);
