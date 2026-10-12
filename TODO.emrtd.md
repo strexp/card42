@@ -128,9 +128,10 @@
   `EmrtdTerminalAuthIntegrationTest` 的 PACE→CA→TA 与扩展长度 PSO）全绿。**教训**：TA 的 ECDSA
   验签引擎须在**安装期**构建，不得在 SD 个性化事务内（DGI `FF07`）构建——J3R180 会 `6F00`。
   RsaPss/双信任点/DG3-DG4 门控由单测覆盖；示例个性化仍用 ECDSA。仅 EAC 1.11 待办。
-- [ ] **Chip Authentication AES profile（`id-CA-*-AES-CBC-CMAC-*`）**：主机 `ChipAuth` 仅
-  ECDH+3DES；AES CA 需 MSE:Set AT + GENERAL AUTHENTICATE 流程（Doc 9303-11 §6.2.4.2），
-  卡侧亦仅 3DES CA。
+- [!] **Chip Authentication AES profile（`id-CA-*-AES-CBC-CMAC-*`，延后）**：卡侧与主机
+  `ChipAuth` 均仅 ECDH+3DES（服务器宣告 `id-CA-ECDH-3DES-CBC-CBC`）；AES CA 需算法/密钥引用
+  绑定（`MSE:Set KAT` 的 keyId）与 AES-CMAC KDF/SM 切换。影响：拒绝 3DES 的终端无法完成 CA，
+  CA 后 SM 为 3DES+SHA-1（已弃用）。ICAO Doc 9303-11 §9.2.5 的 AES OID 属可选，故不宣告。
 
 ## 延后 / 范围外
 
