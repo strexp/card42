@@ -69,6 +69,9 @@ public final class ReadBinary {
             // readable in the clear.
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
+        // DG3/DG4 additionally require the Terminal Authentication ePassport
+        // CHAT bit once a trust point is personalized (Doc 9303-10 §5.4.2).
+        applet.requireLds1ChatAccess(file.getFid());
         short available = (short) (file.getLength() - offset);
         if (available < 0) {
             ISOException.throwIt(ISO7816.SW_WRONG_P1P2);

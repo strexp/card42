@@ -34,6 +34,8 @@ public final class LdsPerso extends DgiStream.Sink {
     public static final short DGI_TA_TRUST_POINT = EmrtdTags.DGI_TA_TRUST_POINT;
     /** DGI carrying the Terminal Authentication current date (6 octets, unpacked BCD). */
     public static final short DGI_TA_CURRENT_DATE = EmrtdTags.DGI_TA_CURRENT_DATE;
+    /** DGI carrying the secondary CVCA trust point (Terminal Authentication). */
+    public static final short DGI_TA_TRUST_POINT_2 = EmrtdTags.DGI_TA_TRUST_POINT_2;
 
     /** Largest key-DGI value: modLen(2) + 256 + expLen(2) + 256. */
     private static final short SCRATCH_SIZE = (short) 520;
@@ -49,6 +51,7 @@ public final class LdsPerso extends DgiStream.Sink {
     private static final byte MODE_PACE_CAN = 8;
     private static final byte MODE_TA = 9;
     private static final byte MODE_TA_DATE = 10;
+    private static final byte MODE_TA2 = 11;
 
     private final LdsCatalog catalog;
     private final AaCrypto aa;
@@ -137,6 +140,8 @@ public final class LdsPerso extends DgiStream.Sink {
             mode = MODE_PACE_CAN;
         } else if (dgi == DGI_TA_TRUST_POINT) {
             mode = MODE_TA;
+        } else if (dgi == DGI_TA_TRUST_POINT_2) {
+            mode = MODE_TA2;
         } else if (dgi == DGI_TA_CURRENT_DATE) {
             mode = MODE_TA_DATE;
         } else if (dgi == EmrtdTags.DGI_CARD_SECURITY) {
@@ -198,6 +203,8 @@ public final class LdsPerso extends DgiStream.Sink {
             pace.setCanSeed(scratch, (short) 0, scratchLen);
         } else if (mode == MODE_TA) {
             ta.setTrustPoint(scratch, (short) 0, scratchLen);
+        } else if (mode == MODE_TA2) {
+            ta.setTrustPointSecondary(scratch, (short) 0, scratchLen);
         } else if (mode == MODE_TA_DATE) {
             ta.setCurrentDate(scratch, (short) 0, scratchLen);
         }

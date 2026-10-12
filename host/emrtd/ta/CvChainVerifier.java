@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import card42.host.common.crypto.Ecdsa;
+import card42.host.common.crypto.RsaPss;
 
 /**
  * Verifies a CV certificate chain against a CVCA trust anchor and computes the
@@ -26,12 +27,11 @@ public final class CvChainVerifier {
         if (chain == null || chain.isEmpty()) {
             throw new IllegalArgumentException("empty CV certificate chain");
         }
-        byte[] key = trustAnchorPublicPointW;
         CvCertificate previous = null;
+        CvCertificate issuer = null;
         for (CvCertificate cert : chain) {
-            if (!cert.isEc() || !CvCertificate.OID_TA_ECDSA_SHA_256.equals(cert.publicKeyOid())) {
-                throw new IllegalArgumentException("unsupported CV certificate public key: "
-                        + cert.publicKeyOid());
+            if (!cert.isEc() && !cert.isRsa()) {
+                throw new IllegalArgumentException("unsupported CV certificate public key");
             }
             if (previous != null && !cert.certificationAuthorityReference()
                     .equals(previous.certificateHolderReference())) {
@@ -39,12 +39,23 @@ public final class CvChainVerifier {
                         + cert.certificationAuthorityReference() + " does not match "
                         + previous.certificateHolderReference());
             }
-            if (!Ecdsa.verify(cert.body(), key, cert.signature())) {
+            boolean ok;
+            if (issuer == null) {
+                // The trust anchor is an EC public point.
+                ok = Ecdsa.verify(cert.body(), trustAnchorPublicPointW, cert.signature());
+            } else if (issuer.isRsa()) {
+                ok = RsaPss.verify(cert.body(),
+                        RsaPss.publicKey(issuer.rsaModulus(), issuer.rsaExponent()),
+                        cert.signature());
+            } else {
+                ok = Ecdsa.verify(cert.body(), issuer.ecPublicKey(), cert.signature());
+            }
+            if (!ok) {
                 throw new IllegalStateException("CV certificate signature verification failed for "
                         + cert.certificateHolderReference());
             }
-            key = cert.ecPublicKey();
             previous = cert;
+            issuer = cert;
         }
         return previous;
     }

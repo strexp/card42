@@ -3,6 +3,7 @@ package card42.test;
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
@@ -16,9 +17,11 @@ import card42.emrtd.Lds2Record;
 import card42.emrtd.LdsPerso;
 import card42.emrtd.Mse;
 import card42.emrtd.PsoVerifyCertificate;
+import card42.emrtd.ReadBinary;
 import card42.emrtd.TaContext;
 import card42.host.common.crypto.Ecdsa;
 import card42.host.common.crypto.P256;
+import card42.host.common.crypto.RsaPss;
 import card42.host.emrtd.ta.Chat;
 import card42.host.emrtd.ta.CvCertificate;
 import card42.host.emrtd.ta.CvCertificateBuilder;
@@ -55,6 +58,10 @@ final class EmrtdTaCardTest {
         rejectsExternalAuthenticateWithoutMseAt();
         travelAuthorization();
         currentDateMechanism();
+        twoTrustPoints();
+        cvcaLink();
+        dg3Dg4Gating();
+        rsaTerminalAuthentication();
     }
 
     private static void verifyChain() throws Exception {
@@ -186,6 +193,256 @@ final class EmrtdTaCardTest {
     }
 
     // --- helpers -------------------------------------------------------------
+
+    /** Two CVCA trust points: a certificate signed by either one verifies. */
+    private static void twoTrustPoints() throws Exception {
+        EmrtdApplet applet = lds1Applet();
+        resetTaState(applet);
+        SecureRandom random = new SecureRandom();
+        BigInteger a = P256.randomScalar(random);
+        BigInteger b = P256.randomScalar(random);
+        byte[] aw = P256.encode(P256.scalarMult(a, P256.generator()));
+        byte[] bw = P256.encode(P256.scalarMult(b, P256.generator()));
+        CvcPrincipal ar = CvcPrincipal.of("UTCVCA0000000001");
+        CvcPrincipal br = CvcPrincipal.of("UTCVCA0000000002");
+        CvcPrincipal dr1 = CvcPrincipal.of("UTDV000000000003");
+        CvcPrincipal dr2 = CvcPrincipal.of("UTDV000000000004");
+        java.util.Map<String, byte[]> noAuth = new java.util.LinkedHashMap<String, byte[]>();
+
+        setTrustPoint(applet, EmrtdTags.DGI_TA_TRUST_POINT, aw, ar.encode(),
+                new byte[] { 0x03, 0, 0, 0 });
+        setTrustPoint(applet, EmrtdTags.DGI_TA_TRUST_POINT_2, bw, br.encode(),
+                new byte[] { 0x03, 0, 0, 0 });
+
+        byte[] dvW1 = P256.encode(P256.scalarMult(P256.randomScalar(random), P256.generator()));
+        byte[] dvW2 = P256.encode(P256.scalarMult(P256.randomScalar(random), P256.generator()));
+        CvCertificate bySecondary = CvCertificateBuilder.build(0, br, dr1, Chat.Role.DV_DOMESTIC,
+                new byte[] { (byte) 0x03 }, dvW1, "250101", "300101", noAuth, b, random);
+        CvCertificate byPrimary = CvCertificateBuilder.build(0, ar, dr2, Chat.Role.DV_DOMESTIC,
+                new byte[] { (byte) 0x03 }, dvW2, "250101", "300101", noAuth, a, random);
+        Asserts.noThrow(() -> importCert(applet, bySecondary),
+                "a certificate signed by the secondary CVCA verifies");
+        Asserts.noThrow(() -> importCert(applet, byPrimary),
+                "a certificate signed by the primary CVCA verifies");
+    }
+
+    /** A CVCA Link Certificate adds a trust point, activated by its Effective Date. */
+    private static void cvcaLink() throws Exception {
+        EmrtdApplet applet = lds1Applet();
+        resetTaState(applet);
+        SecureRandom random = new SecureRandom();
+        BigInteger a = P256.randomScalar(random);
+        BigInteger b = P256.randomScalar(random);
+        BigInteger dv = P256.randomScalar(random);
+        byte[] aw = P256.encode(P256.scalarMult(a, P256.generator()));
+        byte[] bw = P256.encode(P256.scalarMult(b, P256.generator()));
+        byte[] dvW = P256.encode(P256.scalarMult(dv, P256.generator()));
+        CvcPrincipal ar = CvcPrincipal.of("UTCVCA0000000001");
+        CvcPrincipal br = CvcPrincipal.of("UTCVCA0000000002");
+        CvcPrincipal dr = CvcPrincipal.of("UTDV000000000003");
+        java.util.Map<String, byte[]> noAuth = new java.util.LinkedHashMap<String, byte[]>();
+
+        setTrustPoint(applet, EmrtdTags.DGI_TA_TRUST_POINT, aw, ar.encode(),
+                new byte[] { 0x03, 0, 0, 0 });
+        personalizeDate(applet, "240101");
+
+        // The new CVCA (B) is unknown before the link.
+        CvCertificate byLink = CvCertificateBuilder.build(0, br, dr, Chat.Role.DV_DOMESTIC,
+                new byte[] { (byte) 0x03 }, dvW, "250201", "300101", noAuth, b, random);
+        byte[] dstB = doTag(0x83, br.encode());
+        Asserts.sw((short) 0x6A88, () -> {
+            Mse.process(applet, (byte) 0x81, (byte) 0xB6, dstB, (short) 0, (short) dstB.length);
+            byte[] pso = pso(byLink);
+            PsoVerifyCertificate.process(applet, pso, (short) 0, (short) pso.length);
+        }, "a certificate of an unlinked CVCA -> 6A88");
+
+        // The CVCA Link Certificate (role CVCA), signed by A, is effective 250101.
+        CvCertificate link = CvCertificateBuilder.build(0, ar, br, Chat.Role.CVCA,
+                new byte[] { (byte) 0x03 }, bw, "250101", "300101", noAuth, a, random);
+        importCert(applet, link);
+        TaContext ta = taOf(applet);
+        Asserts.bytes(new byte[] { 2, 5, 0, 1, 0, 1 },
+                (byte[]) field(TaContext.class, "currentDate").get(ta),
+                "the CVCA Link Effective Date advances the current date");
+
+        // The linked CVCA (B) now verifies its own certificates.
+        Asserts.noThrow(() -> importCert(applet, byLink),
+                "a certificate signed by the linked CVCA verifies");
+    }
+
+    /** LDS1 DG3/DG4 read requires the ePassport CHAT bit once a trust point exists. */
+    private static void dg3Dg4Gating() throws Exception {
+        TaChain.Chain chain = TaChain.create(new SecureRandom());
+        byte[] dg3 = { 0x63, 0x02, 0x11, 0x22 };
+        byte[] dg4 = { 0x76, 0x02, 0x33, 0x44 };
+
+        EmrtdApplet granted = lds1Applet();
+        resetTaState(granted);
+        setTrustPointWithDg(granted, chain, EmrtdTags.FID_DG3, dg3, new byte[] { 0x03, 0, 0, 0 });
+        field(EmrtdApplet.class, "smEstablished").setBoolean(granted, true);
+        field(EmrtdApplet.class, "paceDone").setBoolean(granted, true);
+        byte[] apdu3 = readApdu((byte) 0x83);
+        Asserts.sw((short) 0x6982,
+                () -> ReadBinary.process(granted, (short) 0xE7, apdu3),
+                "DG3 read before Terminal Authentication -> 6982");
+        authenticateTerminal(granted, chain);
+        Asserts.noThrow(() -> ReadBinary.process(granted, (short) 0xE7, apdu3),
+                "DG3 read after Terminal Authentication with the ePassport bit");
+
+        // A trust point without the DG4 bit refuses EF.DG4.
+        EmrtdApplet denied = lds1Applet();
+        resetTaState(denied);
+        setTrustPointWithDg(denied, chain, EmrtdTags.FID_DG4, dg4, new byte[] { 0x01, 0, 0, 0 });
+        field(EmrtdApplet.class, "smEstablished").setBoolean(denied, true);
+        field(EmrtdApplet.class, "paceDone").setBoolean(denied, true);
+        authenticateTerminal(denied, chain);
+        byte[] apdu4 = readApdu((byte) 0x84);
+        Asserts.sw((short) 0x6982,
+                () -> ReadBinary.process(denied, (short) 0xE7, apdu4),
+                "DG4 read without the DG4 bit -> 6982");
+    }
+
+    /** RSA-PSS-SHA-256 terminal certificate and terminal signature. */
+    private static void rsaTerminalAuthentication() throws Exception {
+        EmrtdApplet applet = lds1Applet();
+        resetTaState(applet);
+        SecureRandom random = new SecureRandom();
+        BigInteger cvca = P256.randomScalar(random);
+        BigInteger dv = P256.randomScalar(random);
+        byte[] cvcaW = P256.encode(P256.scalarMult(cvca, P256.generator()));
+        byte[] dvW = P256.encode(P256.scalarMult(dv, P256.generator()));
+        CvcPrincipal cvcaRef = CvcPrincipal.of("UTCVCA0000000001");
+        CvcPrincipal dvRef = CvcPrincipal.of("UTDV000000000002");
+        CvcPrincipal isRef = CvcPrincipal.of("UTIS000000000003");
+        java.util.Map<String, byte[]> noAuth = new java.util.LinkedHashMap<String, byte[]>();
+
+        setTrustPoint(applet, EmrtdTags.DGI_TA_TRUST_POINT, cvcaW, cvcaRef.encode(),
+                new byte[] { 0x03, 0, 0, 0 });
+        CvCertificate dvCert = CvCertificateBuilder.build(0, cvcaRef, dvRef,
+                Chat.Role.DV_DOMESTIC, new byte[] { (byte) 0x03 }, dvW, "250101", "300101",
+                noAuth, cvca, random);
+        importCert(applet, dvCert);
+
+        java.security.KeyPair rsa = rsaKeyPair();
+        byte[] mod = RsaPss.unsigned(
+                ((java.security.interfaces.RSAPublicKey) rsa.getPublic()).getModulus());
+        byte[] exp = RsaPss.unsigned(
+                ((java.security.interfaces.RSAPublicKey) rsa.getPublic()).getPublicExponent());
+        byte[] body = CvCertificateCodec.encodeBodyRsa(0, dvRef,
+                CvCertificate.OID_TA_RSA_PSS_SHA_256, mod, exp, isRef, Chat.Role.IS,
+                new byte[] { (byte) 0x03 }, "250101", "300101", noAuth);
+        CvCertificate terminal = CvCertificateCodec.parse(
+                CvCertificateCodec.encode(body, Ecdsa.sign(body, dv, random)));
+        importCert(applet, terminal);
+
+        byte[] idIc = filled(32, (byte) 0x11);
+        byte[] caKeyHash = filled(32, (byte) 0x22);
+        TaContext ta = taOf(applet);
+        ta.notePiccEphemeral(uncompressed(idIc), (short) 0, (short) 65);
+        ta.noteTerminalEphemeral(uncompressed(caKeyHash), (short) 0, (short) 65);
+        byte[] at = doTag(0x83, terminal.certificateHolderReference().encode());
+        Mse.process(applet, (byte) 0x81, (byte) 0xA4, at, (short) 0, (short) at.length);
+        GetChallenge.process(applet);
+        byte[] challenge = (byte[]) field(TaContext.class, "challenge").get(ta);
+        byte[] signature = RsaPss.sign(concat(idIc, challenge, caKeyHash), rsa.getPrivate());
+        Asserts.eq(256, signature.length, "RSA-PSS terminal signature is the modulus length");
+        Asserts.noThrow(() -> ExternalAuthenticate.process(applet, signature,
+                        (short) 0, (short) signature.length),
+                "EXTERNAL AUTHENTICATE accepts the RSA-PSS terminal signature");
+        Asserts.check((Boolean) field(TaContext.class, "taDone").get(ta),
+                "RSA terminal authentication completed");
+    }
+
+    /** A one-DGI trust-point sequence with the given holder authorization. */
+    private static void setTrustPoint(EmrtdApplet applet, short dgi, byte[] w, byte[] car,
+                                      byte[] auth) throws Exception {
+        ByteArrayOutputStream dgis = new ByteArrayOutputStream();
+        addTrustPointDgi(dgis, dgi, w, car, auth);
+        applyLds1(applet, dgis);
+    }
+
+    /** Personalizes the current date (DGI FF08) in its own sequence. */
+    private static void personalizeDate(EmrtdApplet applet, String date) throws Exception {
+        ByteArrayOutputStream dgis = new ByteArrayOutputStream();
+        byte[] value = new byte[6];
+        for (int i = 0; i < 6; i++) {
+            value[i] = (byte) (date.charAt(i) - '0');
+        }
+        writeDgi(dgis, EmrtdTags.DGI_TA_CURRENT_DATE, value);
+        applyLds1(applet, dgis);
+    }
+
+    /** The trust point plus one DG EF, so the LDS1 CHAT gate can be exercised. */
+    private static void setTrustPointWithDg(EmrtdApplet applet, TaChain.Chain chain,
+                                            short fid, byte[] content, byte[] auth)
+            throws Exception {
+        ByteArrayOutputStream dgis = new ByteArrayOutputStream();
+        addTrustPointDgi(dgis, EmrtdTags.DGI_TA_TRUST_POINT, chain.cvca.ecPublicKey(),
+                chain.cvca.certificateHolderReference().encode(), auth);
+        writeDgi(dgis, fid, content);
+        applyLds1(applet, dgis);
+    }
+
+    /** Runs MSE:Set DST + PSO:Verify Certificate for one certificate. */
+    private static void importCert(EmrtdApplet applet, CvCertificate certificate) {
+        byte[] dst = doTag(0x83, certificate.certificationAuthorityReference().encode());
+        Mse.process(applet, (byte) 0x81, (byte) 0xB6, dst, (short) 0, (short) dst.length);
+        byte[] pso = pso(certificate);
+        PsoVerifyCertificate.process(applet, pso, (short) 0, (short) pso.length);
+    }
+
+    /** A READ BINARY command APDU for the DG with the given SFI-form P1. */
+    private static byte[] readApdu(byte p1) {
+        byte[] apdu = new byte[5];
+        apdu[0] = 0x0C; // rule C: secure messaging active
+        apdu[2] = p1;
+        apdu[3] = 0x00;
+        return apdu;
+    }
+
+    /** Clears the package-shared trust points and the session state. */
+    private static void resetTaState(EmrtdApplet applet) throws Exception {
+        byte[] kinds = (byte[]) field(TaContext.class, "trustKind").get(null);
+        kinds[0] = 0;
+        kinds[1] = 0;
+        field(TaContext.class, "currentDateValid").setBoolean(null, false);
+        taOf(applet).clearSession();
+    }
+
+    /** Writes a trust-point DGI (FF07 / FF09) into the sequence builder. */
+    private static void addTrustPointDgi(ByteArrayOutputStream out, short dgi, byte[] w,
+                                         byte[] car, byte[] auth) {
+        ByteArrayOutputStream value = new ByteArrayOutputStream();
+        value.write(w, 0, w.length);
+        value.write(car.length);
+        value.write(car, 0, car.length);
+        if (auth != null) {
+            value.write(auth, 0, auth.length);
+        }
+        writeDgi(out, dgi, value.toByteArray());
+    }
+
+    /** Applies a DGI sequence to the LDS1 perso, always carrying the BAC seed and DG1. */
+    private static void applyLds1(EmrtdApplet applet, ByteArrayOutputStream dgis)
+            throws Exception {
+        ByteArrayOutputStream sequence = new ByteArrayOutputStream();
+        writeDgi(sequence, EmrtdTags.DGI_BAC_SEED, new byte[16]);
+        writeDgi(sequence, EmrtdTags.FID_DG1, new byte[] { 0x61, 0x03, 0x5F, 0x1F, 0x00 });
+        byte[] extra = dgis.toByteArray();
+        sequence.write(extra, 0, extra.length);
+        byte[] bytes = sequence.toByteArray();
+        Field field = EmrtdApplet.class.getDeclaredField("perso");
+        field.setAccessible(true);
+        LdsPerso perso = (LdsPerso) field.get(applet);
+        perso.apply(bytes, (short) 0, (short) bytes.length);
+    }
+
+    private static java.security.KeyPair rsaKeyPair() throws Exception {
+        java.security.KeyPairGenerator generator =
+                java.security.KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        return generator.generateKeyPair();
+    }
 
     /**
      * LDS2 authorization gating (Doc 9303-10 §5.4): with the Travel

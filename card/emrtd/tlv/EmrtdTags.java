@@ -94,6 +94,12 @@ public final class EmrtdTags {
      */
     public static final short DGI_TA_TRUST_POINT = (short) 0xFF07;
     /**
+     * Terminal Authentication secondary CVCA trust point (project DGI FF09):
+     * the same {@code W(65) || refLen(1) || CAR || [auth(4)]} layout as FF07,
+     * for a card personalized with two CVCA keys (BSI TR-03110-3 §2.5.1).
+     */
+    public static final short DGI_TA_TRUST_POINT_2 = (short) 0xFF09;
+    /**
      * Terminal Authentication current date (project DGI FF08): 6 octets of
      * unpacked BCD YYMMDD (BSI TR-03110-3 §2.6).
      */
@@ -148,6 +154,10 @@ public final class EmrtdTags {
     public static final short TAG_TA_DISCRETIONARY_TEMPLATE = (short) 0x73;
     /** Object identifier 06 (application authorization extension). */
     public static final short TAG_TA_OID = (short) 0x06;
+    /** RSA public modulus 81 inside a 7F49 key. */
+    public static final short TAG_TA_RSA_MODULUS = (short) 0x81;
+    /** RSA public exponent 82 inside a 7F49 key. */
+    public static final short TAG_TA_RSA_EXPONENT = (short) 0x82;
 
     // LDS1 command / status constants (ISO/IEC 7816-4 + Doc 9303-10 §5).
     public static final byte INS_SELECT_FILE = (byte) 0xA4;

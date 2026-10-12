@@ -8,6 +8,7 @@ import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.crypto.Ecdsa;
 import card42.host.common.crypto.P256;
+import card42.host.common.crypto.RsaPss;
 import card42.host.common.util.Bytes;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
@@ -69,6 +70,20 @@ public final class TerminalAuth {
                                       BigInteger terminalPrivateScalar, byte[] identifier,
                                       byte[] chipAuthenticationKeyHash, SecureRandom random)
             throws Exception {
+        return authenticate(terminal, certificateChain, terminalPrivateScalar, null,
+                identifier, chipAuthenticationKeyHash, random);
+    }
+
+    /**
+     * Runs Terminal Authentication; the terminal signature algorithm follows
+     * the terminal certificate's public-key OID (ECDSA-SHA-256 plain or
+     * RSA-PSS-SHA-256).  Exactly the matching private key must be supplied.
+     */
+    public static Result authenticate(EmrtdTerminal terminal, List<CvCertificate> certificateChain,
+                                      BigInteger terminalPrivateScalar,
+                                      java.security.PrivateKey terminalRsaKey,
+                                      byte[] identifier, byte[] chipAuthenticationKeyHash,
+                                      SecureRandom random) throws Exception {
         if (certificateChain == null || certificateChain.isEmpty()) {
             throw new IllegalArgumentException("terminal authentication needs a certificate chain");
         }
@@ -91,7 +106,16 @@ public final class TerminalAuth {
 
         byte[] chipChallenge = terminal.getChallenge();
         byte[] input = signatureInput(identifier, chipChallenge, chipAuthenticationKeyHash);
-        byte[] signature = Ecdsa.sign(input, terminalPrivateScalar, random);
+        byte[] signature;
+        if (terminalCertificate.isRsa()) {
+            if (terminalRsaKey == null) {
+                throw new IllegalArgumentException(
+                        "RSA terminal certificate needs an RSA private key");
+            }
+            signature = RsaPss.sign(input, terminalRsaKey);
+        } else {
+            signature = Ecdsa.sign(input, terminalPrivateScalar, random);
+        }
         ResponseAPDU auth = terminal.externalAuthenticate(signature);
         requireOk(auth, "EXTERNAL AUTHENTICATE");
 

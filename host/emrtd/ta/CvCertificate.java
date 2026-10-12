@@ -27,6 +27,8 @@ public final class CvCertificate {
     private final CvcPrincipal car;
     private final String publicKeyOid;
     private final byte[] ecPublicKey;
+    private final byte[] rsaModulus;
+    private final byte[] rsaExponent;
     private final CvcPrincipal chr;
     private final Chat chat;
     private final String effectiveDate;
@@ -37,13 +39,16 @@ public final class CvCertificate {
     private final byte[] encoded;
 
     CvCertificate(int profileId, CvcPrincipal car, String publicKeyOid, byte[] ecPublicKey,
-                  CvcPrincipal chr, Chat chat, String effectiveDate, String expirationDate,
+                  byte[] rsaModulus, byte[] rsaExponent, CvcPrincipal chr, Chat chat,
+                  String effectiveDate, String expirationDate,
                   Map<String, byte[]> authorizationExtensions, byte[] signature, byte[] body,
                   byte[] encoded) {
         this.profileId = profileId;
         this.car = car;
         this.publicKeyOid = publicKeyOid;
         this.ecPublicKey = ecPublicKey;
+        this.rsaModulus = rsaModulus;
+        this.rsaExponent = rsaExponent;
         this.chr = chr;
         this.chat = chat;
         this.effectiveDate = effectiveDate;
@@ -52,6 +57,14 @@ public final class CvCertificate {
         this.signature = signature;
         this.body = body;
         this.encoded = encoded;
+    }
+
+    CvCertificate(int profileId, CvcPrincipal car, String publicKeyOid, byte[] ecPublicKey,
+                  CvcPrincipal chr, Chat chat, String effectiveDate, String expirationDate,
+                  Map<String, byte[]> authorizationExtensions, byte[] signature, byte[] body,
+                  byte[] encoded) {
+        this(profileId, car, publicKeyOid, ecPublicKey, null, null, chr, chat, effectiveDate,
+                expirationDate, authorizationExtensions, signature, body, encoded);
     }
 
     public int profileId() {
@@ -78,6 +91,21 @@ public final class CvCertificate {
 
     public boolean isEc() {
         return ecPublicKey != null;
+    }
+
+    /** The RSA public modulus, or null for EC. */
+    public byte[] rsaModulus() {
+        return rsaModulus == null ? null : java.util.Arrays.copyOf(rsaModulus, rsaModulus.length);
+    }
+
+    /** The RSA public exponent, or null for EC. */
+    public byte[] rsaExponent() {
+        return rsaExponent == null ? null
+                : java.util.Arrays.copyOf(rsaExponent, rsaExponent.length);
+    }
+
+    public boolean isRsa() {
+        return rsaModulus != null;
     }
 
     public Chat chat() {

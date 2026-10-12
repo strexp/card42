@@ -425,21 +425,27 @@ PACE 密钥种子（FF04/FF06）个性化，CA 另有静态 P-256 标量（FF03�
 
 ## 17. Terminal Authentication（TAv2, Doc 9303-11 §7.1, BSI TR-03110-3 A.7）
 
-TA 在 PACE 之后把终端授权绑定到 CA 会话，按 CHAT/应用授权位门控 LDS2（Doc 9303-10 §5.4）。
-算法为 **ECDSA-SHA-256**，签名在线上是 TR-03111 **plain（r‖s）**；卡侧
+TA 在 PACE 之后把终端授权绑定到 CA 会话，按 CHAT/应用授权位门控 LDS2（Doc 9303-10 §5.4）与
+LDS1 的 DG3/DG4。算法为 **ECDSA-SHA-256**（签名在线上是 TR-03111 **plain（r‖s）**），备选
+**RSA-PSS-SHA-256**（按证书 `7F49` 公钥 OID 选择；卡侧用 `Signature.ALG_RSA_SHA_256_PKCS1_PSS`，
+salt = SHA-256 长度）。卡侧
 `Signature.getInstance(ALG_SHA_256, SIG_CIPHER_ECDSA_PLAIN, PAD_NULL)` 直接验 plain，无需
 DER 转换。完整决策、APDU 序列与开放点见 [terminal-authentication.md](terminal-authentication.md)。
 
-- **卡侧**（`card/emrtd/ta/TaContext`）：CVCA 信任点（个性化 DGI `FF07`：
-  `W(65)‖refLen(1)‖CAR‖[auth(4)]`）、`MSE:Set DST`(`81B6`)、`PSO:Verify Certificate`
-  (`2A/00BE`)、`MSE:Set AT`(`81A4`)、`EXTERNAL AUTHENTICATE`（`ID_IC‖rIC‖Comp(PKDH,IFD)`，
-  64 B plain）。`ID_IC` 取 PACE step-3 卡侧临时公钥 x 坐标，`Comp(PKDH,IFD)` 取 CA 终端临时
-  公钥 x 坐标。当前日期 `FF08`（6 octet 未打包 BCD）用于拒绝过期证书并前移。**TA 状态为包级
-  static 共享**（一张卡一个信任点/当前日期，同一时刻只选一个实例）；EC 公钥与 `Signature`
-  在个性化 `FF07` 时建一次，命令路径不分配（`docs/specs/common/risks.md` §2）。
-- **授权**：`TaContext.effectiveAuth` = 信任点授权 ∧ 每张已验证证书的 CHAT/应用扩展逐位 AND
-  （App 序号 Travel/Visa/Bio = 1/2/3）；`EmrtdApplet.requireLds2Access(bit)` 取代
-  `requirePace()`（无信任点时仅强制 PACE，便于开发配置）。LDS1 的 DG3/DG4 CHAT 位门控尚未接线。
+- **卡侧**（`card/emrtd/ta/TaContext`）：**最多两个 CVCA 信任点**（BSI TR-03110-3 §2.5.1）——
+  个性化 DGI `FF07`/`FF09`（`W(65)‖refLen(1)‖CAR‖[auth(4)]`）注入初始信任点，运行期
+  **CVCA Link Certificate**（CHAT 角色 CVCA、由当前 CVCA 签名）经 `MSE:Set DST` +
+  `PSO:Verify Certificate` 校验后写入信任点集；**按 Effective Date 启用**：未到期的信任点不可
+  作为 DST 校验键，最新已到期的信任点播种会话授权，且其 Effective Date 前移 ICC 当前日期。
+  另有 `MSE:Set AT`(`81A4`)、`EXTERNAL AUTHENTICATE`（`ID_IC‖rIC‖Comp(PKDH,IFD)`）。`ID_IC`
+  取 PACE step-3 卡侧临时公钥 x 坐标，`Comp(PKDH,IFD)` 取 CA 终端临时公钥 x 坐标。当前日期
+  `FF08`（6 octet 未打包 BCD）用于拒绝过期证书。**TA 状态为包级 static 共享**（一张卡一个
+  信任点集/当前日期，同一时刻只选一个实例）；EC/RSA 密钥与 `Signature` 在首次使用（个性化）
+  时建一次，命令路径不分配（`docs/specs/common/risks.md` §2）。
+- **授权**：`TaContext.effectiveAuth` = 活跃信任点授权 ∧ 每张已验证证书的 CHAT/应用扩展逐位
+  AND（App 序号 Travel/Visa/Bio = 1/2/3）；`EmrtdApplet.requireLds2Access(bit)` 门控 LDS2 选择/
+  读/写/追加，`requireLds1ChatAccess(fid)` 在存在信任点时按 ePassport CHAT 位（b1=DG3、
+  b2=DG4）门控 LDS1 的 DG3/DG4 读；无信任点时仅强制 PACE（开发配置）。
 - **主机**（`host/emrtd/ta/`）：`CvCertificate`/`CvCertificateCodec`/`CvcPrincipal`/`Chat`/
   `CvCertificateBuilder`/`CvChainVerifier`/`TaChain`/`TerminalAuth`；`TerminalAuthenticationInfo`
   接入 `SecurityInfo`/`CardAccess`；`host/common/crypto/Ecdsa` 为自包含 P-256（plain）。

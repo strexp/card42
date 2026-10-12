@@ -520,6 +520,34 @@ public final class EmrtdApplet extends AppletBase
     static final byte LDS2_READ_BIT = 0;
     /** LDS2 append authorization bit (b2 of the application authorization byte). */
     static final byte LDS2_APPEND_BIT = 1;
+    /** ePassport CHAT bit b1: read EF.DG3 (fingerprints). */
+    static final byte EPASS_DG3_BIT = 0;
+    /** ePassport CHAT bit b2: read EF.DG4 (irises). */
+    static final byte EPASS_DG4_BIT = 1;
+
+    /**
+     * LDS1 DG3/DG4 access control (ICAO Doc 9303-10 §5.4.2 Table 96/97): once a
+     * Terminal Authentication trust point is personalized, reading EF.DG3/DG4
+     * requires a successful Terminal Authentication holding the matching
+     * ePassport CHAT bit; a card without a trust point keeps the PACE-only
+     * (development) behaviour.  Other data groups stay PACE-only.
+     */
+    void requireLds1ChatAccess(short fid) {
+        if (ta == null || !ta.hasTrustPoint()) {
+            return;
+        }
+        byte bit;
+        if (fid == EmrtdTags.FID_DG3) {
+            bit = EPASS_DG3_BIT;
+        } else if (fid == EmrtdTags.FID_DG4) {
+            bit = EPASS_DG4_BIT;
+        } else {
+            return;
+        }
+        if (!ta.granted((short) 0, bit)) {
+            ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+        }
+    }
 
     /** The application authorization index for this LDS2 instance (1..3). */
     private short lds2ApplicationIndex() {

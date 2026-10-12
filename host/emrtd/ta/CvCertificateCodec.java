@@ -34,6 +34,8 @@ public final class CvCertificateCodec {
     static final int TAG_OID = 0x06;
     static final int TAG_DISCRETIONARY = 0x53;
     static final int TAG_EC_PUBLIC_POINT = 0x86;
+    static final int TAG_RSA_MODULUS = 0x81;
+    static final int TAG_RSA_EXPONENT = 0x82;
 
     /** Parses a CV certificate TLV. */
     public static CvCertificate parse(byte[] certificate) {
@@ -58,6 +60,8 @@ public final class CvCertificateCodec {
         CvcPrincipal car = null;
         String publicKeyOid = null;
         byte[] ecPublicKey = null;
+        byte[] rsaModulus = null;
+        byte[] rsaExponent = null;
         CvcPrincipal chr = null;
         Chat chat = null;
         String effective = null;
@@ -76,6 +80,8 @@ public final class CvCertificateCodec {
                 PublicKey parsed = parsePublicKey(certificate, field);
                 publicKeyOid = parsed.oid;
                 ecPublicKey = parsed.ecPoint;
+                rsaModulus = parsed.modulus;
+                rsaExponent = parsed.exponent;
                 break;
             case TAG_CHR:
                 chr = CvcPrincipal.parse(certificate, field.valueOffset, field.valueLength);
@@ -99,8 +105,8 @@ public final class CvCertificateCodec {
         if (car == null || chr == null || chat == null || publicKeyOid == null) {
             throw new IllegalArgumentException("CV certificate body is incomplete");
         }
-        return new CvCertificate(profileId, car, publicKeyOid, ecPublicKey, chr, chat,
-                effective, expiration, extensions,
+        return new CvCertificate(profileId, car, publicKeyOid, ecPublicKey, rsaModulus,
+                rsaExponent, chr, chat, effective, expiration, extensions,
                 Der.value(certificate, signatureTlv), Der.encoded(certificate, bodyTlv),
                 Der.encoded(certificate, root));
     }
@@ -137,6 +143,30 @@ public final class CvCertificateCodec {
                                     String expiration, Map<String, byte[]> extensions) {
         byte[] publicKey = DerWriter.tlv(TAG_PUBLIC_KEY, DerWriter.concat(
                 DerWriter.oid(publicKeyOid), DerWriter.tlv(TAG_EC_PUBLIC_POINT, ecPublicKey)));
+        return encodeBody(profileId, car, publicKey, chr, role, relativeAuthorization,
+                effective, expiration, extensions);
+    }
+
+    /**
+     * Encodes a certificate body with an RSA public key (BSI TR-03110-3 C.1.2.2:
+     * {@code 7F49 { 06 <oid>, 81 <modulus>, 82 <exponent> }}).
+     */
+    public static byte[] encodeBodyRsa(int profileId, CvcPrincipal car, String publicKeyOid,
+                                       byte[] modulus, byte[] exponent, CvcPrincipal chr,
+                                       Chat.Role role, byte[] relativeAuthorization,
+                                       String effective, String expiration,
+                                       Map<String, byte[]> extensions) {
+        byte[] publicKey = DerWriter.tlv(TAG_PUBLIC_KEY, DerWriter.concat(
+                DerWriter.oid(publicKeyOid), DerWriter.tlv(TAG_RSA_MODULUS, modulus),
+                DerWriter.tlv(TAG_RSA_EXPONENT, exponent)));
+        return encodeBody(profileId, car, publicKey, chr, role, relativeAuthorization,
+                effective, expiration, extensions);
+    }
+
+    private static byte[] encodeBody(int profileId, CvcPrincipal car, byte[] publicKey,
+                                     CvcPrincipal chr, Chat.Role role,
+                                     byte[] relativeAuthorization, String effective,
+                                     String expiration, Map<String, byte[]> extensions) {
         byte[] chat = Chat.encode(role, relativeAuthorization);
         return DerWriter.tlv(TAG_CERT_BODY, DerWriter.concat(
                 DerWriter.tlv(TAG_PROFILE_ID, new byte[] { (byte) profileId }),
@@ -152,6 +182,8 @@ public final class CvCertificateCodec {
     private static final class PublicKey {
         String oid;
         byte[] ecPoint;
+        byte[] modulus;
+        byte[] exponent;
     }
 
     private static PublicKey parsePublicKey(byte[] der, Der.Tlv publicKey) {
@@ -161,6 +193,10 @@ public final class CvCertificateCodec {
                 out.oid = Der.oid(der, field);
             } else if (field.tag == TAG_EC_PUBLIC_POINT) {
                 out.ecPoint = Der.value(der, field);
+            } else if (field.tag == TAG_RSA_MODULUS) {
+                out.modulus = Der.value(der, field);
+            } else if (field.tag == TAG_RSA_EXPONENT) {
+                out.exponent = Der.value(der, field);
             }
         }
         if (out.oid == null) {

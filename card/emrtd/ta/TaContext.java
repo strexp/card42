@@ -6,50 +6,76 @@ import javacard.framework.Util;
 import javacard.security.ECPublicKey;
 import javacard.security.KeyBuilder;
 import javacard.security.MessageDigest;
+import javacard.security.RSAPublicKey;
 import javacard.security.Signature;
 import javacardx.crypto.Cipher;
 
 import card42.common.Tlv;
 
 /* Card-side Terminal Authentication state (ICAO Doc 9303-11 §7.1, BSI
- * TR-03110-3 A.7): the CVCA trust point, the certificate chain verification
- * (MSE:Set DST + PSO:Verify Certificate), and the terminal key import.  The
- * ECDSA-SHA-256 plain-format verification uses the platform
- * Signature.getInstance(ALG_SHA_256, SIG_CIPHER_ECDSA_PLAIN, PAD_NULL) (see
- * docs/specs/emrtd/terminal-authentication.md).
+ * TR-03110-3 A.7): the CVCA trust point(s), the certificate chain verification
+ * (MSE:Set DST + PSO:Verify Certificate) and the terminal key import.
  *
- * The instance is created for every eMRTD role (LDS1 and LDS2); the state is
- * package-shared static, because only one instance is selected at a time and
- * the card has a single CVCA trust point / current date (docs/specs/common/
- * risks.md §2).
+ * The TAv2 terminal-signature/certificate algorithm is selected per
+ * certificate from its public-key OID: ECDSA-SHA-256 (TR-03111 plain r||s,
+ * verified directly with SIG_CIPHER_ECDSA_PLAIN) or RSA-PSS-SHA-256
+ * (Signature.ALG_RSA_SHA_256_PKCS1_PSS, salt = SHA-256 length).
+ *
+ * Up to two CVCA trust points are kept (BSI TR-03110-3 §2.5.1): the initial
+ * one(s) from personalization (DGI FF07 / FF09) and any CVCA Link Certificate
+ * imported at run time.  A trust point only verifies certificates once its
+ * Effective Date has been reached; the newest effective one seeds the
+ * authorization (enabled/disabled by Effective Date).
+ *
+ * All state is package-shared static: a card has a single CVCA key set and
+ * current date, and only one instance is selected at a time, so per-instance
+ * copies would only waste the scarce persistent heap (docs/specs/common/
+ * risks.md §2).  The key/Signature objects are built on first use (at
+ * personalization, before any command), never on a command path.
  *
  * @author card42
  */
 
 public final class TaContext {
 
-    private static final short KEY_LENGTH = (short) 65;
+    private static final short EC_KEY_LENGTH = (short) 65;
+    private static final short MAX_MODULUS = (short) 256;   // RSA-2048
+    private static final short MAX_EXPONENT = (short) 8;
     private static final short REFERENCE_LENGTH = (short) 16;
+    private static final short SLOTS = (short) 2;
+
+    private static final byte KIND_NONE = 0;
+    private static final byte KIND_EC = 1;
+    private static final byte KIND_RSA = 2;
+
+    /** ECDSA P-256 plain signature length. */
+    private static final short ECDSA_SIGNATURE_LENGTH = (short) 64;
 
     /** Reused TLV search result; a per-command array would leak persistent memory. */
     private static final short[] FIND = new short[2];
 
     /*
-     * The TA state is package-shared: every eMRTD instance shares the card's
-     * single CVCA trust point and current date, and only one instance is
-     * selected at a time, so a per-instance copy only wastes the scarce J3R180
-     * persistent heap (three extra copies made eMRTD personalization fail with
-     * 6F00).  It follows the EmrtdScratch / SmScratch package-shared pattern.
+     * CVCA trust points, up to two slots (BSI TR-03110-3 §2.5.1).  Each slot
+     * holds the key material (EC point or RSA modulus+exponent), the holder
+     * reference, the Effective Date and the relative authorization.
      */
-
-    /** CVCA trust point (personalization DGI FF07); permanent. */
-    static final byte[] trustPointW = new byte[KEY_LENGTH];
-    static final byte[] trustPointRef = new byte[REFERENCE_LENGTH];
-    static short trustPointRefLength;
-    static boolean trustPointValid;
+    static final byte[] trustKind = new byte[SLOTS];
+    static final byte[] trustKey = new byte[(short) (SLOTS * MAX_MODULUS)];
+    static final byte[] trustExp = new byte[(short) (SLOTS * MAX_EXPONENT)];
+    static final short[] trustKeyLength = new short[SLOTS];
+    static final short[] trustExpLength = new short[SLOTS];
+    static final byte[] trustRef = new byte[(short) (SLOTS * REFERENCE_LENGTH)];
+    static final short[] trustRefLength = new short[SLOTS];
+    static final byte[] trustEffective = new byte[(short) (SLOTS * 6)];
+    static final byte[] trustEffectiveValid = new byte[SLOTS];
+    static final byte[] trustAuth = new byte[(short) (SLOTS * 4)];
 
     /** The most recently verified certificate's public key (session). */
-    static final byte[] importedW = new byte[KEY_LENGTH];
+    static final byte[] importedKey = new byte[MAX_MODULUS];
+    static final byte[] importedExp = new byte[MAX_EXPONENT];
+    static short importedKeyLength;
+    static short importedExpLength;
+    static byte importedKind;
     static final byte[] importedRef = new byte[REFERENCE_LENGTH];
     static short importedRefLength;
     static boolean importedValid;
@@ -69,20 +95,14 @@ public final class TaContext {
     static final byte[] idIc = new byte[32];
     static final byte[] caKeyHash = new byte[32];
 
-    /**
-     * Trust-point relative authorization per application (Doc 9303-10 §5.4.2):
-     * [0] = ePassport CHAT byte, [1] = Travel, [2] = Visa, [3] = Biometrics.
-     * Persistent (personalization DGI FF07).
-     */
-    static final byte[] trustPointAuth = new byte[4];
-    /** Session effective authorization: trust-point auth AND each verified certificate. */
+    /** Session effective authorization: active trust point AND each verified certificate. */
     static final byte[] effectiveAuth = new byte[4];
 
     /**
      * The ICC's approximated current date (BSI TR-03110-3 §2.5): 6 octets,
      * unpacked BCD YYMMDD.  Set to the personalization date (DGI FF08) and only
      * ever advanced to the most recent valid CVCA/DV/Accurate-Terminal Effective
-     * Date; it is used to reject expired DV/terminal certificates.
+     * Date; it selects the active CVCA key and rejects expired certificates.
      */
     static final byte[] currentDate = new byte[6];
     static boolean currentDateValid;
@@ -90,6 +110,21 @@ public final class TaContext {
     private static byte dstIssuerRole;
     /** Role of the most recently imported certificate. */
     private static byte importedRole;
+
+    /* Staging for the key currently being parsed and the key selected by DST. */
+    private static final byte[] pkKey = new byte[MAX_MODULUS];
+    private static final byte[] pkExp = new byte[MAX_EXPONENT];
+    private static short pkKeyLength;
+    private static short pkExpLength;
+    private static byte pkKind;
+    private static final byte[] vKey = new byte[MAX_MODULUS];
+    private static final byte[] vExp = new byte[MAX_EXPONENT];
+    private static short vKeyLength;
+    private static short vExpLength;
+    private static byte vKind;
+
+    /** Staging for the certificate's own relative authorization (4 bytes). */
+    private static final byte[] certAuth = new byte[4];
 
     /* Certificate-holder roles (CHAT bits b8/b7, BSI TR-03110-4 §2.1.3.2). */
     private static final byte ROLE_IS = 0;
@@ -105,11 +140,20 @@ public final class TaContext {
     private static final byte[] OID_BIOMETRICS = {
         0x67, (byte) 0x81, 0x08, 0x01, 0x01, 0x09, 0x03 };
 
+    /* Terminal-key algorithm OIDs (BSI TR-03110-3 Table 27). */
+    private static final byte[] OID_TA_ECDSA_SHA_256 = {
+        0x04, 0x00, 0x7F, 0x00, 0x07, 0x02, 0x02, 0x02, 0x02, 0x03 };
+    private static final byte[] OID_TA_RSA_PSS_SHA_256 = {
+        0x04, 0x00, 0x7F, 0x00, 0x07, 0x02, 0x02, 0x02, 0x01, 0x04 };
+
     /** ID_IC || rIC || Comp(PKDH,IFD) (32 + 8 + 32). */
     private static final byte[] signatureInput = new byte[72];
 
     private static ECPublicKey ecKey;
+    private static RSAPublicKey rsaKey1024;
+    private static RSAPublicKey rsaKey2048;
     private static Signature ecSig;
+    private static Signature rsaSig;
 
     public TaContext() {
     }
@@ -118,6 +162,8 @@ public final class TaContext {
     public void clearSession() {
         importedValid = false;
         importedRefLength = 0;
+        importedKind = KIND_NONE;
+        importedKeyLength = 0;
         dstSet = false;
         dstRefLength = 0;
         challengeValid = false;
@@ -125,9 +171,20 @@ public final class TaContext {
         terminalSelected = false;
         importedRole = ROLE_IS;
         dstIssuerRole = ROLE_IS;
-        Util.arrayCopyNonAtomic(trustPointAuth, (short) 0, effectiveAuth, (short) 0, (short) 4);
+        seedAuthorization();
         Util.arrayFillNonAtomic(idIc, (short) 0, (short) idIc.length, (byte) 0);
         Util.arrayFillNonAtomic(caKeyHash, (short) 0, (short) caKeyHash.length, (byte) 0);
+    }
+
+    /** Seeds the session authorization from the active CVCA trust point. */
+    private static void seedAuthorization() {
+        short active = activeTrustPoint();
+        if (active >= 0) {
+            Util.arrayCopyNonAtomic(trustAuth, (short) (active * 4), effectiveAuth,
+                    (short) 0, (short) 4);
+        } else {
+            Util.arrayFillNonAtomic(effectiveAuth, (short) 0, (short) 4, (byte) 0);
+        }
     }
 
     /** Effective authorization byte for an application index (0 epassport, 1..3). */
@@ -142,40 +199,144 @@ public final class TaContext {
         return taDone && value != 0;
     }
 
-    /** True once a CVCA trust point has been personalized. */
+    /** True once at least one CVCA trust point has been personalized. */
     public boolean hasTrustPoint() {
-        return trustPointValid;
+        return trustKind[0] != KIND_NONE || trustKind[1] != KIND_NONE;
     }
 
     /**
-     * Personalization (DGI FF07): {@code W(65) || refLen(1) || CAR(refLen)}.
-     * The CVCA public key is the trust anchor for the certificate chain.
+     * The slot of the CVCA key currently valid for verification: the valid slot
+     * with the most recent Effective Date that has been reached (BSI
+     * TR-03110-3 §2.5.1).  -1 when none is usable.
+     */
+    private static short activeTrustPoint() {
+        short best = -1;
+        for (short i = 0; i < SLOTS; i++) {
+            if (trustKind[i] == KIND_NONE || !slotEffective(i)) {
+                continue;
+            }
+            if (best < 0 || effectiveAfter(i, best)) {
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    /** True when slot i's Effective Date has been reached (or is absent). */
+    private static boolean slotEffective(short slot) {
+        if (!currentDateValid || trustEffectiveValid[slot] == 0) {
+            return true;
+        }
+        return compare(currentDate, trustEffective, (short) (slot * 6)) >= 0;
+    }
+
+    /** True when slot a has a later Effective Date than slot b (absent = earliest). */
+    private static boolean effectiveAfter(short a, short b) {
+        if (trustEffectiveValid[a] == 0) {
+            return false;
+        }
+        if (trustEffectiveValid[b] == 0) {
+            return true;
+        }
+        return compare(trustEffective, (short) (a * 6), trustEffective, (short) (b * 6)) > 0;
+    }
+
+    /**
+     * Personalization (DGI FF07): {@code W(65) || refLen(1) || CAR(refLen)
+     * || [auth(4)]} for the primary CVCA public key (B3DES or RSA).
      */
     public void setTrustPoint(byte[] src, short off, short len) {
-        if (len < (short) (KEY_LENGTH + 1)) {
+        setTrustPoint(src, off, len, (short) 0);
+    }
+
+    /** Personalization (DGI FF09): the secondary CVCA trust point. */
+    public void setTrustPointSecondary(byte[] src, short off, short len) {
+        setTrustPoint(src, off, len, (short) 1);
+    }
+
+    private void setTrustPoint(byte[] src, short off, short len, short slot) {
+        // FF07/FF09 carry an EC trust point: W(65) || refLen || CAR || [auth(4)].
+        if (len < (short) (EC_KEY_LENGTH + 1)) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
-        short refLen = (short) (src[(short) (off + KEY_LENGTH)] & 0xFF);
+        short refLen = (short) (src[(short) (off + EC_KEY_LENGTH)] & 0xFF);
         if (refLen < 1 || refLen > REFERENCE_LENGTH
-                || (short) (KEY_LENGTH + 1 + refLen) > len) {
+                || (short) (EC_KEY_LENGTH + 1 + refLen) > len) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
-        // Build the shared verification key/Signature here, at personalization,
-        // so no command path ever allocates (docs/specs/common/risks.md §2).
-        ensureEc();
-        Util.arrayCopyNonAtomic(src, off, trustPointW, (short) 0, KEY_LENGTH);
-        Util.arrayCopyNonAtomic(src, (short) (off + KEY_LENGTH + 1),
-                trustPointRef, (short) 0, refLen);
-        trustPointRefLength = refLen;
-        Util.arrayFillNonAtomic(trustPointAuth, (short) 0, (short) 4, (byte) 0);
-        short authOff = (short) (off + KEY_LENGTH + 1 + refLen);
+        ensureKeys();
+        Util.arrayCopyNonAtomic(src, off, trustKey, (short) (slot * MAX_MODULUS), EC_KEY_LENGTH);
+        trustKind[slot] = KIND_EC;
+        trustKeyLength[slot] = EC_KEY_LENGTH;
+        trustExpLength[slot] = 0;
+        Util.arrayCopyNonAtomic(src, (short) (off + EC_KEY_LENGTH + 1),
+                trustRef, (short) (slot * REFERENCE_LENGTH), refLen);
+        trustRefLength[slot] = refLen;
+        trustEffectiveValid[slot] = 0;
+        byte[] slotAuth = trustAuth;
+        short authBase = (short) (slot * 4);
+        Util.arrayFillNonAtomic(slotAuth, authBase, (short) 4, (byte) 0);
+        short authOff = (short) (off + EC_KEY_LENGTH + 1 + refLen);
         if ((short) (authOff + 4) <= (short) (off + len)) {
-            // Optional trailing relative authorization
-            // [ePassport, Travel, Visa, Biometrics] (Doc 9303-10 §5.4.2).
-            Util.arrayCopyNonAtomic(src, authOff, trustPointAuth, (short) 0, (short) 4);
+            Util.arrayCopyNonAtomic(src, authOff, slotAuth, authBase, (short) 4);
         }
-        Util.arrayCopyNonAtomic(trustPointAuth, (short) 0, effectiveAuth, (short) 0, (short) 4);
-        trustPointValid = true;
+        seedAuthorization();
+    }
+
+    /**
+     * Stores a CVCA public key (from a CVCA Link Certificate verified at run
+     * time) in the trust-point set, replacing the same reference or the oldest
+     * slot (BSI TR-03110-3 §2.5.1).  Authenticity has already been verified.
+     */
+    private static void storeTrustPoint(byte[] ref, short refOff, short refLen,
+                                        byte[] key, short keyLen, byte kind,
+                                        byte[] exp, short expLen,
+                                        byte[] effective, short effOff, boolean effValid,
+                                        byte[] auth, short authOff) {
+        if (refLen < 1 || refLen > REFERENCE_LENGTH) {
+            ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+        }
+        short slot = -1;
+        for (short i = 0; i < SLOTS && slot < 0; i++) {
+            if (trustKind[i] != KIND_NONE && trustRefLength[i] == refLen
+                    && Util.arrayCompare(trustRef, (short) (i * REFERENCE_LENGTH),
+                            ref, refOff, refLen) == 0) {
+                slot = i;
+            }
+        }
+        if (slot < 0) {
+            for (short i = 0; i < SLOTS && slot < 0; i++) {
+                if (trustKind[i] == KIND_NONE) {
+                    slot = i;
+                }
+            }
+        }
+        if (slot < 0) {
+            // Both slots full: evict the oldest effective key.
+            slot = 0;
+            for (short i = 1; i < SLOTS; i++) {
+                if (effectiveAfter(slot, i)) {
+                    slot = i;
+                }
+            }
+        }
+        trustKind[slot] = kind;
+        trustKeyLength[slot] = keyLen;
+        Util.arrayCopyNonAtomic(key, (short) 0, trustKey,
+                (short) (slot * MAX_MODULUS), keyLen);
+        trustExpLength[slot] = expLen;
+        if (expLen > 0) {
+            Util.arrayCopyNonAtomic(exp, (short) 0, trustExp, (short) (slot * MAX_EXPONENT), expLen);
+        }
+        Util.arrayCopyNonAtomic(ref, refOff, trustRef, (short) (slot * REFERENCE_LENGTH), refLen);
+        trustRefLength[slot] = refLen;
+        trustEffectiveValid[slot] = effValid ? (byte) 1 : (byte) 0;
+        if (effValid) {
+            Util.arrayCopyNonAtomic(effective, effOff, trustEffective,
+                    (short) (slot * 6), (short) 6);
+        }
+        Util.arrayCopyNonAtomic(auth, authOff, trustAuth, (short) (slot * 4), (short) 4);
+        seedAuthorization();
     }
 
     /**
@@ -217,8 +378,9 @@ public final class TaContext {
 
     /**
      * PSO:Verify Certificate (P1/P2 = 0x00BE): data is {@code 7F4E <body> 5F37 <sig>}.
-     * Verifies the body signature with the DST key and imports the certificate's
-     * public key (its Certificate Holder Reference becomes the next DST target).
+     * Verifies the body signature with the DST key and imports the certificate:
+     * a CVCA Link Certificate updates the CVCA trust-point set; any other
+     * certificate's public key becomes the next DST target (BSI TR-03110-3 A.7.2).
      */
     public void psoVerifyCertificate(byte[] data, short off, short len) {
         if (!dstSet) {
@@ -252,13 +414,18 @@ public final class TaContext {
             }
             p = (short) (p + total);
         }
-        if (bodyStart < 0 || signatureLength != 64) {
+        if (bodyStart < 0) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
 
-        byte[] verifyingKey = resolveDstKey();
-        if (!verifyEcdsa(verifyingKey, data, bodyStart, bodyTotal,
-                data, signatureOffset, signatureLength)) {
+        if (!resolveDstKey()) {
+            ISOException.throwIt((short) 0x6A88); // referenced data not found
+        }
+        short expected = vKind == KIND_EC ? ECDSA_SIGNATURE_LENGTH : vKeyLength;
+        if (signatureLength != expected) {
+            ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+        }
+        if (!verify(data, bodyStart, bodyTotal, data, signatureOffset, signatureLength)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
         importCertificate(data, bodyValueOffset, bodyValueLength, dstIssuerRole);
@@ -267,14 +434,14 @@ public final class TaContext {
 
     /** Records ID_IC = Comp(PKDH,IC) from an uncompressed PICC ephemeral point. */
     public void notePiccEphemeral(byte[] uncompressedW, short off, short len) {
-        if (len == KEY_LENGTH && uncompressedW[off] == (byte) 0x04) {
+        if (len == EC_KEY_LENGTH && uncompressedW[off] == (byte) 0x04) {
             Util.arrayCopyNonAtomic(uncompressedW, (short) (off + 1), idIc, (short) 0, (short) 32);
         }
     }
 
     /** Records Comp(PKDH,IFD) from an uncompressed terminal ephemeral point. */
     public void noteTerminalEphemeral(byte[] uncompressedW, short off, short len) {
-        if (len == KEY_LENGTH && uncompressedW[off] == (byte) 0x04) {
+        if (len == EC_KEY_LENGTH && uncompressedW[off] == (byte) 0x04) {
             Util.arrayCopyNonAtomic(uncompressedW, (short) (off + 1), caKeyHash, (short) 0,
                     (short) 32);
         }
@@ -312,13 +479,20 @@ public final class TaContext {
         if (!terminalSelected || !challengeValid) {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
-        if (len != 64) {
+        short expected = importedKind == KIND_EC ? ECDSA_SIGNATURE_LENGTH : importedKeyLength;
+        if (len != expected) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
         Util.arrayCopyNonAtomic(idIc, (short) 0, signatureInput, (short) 0, (short) 32);
         Util.arrayCopyNonAtomic(challenge, (short) 0, signatureInput, (short) 32, (short) 8);
         Util.arrayCopyNonAtomic(caKeyHash, (short) 0, signatureInput, (short) 40, (short) 32);
-        boolean ok = verifyEcdsa(importedW, signatureInput, (short) 0, (short) 72, data, off, len);
+        // Load the imported key into the staging buffer used by verify().
+        Util.arrayCopyNonAtomic(importedKey, (short) 0, vKey, (short) 0, importedKeyLength);
+        Util.arrayCopyNonAtomic(importedExp, (short) 0, vExp, (short) 0, importedExpLength);
+        vKeyLength = importedKeyLength;
+        vExpLength = importedExpLength;
+        vKind = importedKind;
+        boolean ok = verify(signatureInput, (short) 0, (short) 72, data, off, len);
         challengeValid = false;
         terminalSelected = false;
         if (!ok) {
@@ -327,28 +501,54 @@ public final class TaContext {
         taDone = true;
     }
 
-    /** The key referenced by the pending MSE:Set DST, or 6A88.  Sets the issuer role. */
-    private byte[] resolveDstKey() {
-        if (dstRefLength == trustPointRefLength
-                && Util.arrayCompare(dstRef, (short) 0, trustPointRef, (short) 0, dstRefLength) == 0) {
-            dstIssuerRole = ROLE_CVCA;
-            return trustPointW;
+    /**
+     * Loads the key referenced by the pending MSE:Set DST into the verification
+     * staging ({@link #vKey}/{@link #vExp}/...), or returns false (6A88).  A
+     * trust point whose Effective Date has not been reached is not selectable
+     * (BSI TR-03110-3 §2.5.1).  Sets the issuer role.
+     */
+    private static boolean resolveDstKey() {
+        for (short i = 0; i < SLOTS; i++) {
+            if (trustKind[i] == KIND_NONE || !slotEffective(i)) {
+                continue;
+            }
+            if (dstRefLength == trustRefLength[i]
+                    && Util.arrayCompare(dstRef, (short) 0, trustRef,
+                            (short) (i * REFERENCE_LENGTH), dstRefLength) == 0) {
+                dstIssuerRole = ROLE_CVCA;
+                loadVerificationKey(trustKind[i], trustKey, (short) (i * MAX_MODULUS),
+                        trustKeyLength[i], trustExp, (short) (i * MAX_EXPONENT),
+                        trustExpLength[i]);
+                return true;
+            }
         }
         if (importedValid && dstRefLength == importedRefLength
                 && Util.arrayCompare(dstRef, (short) 0, importedRef, (short) 0, dstRefLength) == 0) {
             dstIssuerRole = importedRole;
-            return importedW;
+            loadVerificationKey(importedKind, importedKey, (short) 0, importedKeyLength,
+                    importedExp, (short) 0, importedExpLength);
+            return true;
         }
-        ISOException.throwIt((short) 0x6A88); // referenced data not found
-        return null; // unreachable
+        return false;
+    }
+
+    private static void loadVerificationKey(byte kind, byte[] key, short keyOff, short keyLen,
+                                            byte[] exp, short expOff, short expLen) {
+        vKind = kind;
+        vKeyLength = keyLen;
+        vExpLength = expLen;
+        Util.arrayCopyNonAtomic(key, keyOff, vKey, (short) 0, keyLen);
+        if (expLen > 0) {
+            Util.arrayCopyNonAtomic(exp, expOff, vExp, (short) 0, expLen);
+        }
     }
 
     /**
      * Parses the certificate body, enforces the validity period and imports the
-     * key (BSI TR-03110-3 §2.5.2): a non-CVCA-Link certificate whose expiration
-     * date is before the current date fails; the current date is advanced to the
-     * Effective Date for CVCA/DV and for accurate (domestic-DV-issued) terminal
-     * certificates.
+     * key (BSI TR-03110-3 §2.5.2): a CVCA Link Certificate updates the trust
+     * set; a non-CVCA-Link certificate whose expiration date is before the
+     * current date fails; the current date is advanced to the Effective Date for
+     * CVCA/DV and for accurate (domestic-DV-issued) terminal certificates.
      */
     private void importCertificate(byte[] data, short off, short len, byte issuerRole) {
         short p = off;
@@ -356,13 +556,14 @@ public final class TaContext {
         boolean chrFound = false;
         short chrOff = 0;
         short chrLength = 0;
-        short pointOff = 0;
-        boolean pointFound = false;
+        boolean keyFound = false;
         byte role = ROLE_IS;
         short effectiveOff = 0;
         boolean effectiveFound = false;
         short expirationOff = 0;
         boolean expirationFound = false;
+
+        Util.arrayFillNonAtomic(certAuth, (short) 0, (short) 4, (byte) 0xFF);
 
         while (p < end) {
             short total = Tlv.totalLength(data, p);
@@ -373,8 +574,7 @@ public final class TaContext {
             short valueOff = Tlv.valueOffset(data, p);
             short valueLength = Tlv.getLength(data, Tlv.lengthOffset(data, p));
             if (tag == EmrtdTags.TAG_TA_PUBLIC_KEY) {
-                pointOff = findEcPoint(data, valueOff, valueLength);
-                pointFound = pointOff > 0;
+                keyFound = parsePublicKey(data, valueOff, valueLength);
             } else if (tag == EmrtdTags.TAG_TA_CHR) {
                 if (valueLength > REFERENCE_LENGTH) {
                     ISOException.throwIt(ISO7816.SW_WRONG_DATA);
@@ -395,7 +595,7 @@ public final class TaContext {
             }
             p = (short) (p + total);
         }
-        if (!pointFound || !chrFound) {
+        if (!keyFound || !chrFound) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
 
@@ -406,11 +606,25 @@ public final class TaContext {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
 
-        Util.arrayCopyNonAtomic(data, pointOff, importedW, (short) 0, KEY_LENGTH);
-        Util.arrayCopyNonAtomic(data, chrOff, importedRef, (short) 0, chrLength);
-        importedRefLength = chrLength;
-        importedRole = role;
-        importedValid = true;
+        if (role == ROLE_CVCA) {
+            // A CVCA Link Certificate: add/replace a CVCA trust-point slot.
+            storeTrustPoint(data, chrOff, chrLength, pkKey, pkKeyLength, pkKind,
+                    pkExp, pkExpLength, data, effectiveOff, effectiveFound, certAuth, (short) 0);
+        } else {
+            Util.arrayCopyNonAtomic(pkKey, (short) 0, importedKey, (short) 0, pkKeyLength);
+            Util.arrayCopyNonAtomic(pkExp, (short) 0, importedExp, (short) 0, pkExpLength);
+            importedKind = pkKind;
+            importedKeyLength = pkKeyLength;
+            importedExpLength = pkExpLength;
+            Util.arrayCopyNonAtomic(data, chrOff, importedRef, (short) 0, chrLength);
+            importedRefLength = chrLength;
+            importedRole = role;
+            importedValid = true;
+            // Fold the DV/IS relative authorization into the session authorization.
+            for (short i = 0; i < 4; i++) {
+                effectiveAuth[i] = (byte) (effectiveAuth[i] & certAuth[i]);
+            }
+        }
 
         // Advance the current date (§2.5.2 step i).
         if (effectiveFound && advancesDate(role, issuerRole)) {
@@ -419,6 +633,62 @@ public final class TaContext {
                 currentDateValid = true;
             }
         }
+    }
+
+    /**
+     * Parses the {@code 7F49} public key into the staging buffers.  Supports the
+     * ECDSA-SHA-256 (tag 86 point) and RSA-PSS-SHA-256 (tags 81 modulus, 82
+     * exponent) profiles (BSI TR-03110-3 C.1.2.2).  Returns false when no
+     * usable key is present.
+     */
+    private boolean parsePublicKey(byte[] data, short off, short len) {
+        short p = off;
+        short end = (short) (off + len);
+        boolean rsaOid = false;
+        boolean ecPointFound = false;
+        short modOff = 0;
+        short modLen = 0;
+        short expOff = 0;
+        short expLen = 0;
+        while (p < end) {
+            short total = Tlv.totalLength(data, p);
+            if (total <= 0 || (short) (p + total) > end) {
+                break;
+            }
+            short tag = Tlv.getTag(data, p);
+            short valueOff = Tlv.valueOffset(data, p);
+            short valueLength = Tlv.getLength(data, Tlv.lengthOffset(data, p));
+            if (tag == EmrtdTags.TAG_TA_OID) {
+                rsaOid = matches(data, valueOff, valueLength, OID_TA_RSA_PSS_SHA_256);
+            } else if (tag == EmrtdTags.TAG_TA_EC_POINT) {
+                if (valueLength == EC_KEY_LENGTH) {
+                    Util.arrayCopyNonAtomic(data, valueOff, pkKey, (short) 0, EC_KEY_LENGTH);
+                    pkKeyLength = EC_KEY_LENGTH;
+                    pkExpLength = 0;
+                    pkKind = KIND_EC;
+                    ecPointFound = true;
+                }
+            } else if (tag == EmrtdTags.TAG_TA_RSA_MODULUS) {
+                modOff = valueOff;
+                modLen = valueLength;
+            } else if (tag == EmrtdTags.TAG_TA_RSA_EXPONENT) {
+                expOff = valueOff;
+                expLen = valueLength;
+            }
+            p = (short) (p + total);
+        }
+        if (rsaOid) {
+            if (modLen < 1 || modLen > MAX_MODULUS || expLen < 1 || expLen > MAX_EXPONENT) {
+                return false;
+            }
+            Util.arrayCopyNonAtomic(data, modOff, pkKey, (short) 0, modLen);
+            Util.arrayCopyNonAtomic(data, expOff, pkExp, (short) 0, expLen);
+            pkKeyLength = modLen;
+            pkExpLength = expLen;
+            pkKind = KIND_RSA;
+            return true;
+        }
+        return ecPointFound;
     }
 
     /** True for a certificate whose Effective Date may advance the current date. */
@@ -443,6 +713,18 @@ public final class TaContext {
         return 0;
     }
 
+    /** Compares two 6-octet BCD dates at the given offsets of the same array. */
+    private static short compare(byte[] buf, short offA, byte[] other, short offB) {
+        for (short i = 0; i < 6; i++) {
+            short a = (short) (buf[(short) (offA + i)] & 0xFF);
+            short b = (short) (other[(short) (offB + i)] & 0xFF);
+            if (a != b) {
+                return a < b ? (short) -1 : (short) 1;
+            }
+        }
+        return 0;
+    }
+
     /** The certificate-holder role from the CHAT discretionary byte (b8/b7). */
     private static byte roleOf(byte discretionary) {
         switch (discretionary & 0xC0) {
@@ -457,38 +739,20 @@ public final class TaContext {
         }
     }
 
-    /** The offset of the 65-byte EC public point (tag 86) inside a 7F49 value, or 0. */
-    private static short findEcPoint(byte[] data, short off, short len) {
-        short p = off;
-        short end = (short) (off + len);
-        while (p < end) {
-            short total = Tlv.totalLength(data, p);
-            if (total <= 0 || (short) (p + total) > end) {
-                return 0;
-            }
-            short tag = Tlv.getTag(data, p);
-            short valueOff = Tlv.valueOffset(data, p);
-            short valueLength = Tlv.getLength(data, Tlv.lengthOffset(data, p));
-            if (tag == EmrtdTags.TAG_TA_EC_POINT && valueLength == KEY_LENGTH) {
-                return valueOff;
-            }
-            p = (short) (p + total);
-        }
-        return 0;
-    }
-
     /** ANDs the CHAT relative authorization and returns the certificate-holder role. */
     private byte andChat(byte[] data, short off, short len) {
         if (Lds2Record.find(data, off, len, EmrtdTags.TAG_TA_DISCRETIONARY, FIND)
                 && FIND[1] >= 1) {
             byte chat = data[FIND[0]];
-            effectiveAuth[0] = (byte) (effectiveAuth[0] & chat);
+            // The ePassport relative authorization is bits b2/b1; the role sits
+            // in b8/b7 (BSI TR-03110-4 §2.1.3.2).
+            certAuth[0] = (byte) (certAuth[0] & (chat & 0x03));
             return roleOf(chat);
         }
         return ROLE_IS;
     }
 
-    /** ANDs each application authorization extension into the effective authorization. */
+    /** ANDs each application authorization extension into the certificate authorization. */
     private void andExtensions(byte[] data, short off, short len) {
         short p = off;
         short end = (short) (off + len);
@@ -534,7 +798,7 @@ public final class TaContext {
         }
         short index = appIndex(data, oidOff, oidLen);
         if (index >= 0) {
-            effectiveAuth[index] = (byte) (effectiveAuth[index] & data[bitsOff]);
+            certAuth[index] = (byte) (certAuth[index] & data[bitsOff]);
         }
     }
 
@@ -558,11 +822,12 @@ public final class TaContext {
     }
 
     /**
-     * Builds the shared EC verification key and Signature once (at install, so
-     * no persistent allocation happens inside the Security Domain's
-     * personalization transaction).
+     * Builds the shared verification keys and Signatures once, at first use
+     * (personalization, so no persistent allocation happens on a command path).
+     * Failures are left to the platform: a card without the algorithm simply
+     * cannot verify that profile.
      */
-    static void ensureEc() {
+    static void ensureKeys() {
         if (ecKey == null) {
             ecKey = (ECPublicKey) KeyBuilder.buildKey(
                     KeyBuilder.TYPE_EC_FP_PUBLIC, KeyBuilder.LENGTH_EC_FP_256, false);
@@ -572,12 +837,39 @@ public final class TaContext {
         }
     }
 
-    private boolean verifyEcdsa(byte[] keyW, byte[] message, short messageOff, short messageLength,
-                                byte[] signature, short signatureOff, short signatureLength) {
-        ensureEc();
-        ecKey.setW(keyW, (short) 0, KEY_LENGTH);
-        ecSig.init(ecKey, Signature.MODE_VERIFY);
-        return ecSig.verify(message, messageOff, messageLength, signature, signatureOff,
-                signatureLength);
+    private static void ensureRsa() {
+        if (rsaKey2048 == null) {
+            rsaKey1024 = (RSAPublicKey) KeyBuilder.buildKey(
+                    KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_1024, false);
+            rsaKey2048 = (RSAPublicKey) KeyBuilder.buildKey(
+                    KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_2048, false);
+            rsaSig = Signature.getInstance(Signature.ALG_RSA_SHA_256_PKCS1_PSS, false);
+        }
+    }
+
+    /**
+     * Verifies {@code message} against the resolved key with the algorithm
+     * selected by the key kind (ECDSA-SHA-256 plain, RSA-PSS-SHA-256).
+     */
+    private static boolean verify(byte[] message, short messageOff, short messageLength,
+                                  byte[] signature, short signatureOff, short signatureLength) {
+        try {
+            if (vKind == KIND_EC) {
+                ensureKeys();
+                ecKey.setW(vKey, (short) 0, EC_KEY_LENGTH);
+                ecSig.init(ecKey, Signature.MODE_VERIFY);
+                return ecSig.verify(message, messageOff, messageLength,
+                        signature, signatureOff, signatureLength);
+            }
+            ensureRsa();
+            RSAPublicKey key = vKeyLength <= 128 ? rsaKey1024 : rsaKey2048;
+            key.setModulus(vKey, (short) 0, vKeyLength);
+            key.setExponent(vExp, (short) 0, vExpLength);
+            rsaSig.init(key, Signature.MODE_VERIFY);
+            return rsaSig.verify(message, messageOff, messageLength,
+                    signature, signatureOff, signatureLength);
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

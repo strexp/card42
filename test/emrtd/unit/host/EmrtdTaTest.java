@@ -17,12 +17,15 @@ import java.util.Map;
 import card42.host.common.codec.DerWriter;
 import card42.host.common.crypto.Ecdsa;
 import card42.host.common.crypto.P256;
+import card42.host.common.crypto.RsaPss;
 import card42.host.emrtd.lds.SecurityInfo;
 import card42.host.emrtd.lds.TerminalAuthenticationInfo;
 import card42.host.emrtd.ta.Chat;
 import card42.host.emrtd.ta.CvCertificate;
+import card42.host.emrtd.ta.CvCertificateBuilder;
 import card42.host.emrtd.ta.CvCertificateCodec;
 import card42.host.emrtd.ta.CvChainVerifier;
+import card42.host.emrtd.ta.CvcPrincipal;
 import card42.host.emrtd.ta.TaChain;
 import card42.host.emrtd.ta.TerminalAuth;
 
@@ -43,6 +46,8 @@ final class EmrtdTaTest {
         ecdsaJceCrossCheck();
         certificateRoundTrip();
         chainVerification();
+        rsaCertificate();
+        rsaIssuerChain();
         effectiveAuthorization();
         terminalAuthInput();
         terminalAuthenticationInfo();
@@ -126,6 +131,107 @@ final class EmrtdTaTest {
                 P256.generator()));
         Asserts.rejects(() -> CvChainVerifier.verify(parsed, otherAnchor),
                 "a wrong trust anchor fails chain verification");
+    }
+
+    /** The TAv2 RSA-PSS-SHA-256 certificate profile (BSI TR-03110-3 C.1.2.2). */
+    private static void rsaCertificate() throws Exception {
+        SecureRandom random = new SecureRandom();
+        BigInteger cvca = P256.randomScalar(random);
+        BigInteger dv = P256.randomScalar(random);
+        byte[] cvcaW = P256.encode(P256.scalarMult(cvca, P256.generator()));
+        byte[] dvW = P256.encode(P256.scalarMult(dv, P256.generator()));
+        CvcPrincipal cvcaRef = CvcPrincipal.of("UTCVCA0000000001");
+        CvcPrincipal dvRef = CvcPrincipal.of("UTDV000000000002");
+        CvcPrincipal isRef = CvcPrincipal.of("UTIS000000000003");
+        Map<String, byte[]> noAuth = new java.util.LinkedHashMap<String, byte[]>();
+        java.security.KeyPair rsa = rsaKeyPair();
+        byte[] mod = RsaPss.unsigned(
+                ((java.security.interfaces.RSAPublicKey) rsa.getPublic()).getModulus());
+        byte[] exp = RsaPss.unsigned(
+                ((java.security.interfaces.RSAPublicKey) rsa.getPublic()).getPublicExponent());
+
+        CvCertificate dvCert = CvCertificateBuilder.build(0, cvcaRef, dvRef,
+                Chat.Role.DV_DOMESTIC, new byte[] { (byte) 0x03 }, dvW, "250101", "300101",
+                noAuth, cvca, random);
+        // RSA subject key, signed by the EC DV (an RSA cert carried over ECDSA).
+        byte[] body = CvCertificateCodec.encodeBodyRsa(0, dvRef,
+                CvCertificate.OID_TA_RSA_PSS_SHA_256, mod, exp, isRef, Chat.Role.IS,
+                new byte[] { (byte) 0x03 }, "250101", "300101", noAuth);
+        CvCertificate terminal = CvCertificateCodec.parse(
+                CvCertificateCodec.encode(body, Ecdsa.sign(body, dv, random)));
+
+        CvCertificate parsed = CvCertificateCodec.parse(terminal.encoded());
+        Asserts.check(parsed.isRsa(), "RSA terminal certificate parses as RSA");
+        Asserts.eq(CvCertificate.OID_TA_RSA_PSS_SHA_256, parsed.publicKeyOid(),
+                "RSA terminal certificate carries the RSA-PSS OID");
+        Asserts.bytes(mod, parsed.rsaModulus(), "RSA modulus round-trips");
+        Asserts.bytes(exp, parsed.rsaExponent(), "RSA exponent round-trips");
+
+        List<CvCertificate> chain = new ArrayList<CvCertificate>();
+        chain.add(dvCert);
+        chain.add(parsed);
+        CvCertificate verified = CvChainVerifier.verify(chain, cvcaW);
+        Asserts.eq(isRef.name(), verified.certificateHolderReference().name(),
+                "RSA terminal certificate chain verifies against the EC trust anchor");
+
+        byte[] message = "terminal authentication".getBytes(
+                java.nio.charset.StandardCharsets.ISO_8859_1);
+        byte[] signature = RsaPss.sign(message, rsa.getPrivate());
+        Asserts.check(RsaPss.verify(message, RsaPss.publicKey(mod, exp), signature),
+                "RSA-PSS sign/verify round-trip");
+        Asserts.check(!RsaPss.verify(message, RsaPss.publicKey(mod, exp), tamper(signature)),
+                "RSA-PSS rejects a tampered signature");
+    }
+
+    /** An RSA issuer key signing an EC terminal certificate with RSA-PSS. */
+    private static void rsaIssuerChain() throws Exception {
+        SecureRandom random = new SecureRandom();
+        BigInteger cvca = P256.randomScalar(random);
+        BigInteger is = P256.randomScalar(random);
+        byte[] cvcaW = P256.encode(P256.scalarMult(cvca, P256.generator()));
+        byte[] isW = P256.encode(P256.scalarMult(is, P256.generator()));
+        CvcPrincipal cvcaRef = CvcPrincipal.of("UTCVCA0000000001");
+        CvcPrincipal dvRef = CvcPrincipal.of("UTDV000000000002");
+        CvcPrincipal isRef = CvcPrincipal.of("UTIS000000000003");
+        Map<String, byte[]> noAuth = new java.util.LinkedHashMap<String, byte[]>();
+
+        java.security.KeyPair dvRsa = rsaKeyPair();
+        byte[] mod = RsaPss.unsigned(
+                ((java.security.interfaces.RSAPublicKey) dvRsa.getPublic()).getModulus());
+        byte[] exp = RsaPss.unsigned(
+                ((java.security.interfaces.RSAPublicKey) dvRsa.getPublic()).getPublicExponent());
+        // The DV certificate has an RSA key and is signed by the EC CVCA.
+        byte[] dvBody = CvCertificateCodec.encodeBodyRsa(0, cvcaRef,
+                CvCertificate.OID_TA_RSA_PSS_SHA_256, mod, exp, dvRef, Chat.Role.DV_DOMESTIC,
+                new byte[] { (byte) 0x03 }, "250101", "300101", noAuth);
+        CvCertificate dvCert = CvCertificateCodec.parse(
+                CvCertificateCodec.encode(dvBody, Ecdsa.sign(dvBody, cvca, random)));
+        // The terminal certificate has an EC key and is signed by the RSA DV (RSA-PSS).
+        byte[] termBody = CvCertificateCodec.encodeBody(0, dvRef,
+                CvCertificate.OID_TA_ECDSA_SHA_256, isW, isRef, Chat.Role.IS,
+                new byte[] { (byte) 0x03 }, "250101", "300101", noAuth);
+        CvCertificate terminal = CvCertificateCodec.parse(
+                CvCertificateCodec.encode(termBody, RsaPss.sign(termBody, dvRsa.getPrivate())));
+
+        List<CvCertificate> chain = new ArrayList<CvCertificate>();
+        chain.add(dvCert);
+        chain.add(terminal);
+        CvCertificate verified = CvChainVerifier.verify(chain, cvcaW);
+        Asserts.eq(isRef.name(), verified.certificateHolderReference().name(),
+                "an RSA-signed certificate verifies against an RSA DV key");
+    }
+
+    private static java.security.KeyPair rsaKeyPair() throws Exception {
+        java.security.KeyPairGenerator generator =
+                java.security.KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        return generator.generateKeyPair();
+    }
+
+    private static byte[] tamper(byte[] value) {
+        byte[] out = value.clone();
+        out[out.length / 2] ^= 0x01;
+        return out;
     }
 
     private static void effectiveAuthorization() {

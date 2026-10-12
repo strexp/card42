@@ -34,6 +34,8 @@ public class Signature {
     public static final byte ALG_DES_MAC8_NOPAD = (byte) 10;
     public static final byte ALG_DES_MAC8_ISO9797_M2 = (byte) 11;
     public static final byte ALG_ECDSA_SHA_256 = (byte) 33;
+    /** Card-side RSA-PSS with SHA-256 (Terminal Authentication RSA profile). */
+    public static final byte ALG_RSA_SHA_256_PKCS1_PSS = (byte) 21;
 
     /** Cipher selector for the plain (r||s) ECDSA signature format. */
     public static final byte SIG_CIPHER_ECDSA_PLAIN = (byte) 9;
@@ -63,7 +65,8 @@ public class Signature {
             }
             return new Signature(algorithm);
         }
-        if (algorithm != ALG_RSA_SHA_PKCS1 && algorithm != ALG_RSA_SHA_256_PKCS1) {
+        if (algorithm != ALG_RSA_SHA_PKCS1 && algorithm != ALG_RSA_SHA_256_PKCS1
+                && algorithm != ALG_RSA_SHA_256_PKCS1_PSS) {
             throw new CryptoException((short) 1);
         }
         return new Signature(algorithm);
@@ -103,7 +106,12 @@ public class Signature {
             return;
         }
         try {
-            signature = java.security.Signature.getInstance(name(algorithm));
+            if (theMode == MODE_VERIFY) {
+                // verify() builds its own verifier from the public key.
+                return;
+            }
+            signature = algorithm == ALG_RSA_SHA_256_PKCS1_PSS
+                    ? pssSigner() : java.security.Signature.getInstance(name(algorithm));
             signature.initSign(jcePrivate(theKey));
         } catch (Exception e) {
             throw new CryptoException((short) 1);
@@ -180,8 +188,8 @@ public class Signature {
             return verifyEcdsaPlain(inBuff, inOffset, inLength, sigBuff, sigOffset, sigLength);
         }
         try {
-            java.security.Signature verifier =
-                    java.security.Signature.getInstance(name(algorithm));
+            java.security.Signature verifier = algorithm == ALG_RSA_SHA_256_PKCS1_PSS
+                    ? pssSigner() : java.security.Signature.getInstance(name(algorithm));
             verifier.initVerify(jcePublic(key));
             if (inLength > 0) {
                 verifier.update(inBuff, inOffset, inLength);
@@ -303,5 +311,13 @@ public class Signature {
 
     private static String name(byte algorithm) {
         return algorithm == ALG_RSA_SHA_PKCS1 ? "SHA1withRSA" : "SHA256withRSA";
+    }
+
+    /** A JDK RSA-PSS signer/verifier with SHA-256 and a 32-byte salt (Java Card default). */
+    private static java.security.Signature pssSigner() throws Exception {
+        java.security.Signature s = java.security.Signature.getInstance("RSASSA-PSS");
+        s.setParameter(new java.security.spec.PSSParameterSpec("SHA-256", "MGF1",
+                java.security.spec.MGF1ParameterSpec.SHA256, 32, 1));
+        return s;
     }
 }
