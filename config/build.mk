@@ -17,3 +17,10 @@ CARD_EMRTD_DIR  ?= card/emrtd
 # Test build switch (docs/specs/common/architecture.md §7): 1 = allow CONTACTLESS role instances
 # on the contact interface (used by the PPSE/contactless smoke test).
 TEST_CONTACTLESS ?= 0
+
+# CAP variant consumed by the deploy/test targets: debug (default) or release.
+# `make` always builds both variants (release has the canonical name, debug
+# carries a -debug suffix); this knob only selects which one is deployed and
+# used by the test matrices.  It never appears in a target name, so the same
+# targets work for both.
+CAP_MODE ?= debug

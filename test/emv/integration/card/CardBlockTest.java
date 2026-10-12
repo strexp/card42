@@ -19,9 +19,10 @@ import card42.host.common.codec.Tags;
  *
  * <p>The card block is a card-wide, irreversible flag ({@code EMVAppletBase}
  * static {@code cardBlocked}), so this suite must run against a <em>fresh</em>
- * simulator and must be the last thing that touches the card.  It is therefore
- * driven by its own Makefile target ({@code test-emv-sim-block}) which restarts the
- * simulator, redeploys and re-personalizes before running this class.
+ * simulator that nothing else touches.  {@code make test-emv-sim} runs it as a
+ * second phase, after the other EMV suites (whose last member, IssuerScriptTest,
+ * already blocks that first card): the phase restarts the simulator, redeploys
+ * and re-personalizes before running this class.
  *
  * <p>The separate post-issuance {@code CARD BLOCK} command path is covered by
  * {@link IssuerScriptTest}.

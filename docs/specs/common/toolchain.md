@@ -15,37 +15,36 @@
 ## 2. 构建
 
 ```
-make                 # 三个 CAP + 五个主机 jar（调试 CAP，含 -debug）
-make card            # card-common + card-emv + card-emrtd
-make card-common     # 库 CAP card42common.cap/.exp（无 applet）
-make card-emv        # card42-emv.cap（依赖 card42common）
-make card-emrtd      # card42-emrtd.cap（依赖 card42common）
-make card-release    # 无 -debug 的 release CAP（build/release/，复用已编译类）
-make release         # 调试 CAP + release CAP + 五个 jar（CI/发布入口）
+make                 # debug + release CAP 两套 + 五个主机 jar（一次产出）
+make card            # card-common + card-emv + card-emrtd（各 debug + release）
+make card-common     # 库 CAP（card42-common.cap + card42-common-debug.cap）
+make card-emv        # EMV CAP（card42-emv.cap + card42-emv-debug.cap）
+make card-emrtd      # eMRTD CAP（card42-emrtd.cap + card42-emrtd-debug.cap）
 make host            # host-common + host-emv + host-emrtd + host-emv-cli + host-emrtd-cli
-make verify          # 校验三个（调试）export 文件
-make verify-release  # 校验三个 release export 文件
+make verify          # 校验全部（release + debug）export 文件
 make TEST_CONTACTLESS=1   # 测试构建（EMV）
-make test / test-emv / test-emrtd   # 三矩阵端到端
 make clean           # 清理 build/
 ```
 
-**调试 / release CAP**：默认 `make`/`make card` 用 converter 的 `-debug` 生成含行号/局部变量表的 CAP
-（便于卡内调试，体积约大 20–25%）。`make release` 额外用**同一批已编译类**去掉 `-debug` 重新转换到
-`build/release/`（仅 CAP/JCA 不同，`.exp` 相同），并跑 `verify-release`。发布物：`dist/card/`（调试，
-无后缀）、`dist/card-release/`（生产，`-release` 后缀）、`dist/host/`（五个 jar）；CI `ci.yml` 三件
-artifact（`card42-card`/`card42-card-release`/`card42-host`），`release.yml` 在 tag 上把三者附到 draft
-release（生产下发用 `-release`，排查用调试 CAP）。
+**交付物布局**：一次 `make` 把两套 CAP 平铺在 `build/deliverables/`：release 用规范名
+（`card42-common.cap` / `card42-emv.cap` / `card42-emrtd.cap`，无 converter `-debug`），debug 加
+`-debug` 后缀（`*-debug.cap` / `*-debug.exp`）；两者复用同一批 `javac -g` 编译类，`.exp` 内容相同。
+中间转换产物在 `build/out/{debug,release}/`。**CAP_MODE**（`config/build.mk`，默认 `debug`）只决定
+`sim-*` / `card-*` / `test-*` 部署与测试哪一套 CAP，不出现在任何 target 名里，例如
+`make CAP_MODE=release test-emv-sim`。CI `ci.yml` 三件 artifact（`card42-card`=release、
+`card42-card-debug`、`card42-host`），`release.yml` 在 tag 上附到 draft release（生产下发 release，
+排查用 `-debug`）。
 
-交付物（三个 CAP + 五个主机 jar）：
+交付物（三个 CAP + 五个主机 jar），每模块 `javac -g` 编译一次、converter 转换两次：
 
-- **库 CAP `card42common`**：`javac` 编译 `card/common` 到 `build/card/common/bin`；converter
-  用 `build/card42common.conf`（**无 `-applet`**）生成 `card42common.cap/.exp`。
+- **库 CAP `card42-common`**：编译 `card/common` 到 `build/card/common/bin`；converter 用
+  `build/card42common.conf`（debug，含 `-debug`）与 `build/card42common-release.conf`（release，
+  **无 `-applet`**）生成 `card42-common.cap/.exp` 与 `card42-common-debug.cap/.exp`。
 - **EMV CAP `card42-emv`**：编译 `card/emv`（classpath 追加 common bin，含生成的
-  `BuildConfig`）到 `build/card/emv/bin`；converter 用 `build/card42-emv.conf`
-  （`-exportpath <GPAPI>/exports23:<common 导出根>`，两个 `-applet`）。
+  `BuildConfig`）到 `build/card/emv/bin`；converter 用 `build/card42-emv.conf` /
+  `build/card42-emv-release.conf`（`-exportpath <GPAPI>/exports23:<common 导出根>`，两个 `-applet`）。
 - **eMRTD CAP `card42-emrtd`**：编译 `card/emrtd` 到 `build/card/emrtd/bin`；converter 用
-  `build/card42-emrtd.conf`（一个 `-applet`）。
+  `build/card42-emrtd.conf` / `build/card42-emrtd-release.conf`（一个 `-applet`）。
 - **主机五 jar**：`javac` 只用 JDK 编译 `host/common` → `card42-common.jar`；编译 `host/emv`
   中除 `cli/` 外的源码（cp common）→ `card42-emv.jar`（**库**，无 `Main-Class`）；编译
   `host/emv/cli`（cp common + emv 库）→ `card42-emv-cli.jar`（`Main-Class`
@@ -70,13 +69,17 @@ release（生产下发用 `-release`，排查用调试 CAP）。
 
 | 文件 | 内容 |
 |------|------|
-| `config/build.mk` | 输出目录、三个源码目录（`CARD_COMMON_DIR`/`CARD_EMV_DIR`/`CARD_EMRTD_DIR`）、`TEST_CONTACTLESS` |
+| `config/build.mk` | 输出目录、三个源码目录（`CARD_COMMON_DIR`/`CARD_EMV_DIR`/`CARD_EMRTD_DIR`）、`TEST_CONTACTLESS`、`CAP_MODE` |
 | `config/toolchain.mk` | `JAVA_HOME`、`JAVA`、`JAVAC`、`JAR`、`JAVAC_RELEASE` |
 | `config/externals.mk` | Java Card SDK、GlobalPlatform API、GPPro jar |
 | `config/target.mk` | `JC_TARGET`、`JC_API_VERSION` |
 | `config/ids.mk` | 统一 RID、三个 package/applet 名与 AID、common/emv 版本（eMRTD 无版本变量） |
-| `config/simulator.mk` | 模拟器端口、SCP03 keyset、PIN、部署计划、`SIM_CAPS`/`SIM_BOTH_CAPS`、`GP_SIM` |
+| `config/simulator.mk` | 模拟器端口、SCP03 keyset、PIN、部署计划、`GP_SIM` |
 | `config/card.mk` | 真卡 GPPro 参数（`GP_ARGS`、`GP_PERSONALIZE`、`CARD_NEW_*`）+ eMRTD LDS1 安装（`EMRTD_LDS1_AID`/`EMRTD_LDS1_PRIVS`） |
+
+构建规则在 `mk/*.mk`，每类一个文件：`paths`（派生路径/源码清单）、`cap`（三个 CAP，debug+release）、
+`host`（五个 jar）、`sim`（模拟器生命周期）、`deploy`（模拟器/真卡安装与个性化）、`test`（集成矩阵）、
+`unit`（纯 JVM 单测）。顶层 `Makefile` 只做配置 include、聚合 `all`/`clean`/`help`。
 
 覆盖优先级（递增）：分类默认值 < `config/local.mk`（复制 `config/local.mk.example`，
 gitignore，用于私密密钥）< 环境变量 < 命令行，如 `make JAVA_HOME=/path/to/jdk`。
@@ -97,15 +100,14 @@ gitignore，用于私密密钥）< 环境变量 < 命令行，如 `make JAVA_HOM
 | `EMRTD_PACKAGE_NAME` / `EMRTD_PACKAGE_AID` | `card42.emrtd` / `…:02` | eMRTD package |
 | `EMRTD_CLASS` / `EMRTD_AID` | `card42.emrtd.EmrtdApplet` / `…:02:01` | eMRTD applet |
 | `TEST_CONTACTLESS` | `0` | `1`=允许非接触实例在接触接口被选中 |
+| `CAP_MODE` | `debug` | 部署/测试消费的 CAP 变体（`debug`/`release`）；`make` 始终产出两套 |
 | `DEPLOY_CONF` | `deploy/deploy-emv.conf` | EMV 生产实例 |
 | `DEPLOY_EMV_TEST_CONF` | `deploy/deploy-emv-test.conf` | EMV 测试实例 |
 | `DEPLOY_EMRTD_CONF` | `deploy/deploy-emrtd.conf` | eMRTD LDS1/LDS2 实例 |
 | `DEPLOY_BOTH_CONF` | `deploy/deploy.conf` | both 矩阵 |
 | `EMV_PERSO_KEYS` | `perso/emv/sample.perso.sda.keys` | 示例 SDA 密钥档案（两脚本共用） |
 | `SIM_EMV_PERSO_SCRIPT` | `perso/emv/sample-test.perso` | 模拟器个性化脚本（生产 + 测试实例） |
-| `CARD_EMV_PERSO_SCRIPT` | `perso/emv/sample.perso` | 真卡个性化脚本（仅生产实例） |
-| `SIM_CAPS` | common,emv | EMV 矩阵加载的 CAP（逗号分隔） |
-| `SIM_BOTH_CAPS` | common,emv,emrtd | both 矩阵加载的 CAP |
+| `CARD_EMV_PERSO_SCRIPT` | `perso/emv/sample-j3r180.perso` | 真卡个性化脚本（仅生产实例） |
 | `BUILD_DIR` | `build` | 输出目录 |
 | `SIM_PORT` | `9025` | 模拟器端口 |
 | `SIM_KVN` / `SIM_ENC_KEY` / `SIM_MAC_KEY` / `SIM_DEK_KEY` | `01` / `1111…` / `2222…` / `3333…` | SCP03 keyset |
@@ -117,44 +119,43 @@ gitignore，用于私密密钥）< 环境变量 < 命令行，如 `make JAVA_HOM
 
 ## 4. 模拟器
 
-命名约定：带 `emv`/`emrtd` 关键字的只针对该模块；**不带关键字的为公共/both**。
+模块关键字 `<mod>` = `emv` | `emrtd` | `both`（`both` 即公共矩阵）；部署/个性化/测试目标对三个关键字
+同形。`CAP_MODE`（默认 `debug`）决定部署/测试 `-debug` 还是 release CAP。
 
 ```
-make test          # both 矩阵：EMV + eMRTD 共存（单次部署，不含 block）
-make test-emv      # EMV 矩阵：部署 + 个性化 + 冒烟/目录/边界（test-emv-sim + test-emv-sim-block）
-make test-emrtd    # eMRTD 矩阵：LDS1 + LDS2 + BAC + SM + PA + AA + PACE
-make sim-install   # 启动 + 加载三个 CAP + 创建 both 实例（不含个性化）
-make sim-emv-install    # 启动 + 加载 common/emv + 创建 EMV 实例（含测试实例）
-make sim-emrtd-install  # 启动 + 加载 common/emrtd + 创建 LDS1/LDS2 实例
-make sim-perso / sim-emv-perso / sim-emrtd-perso   # both / EMV / eMRTD 个性化
-make test-emv-sim      # 部署 + 个性化 + 跑全部 EMV 集成 suite
-make test-emv-sim-run S=<Suite>  # 起模拟器并只跑一个 EMV suite（默认 EmvFlowTest）
-make sim-stop      # 停止模拟器
-make test-unit     # 纯 JVM 单测（无需模拟器）
+make test-emv-sim / test-emrtd-sim            # 各模块：部署 + 个性化 + 全部 suite
+make test-both-sim                            # both 矩阵：EMV + eMRTD 共存（单次部署）
+make test-emv-sim-run S=<Suite>               # 部署 + 个性化 + 单个 EMV suite（默认 EmvFlowTest）
+make test-emrtd-sim-run S=<Suite>             # 同上（eMRTD）
+make test-emv-card / test-emrtd-card / test-both-card   # 真卡：各模块 suite（见 §5/§6）
+make sim-emv-install / sim-emrtd-install / sim-both-install    # 启动 + 加载 CAP + 创建实例
+make sim-emv-perso / sim-emrtd-perso / sim-both-perso          # 个性化（STORE DATA）
+make sim-stop                                 # 停止模拟器
+make test-unit                                # 纯 JVM 单测（无需模拟器）
 ```
 
-`make test`（both）= 单次部署跑生产 EMV suite + eMRTD suite；`make test-emv` = `test-emv-sim` +
-第二个模拟器生命周期的 `test-emv-sim-block`（卡级 block 不可逆，须最后单独一轮）。加
-`TEST_CONTACTLESS=1` 走非接触流（经 PPSE）。
+`make test-both-sim` = 单次共存部署跑生产 EMV suite（`BOTH_EMV_SUITES` = `ContactKernelTest`/
+`DirectoryTest`；测试实例 04/06/08 未部署）+ 全部 `EMRTD_SUITES`。`make test-emv-sim` 先跑
+`EMV_SUITES`（其末项 `IssuerScriptTest` 会 block 整卡），再**重启模拟器**、重新部署与个性化后跑
+`CardBlockTest`（CSU 卡级 block 路径，不可逆，须全新卡；故为 `test-emv-sim` 的第二阶段，而非独立
+target）。加 `TEST_CONTACTLESS=1` 走非接触流（经 PPSE）。
 
-`make test-emrtd`：`sim-emrtd-install` + `sim-emrtd-perso`（加载 `card42common` + `card42-emrtd`，
-创建 `A0000002471001` 与 LDS2 DF，用 `EmrtdPersoExporter -script=$(EMRTD_PERSO_SCRIPT)` 把
-`perso/emrtd/sample.perso` 的 DGI 序列经 GPPro `--store-data` 个性化样例护照），再跑
-`EMRTD_SUITES`（`EmrtdBacTest`、`EmrtdLds2IntegrationTest`、`EmrtdLds2AppsIntegrationTest`、
-`EmrtdPaceIntegrationTest`、`EmrtdChipAuthIntegrationTest`）；这些
-suite 从仓库根读取 PA 的 CSCA 夹具 `perso/emrtd/csca.crt`。
+`make test-emrtd-sim`：`sim-emrtd-install` + `sim-emrtd-perso`（加载 `card42-common` +
+`card42-emrtd`，创建 `A0000002471001` 与 LDS2 DF，用 `EmrtdPersoExporter
+-script=$(EMRTD_PERSO_SCRIPT)` 把 `perso/emrtd/sample.perso` 的 DGI 序列经 GPPro `--store-data`
+个性化样例护照），再跑 `EMRTD_SUITES`；这些 suite 从仓库根读取 PA 的 CSCA 夹具
+`perso/emrtd/csca.crt`。
 
-`make test`（both）：`sim-install` + `sim-perso`（加载三个 CAP，按 `deploy.conf` 创建 EMV +
-eMRTD 实例，EMV 用 `perso/emv/sample.perso`、eMRTD 用 `perso/emrtd/sample.perso`），再跑生产
-EMV suite（`ContactKernelTest`、`DirectoryTest`）与 `EMRTD_SUITES`。
+`make test-both-sim`：`sim-both-install` + `sim-both-perso`（加载三个 CAP，按 `deploy.conf` 创建 EMV +
+eMRTD 实例，EMV 用 `perso/emv/sample-j3r180.perso`、eMRTD 用 `perso/emrtd/sample.perso`），再跑
+`BOTH_EMV_SUITES` 与 `EMRTD_SUITES`。
 
 `make test-emv-sim-run S=<Suite>`（`S` 默认 `EmvFlowTest`）先执行 `sim-emv-install` +
-`sim-emv-perso`（起模拟器、安装并个性化），再只运行 `test/emv/integration/` 中指定的一个入口
-（如 `make test-emv-sim-run S=AesFlowTest`），便于针对单个流程迭代调试；`test-emv-sim` 按
-`EMV_SUITES` 顺序把全部 suite 各起一个 JVM 运行。
+`sim-emv-perso`（起模拟器、安装并个性化），再只运行指定的一个 suite，便于针对单个流程迭代调试；
+`test-emv-sim` 按 `EMV_SUITES` 顺序把全部 suite 各起一个 JVM 运行。eMRTD 用
+`test-emrtd-sim-run S=<Suite>`。
 
-`make sim-install`（both）/`make sim-emv-install`（EMV）安装步骤（个性化见 `sim-perso` /
-`sim-emv-perso`）：
+`make sim-<mod>-install` 安装步骤（个性化见 `sim-<mod>-perso`）：
 
 1. 复制 `jcsl` 到 `build/sim/`，用 `Configurator.jar` 注入 SCP03 密钥（stock `jcsl` 不带初始
    SCP 密钥，必须先配置）。
@@ -163,13 +164,14 @@ EMV suite（`ContactKernelTest`、`DirectoryTest`）与 `EMRTD_SUITES`。
    `--create <instance> --applet <class> --package <PACKAGE_AID 的 hex 形式>`（`--create` 不从
    applet AID 推断 package——nextgen 与 classic 均如此，因为实例尚未进入注册表；须显式传入；
    GPPro 不认 `0x…:…` 写法，故用去前缀/冒号的 `PACKAGE_AID_HEX`）。
-   - `sim-emv-install`：`SIM_CAPS`（common+emv）+ `deploy-emv.conf` + `deploy-emv-test.conf`。
-   - `sim-install`（both）：`SIM_BOTH_CAPS`（common+emv+emrtd）+ `deploy.conf`，按 class AID 前缀选
-     emv/emrtd 的 package。
+   - `sim-emv-install`：common+emv + `deploy-emv.conf` + `deploy-emv-test.conf`。
+   - `sim-emrtd-install`：common+emrtd + `deploy-emrtd.conf`。
+   - `sim-both-install`：common+emv+emrtd + `deploy.conf`，按 class AID 前缀选 emv/emrtd 的 package。
 4. 个性化（SCP03）：
    - `sim-emv-perso`：`PersoExporter` 把 `$(SIM_EMV_PERSO_SCRIPT)`（默认 `perso/emv/sample-test.perso`，
      含测试实例）每实例的 DGI 序列导出为 hex，交给 GPPro `--personalize <AID> --store-data <hex>`。
-   - `sim-perso`（both）：EMV 用 `$(CARD_EMV_PERSO_SCRIPT)`（生产集），eMRTD 用
+   - `sim-emrtd-perso`：`EmrtdPersoExporter -script=$(EMRTD_PERSO_SCRIPT)`。
+   - `sim-both-perso`：EMV 用 `$(CARD_EMV_PERSO_SCRIPT)`（生产集），eMRTD 用
      `EmrtdPersoExporter -script=$(EMRTD_PERSO_SCRIPT)`（DG1/DG2/DG15/SOD + K_seed + AA 私钥 +
      CA/PACE 密钥 + LDS2 EF）。
 
@@ -192,30 +194,30 @@ progress. **Do not use.**”），故**只用于模拟器**；真卡一律不加
 
 ## 5. 真卡安装
 
-`make card-install` / `make card-emv-install` / `make card-emrtd-install` 用 GPPro 对 PC/SC
+`make card-both-install` / `make card-emv-install` / `make card-emrtd-install` 用 GPPro 对 PC/SC
 读卡器中的卡：**只 LOAD**（不自动 install，保证实例 AID 与部署计划一致），再按部署计划逐条
-创建实例。`card-install`（both）加载 common+emv+emrtd 并按 `deploy.conf` 创建生产实例（不含
+创建实例。`card-both-install`（both）加载 common+emv+emrtd 并按 `deploy.conf` 创建生产实例（不含
 测试实例）；`card-emv-install` 加载 common+emv 并按 `deploy-emv.conf`（生产）+
 `deploy-emv-test.conf`（测试）创建；`card-emrtd-install` 加载 common+emrtd 并按
 `deploy-emrtd.conf` 创建 LDS1/LDS2 实例。与模拟器共用同一 GPPro 二进制和
 `--load`/`--create`/`--personalize` 命令集，区别仅在传输（此处 classic PC/SC，不加 `--ng`）与
-安全通道（真卡 SCP02/SCP03 自动协商）。
+安全通道（真卡 SCP02/SCP03 自动协商）。CAP_MODE 同 §4。
 
 ```
-make card-install                          # both：加载三 CAP + 生产实例（deploy.conf）
+make card-both-install                     # both：加载三 CAP + 生产实例（deploy.conf）
 make card-emv-install                      # EMV：common+emv + 生产/测试实例
 make card-emrtd-install                    # eMRTD：common+emrtd + LDS1/LDS2
 make card-uninstall                        # 删除全部实例 + emv/emrtd package（重装前清卡）
 make card-emv-install GP_ARGS="--key-enc ... --key-mac ... --key-dek ..."
 make card-emv-install GP_PERSONALIZE=1     # 追加 INSTALL [for personalization]
-make card-perso / card-emv-perso / card-emrtd-perso   # 下发每实例 DGI 序列（见下）
+make card-both-perso / card-emv-perso / card-emrtd-perso   # 下发每实例 DGI 序列（见下）
 ```
 
 > Java Card 不自动回收已删除对象；反复失败的 INSTALL 会在持久堆留下泄漏，之后某一实例的
 > INSTALL 以 `6F00` 失败。真卡重装前先 `make card-uninstall`（用 `GP_ARGS` 的 SD 密钥删除
 > 实例与 emv/emrtd package），或换用新卡。
 
-个性化：`make card-emv-perso` 把 `$(CARD_EMV_PERSO_SCRIPT)`（默认 `perso/emv/sample.perso`，仅生产
+个性化：`make card-emv-perso` 把 `$(CARD_EMV_PERSO_SCRIPT)`（默认 `perso/emv/sample-j3r180.perso`，仅生产
 实例）每实例的 DGI 序列（由 `PersoExporter` 输出为 hex，即 `PersoScript.sequence()`）交给 GPPro
 `--personalize <AID> --store-data <DGI序列hex>`。`--store-data` 基值 `P1=0x01`
 （bit0=1）、末块 `|0x80`、`P2` 为块序号，按 SD block size 自动分块，与 applet 的
@@ -231,10 +233,11 @@ DES3 keyset **version 0**；`config/local.mk` 里的非出厂 tk 直接建链，
 须显式 `--package <PACKAGE_AID_HEX>`（见 §4）。两点已知现象：① `APPLET_AID`（`43415244420101`）
 与生产实例 `...01` 的 AID 相同，classic `--create ...02` 会误报
 `WARNING: Applet 43415244420101 already present on card`，但实例照常创建，属良性；② 个性化
-脚本拆为生产集 `perso/emv/sample.perso`（`CARD_EMV_PERSO_SCRIPT` 默认）与含测试实例的
-`perso/emv/sample-test.perso`（`SIM_EMV_PERSO_SCRIPT` 默认），只装生产实例（`DEPLOY_EMV_TEST_CONF=`）
-时 `make card-emv-perso` 默认与之一致；个性化测试实例用
-`make card-emv-perso CARD_EMV_PERSO_SCRIPT=perso/emv/sample-test.perso`。
+脚本分生产集 `perso/emv/sample.perso`、含测试实例的 `perso/emv/sample-test.perso`
+（`SIM_EMV_PERSO_SCRIPT` 默认）与 J3R180 专用的 `sample-j3r180[-test].perso`；真卡
+`CARD_EMV_PERSO_SCRIPT` 默认 `perso/emv/sample-j3r180.perso`，只装生产实例
+（`DEPLOY_EMV_TEST_CONF=`）时 `make card-emv-perso` 与之一致；个性化测试实例用
+`make card-emv-perso CARD_EMV_PERSO_SCRIPT=perso/emv/sample-j3r180-test.perso`。
 
 **J3R180 无 DDA/CDA**：该卡不实现 `Signature.ALG_RSA_SHA_ISO9796_MR`（实测：标准 `@sda`
 的 DDA 私钥 DGI `8103`/`8101` 回 `6A80`，改用 CRT 容器仍 `6A80`；而 PIN 密钥 `8104`/`8102`
@@ -278,8 +281,8 @@ eMRTD 真卡：`card-emrtd-install` 创建的 LDS1 实例带 GP `CardReset` 权�
 - **集成测试**（package `card42.test`）：
   - EMV `test/emv/integration/`：卡命令流 suite 在 `test/emv/integration/card/`
     （`EmvFlowTest`、`DirectoryTest`、`BoundaryTest`、`LogTest`、`VelocityTest`、`AesFlowTest`、
-    `OnlineClosedLoopTest`、`IssuerScriptTest` 与 `CardBlockTest`，后者由 `test-emv-sim-block` 在
-    第二个模拟器生命周期单独执行）；主机内核 suite 在
+    `OnlineClosedLoopTest`、`IssuerScriptTest` 与 `CardBlockTest`，后者由 `test-emv-sim` 的
+    第二阶段（重启模拟器、重新部署/个性化）在第二个模拟器生命周期执行）；主机内核 suite 在
     `test/emv/integration/host/kernel/{contact,contactless}/`（`ContactKernelTest`、
     `ContactlessTest`）；CLI suite 在 `test/emv/integration/host/cli/`（`TerminalCliTest`）；
     测试替身与助手（`Checks`/`TestTerminals`）在 `test/emv/integration/support/`。
@@ -288,12 +291,13 @@ eMRTD 真卡：`card-emrtd-install` 创建的 LDS1 实例带 GP `CardReset` 权�
     `EmrtdLds2AppsIntegrationTest`（LDS2 Visa/Additional Biometrics）、`EmrtdPaceIntegrationTest`
     （PACE 3DES/AES-128）、`EmrtdChipAuthIntegrationTest`（Chip Authentication ECDH）。
   - suite 与介质无关：`-host=socket:...` 打模拟器（`make test-emv-sim` / `test-emv-sim-run` /
-    `test-emrtd` / `test`），`-host=pcsc` 打 PC/SC 真卡（`make test-emv-card S=<Suite>`）；
+    `test-emrtd-sim` / `test-both-sim`），`-host=pcsc` 打 PC/SC 真卡（`make test-emv-card S=<Suite>`）；
     eMRTD 真卡用 `make test-emrtd-card`（全部 `EMRTD_SUITES`）或
     `make test-emrtd-card-run S=<Suite>`，读卡器序号用 `CARD_HOST=pcsc:<idx>`（如 ACR1581 的
     PICC 口是 `pcsc:1`；默认 0 是 SAM 槽）。
     真卡并非全部 suite 可移植：`LogTest` 依赖测试实例 `06`；`ContactlessTest` 需非接触读卡器
-    且断言 AIP `0x6900`/DDA/CDA（对 SDA-only 卡不可移植）；`CardBlockTest` 有不可逆副作用。
+    且断言 AIP `0x6900`/DDA/CDA（对 SDA-only 卡不可移植）；`IssuerScriptTest` 与 `CardBlockTest`
+    会 block 整卡（不可逆），故 `CARD_PORTABLE_SUITES` 不含两者。
 - **纯 JVM 单测**（package `card42.test`）：`make test-unit` 无需模拟器。
   - EMV 卡内类（`Tlv`/`TlvReader`/`DolReader`/`Dgi`/`DgiReader`/`TlvTags`/`EMVCommands`/
     `EMVStatus`/`EMVRoles`/`EMVCodes`/
@@ -329,44 +333,47 @@ eMRTD 真卡：`card-emrtd-install` 创建的 LDS1 实例带 GP `CardReset` 权�
   覆盖仅存在于对应矩阵；引用这些行为时以门控矩阵为准：
   - `ContactlessTest`（及 `TerminalCliTest` 的 contactless 路径）仅在 `TEST_CONTACTLESS=1`
     构建下执行，默认构建整体跳过（`docs/specs/common/architecture.md` §7）。
-  - `CardBlockTest` 仅在 `test-emv-sim-block`（第二个模拟器生命周期）执行，不在 `EMV_SUITES`；
-    卡级 block 不可逆，真卡按约束不跑。
+  - `CardBlockTest` 由 `test-emv-sim` 在第二个模拟器生命周期（重启后重新部署/个性化）执行，
+    不在 `EMV_SUITES`；`IssuerScriptTest`（`EMV_SUITES` 末项）与 `CardBlockTest` 均会 block 整卡，
+    故都不在 `CARD_PORTABLE_SUITES`，真卡按约束不跑。
   - `LogTest` 依赖 jcsl「SELECT 失败后仍选中」，不在 `CARD_PORTABLE_SUITES`，真卡不可移植。
   - `EmvFlowTest` 按 AIP/实例与个性化状态跳过接触less/通用断言；`LayeringTest` 非仓库根运行时跳过。
-  - `test-emv-card` 仅接受 `CARD_PORTABLE_SUITES`（`test/rules.mk`），其余套件提示改用
+  - `test-emv-card` 仅接受 `CARD_PORTABLE_SUITES`（`mk/test.mk`），其余套件提示改用
     `test-emv-sim-run`，避免误跑不可移植套件。
   - 尚无端到端覆盖的规范区域（eMRTD 卡侧命令级、主机 CLI 流程、非接触 Entry Point/内核
     Restart/冲正等）登记在 `TODO.emv.md`/`TODO.emrtd.md`。
 
-`make test` 的验收：`make`/`make verify` 0 错 0 警告；`make test-unit`、`make test`、
-`make TEST_CONTACTLESS=1 test`、`make test-emrtd` 全绿。
+`make test-both-sim` 的验收：`make`/`make verify` 0 错 0 警告；`make test-unit`、`make test-both-sim`、
+`make TEST_CONTACTLESS=1 test-both-sim`、`make test-emrtd-sim` 全绿。
 
 ## 7. 命令速查
 
 ```bash
-make                       # 三个 CAP + 五个主机 jar
+make                       # debug + release CAP 两套 + 五个主机 jar
 make card / card-common / card-emv / card-emrtd
 make host / host-common / host-emv / host-emrtd / host-emv-cli / host-emrtd-cli
-make release / card-release / verify-release   # 调试 + 无 -debug 的 release CAP（build/release/）
+make verify                # 校验全部（release + debug）export
+make CAP_MODE=release ...  # 用 release CAP 部署/测试（默认 debug）
 make TEST_CONTACTLESS=1    # 测试构建
-make verify                # 校验三个 export
-make sim-install / sim-emv-install / sim-emrtd-install   # both / EMV / eMRTD：启动 + 安装（加载 CAP + 建实例）
-make sim-perso / sim-emv-perso / sim-emrtd-perso         # both / EMV / eMRTD：个性化
-make test                  # both 矩阵
-make test-emv              # EMV 矩阵（test-emv-sim + test-emv-sim-block）
-make test-emrtd            # eMRTD 矩阵
-make test-emv-sim              # 部署 + 个性化 + 跑全部 EMV 集成 suite
+make sim-emv-install / sim-emrtd-install / sim-both-install   # 启动 + 安装（加载 CAP + 建实例）
+make sim-emv-perso / sim-emrtd-perso / sim-both-perso         # 个性化
+make test-emv-sim              # EMV：部署 + 个性化 + 全部 suite（含 CardBlockTest 重启阶段）
 make test-emv-sim-run S=AesFlowTest # 起模拟器并只跑一个 EMV suite
+make test-emrtd-sim            # eMRTD：部署 + 个性化 + 全部 suite
+make test-emrtd-sim-run S=EmrtdBacTest   # 只跑一个 eMRTD suite
+make test-both-sim             # both 共存矩阵
+make test-emv-card / test-emrtd-card / test-both-card   # 真卡矩阵
 make test-emv-card S=EmvFlowTest    # 对真卡（PC/SC）跑一个 EMV suite
 make test-emrtd-card           # 对真卡（PC/SC）跑全部 eMRTD suite
 make test-emrtd-card CARD_HOST=pcsc:1         # 指定读卡器序号（PICC=1）
 make test-emrtd-card-run S=EmrtdBacTest       # 对真卡只跑一个 eMRTD suite
 make sim-stop              # 停止模拟器
-make card-install              # 真卡安装 both（common+emv+emrtd，deploy.conf 生产实例）
+make card-both-install         # 真卡安装 both（common+emv+emrtd，deploy.conf 生产实例）
 make card-emv-install          # 真卡安装 EMV（含 04/06/08 测试实例）
 make card-emrtd-install        # 真卡安装 eMRTD（common+emrtd）
-make card-perso                # 真卡个性化 both（EMV 生产集 + eMRTD 样例）
-make card-emv-perso            # 真卡个性化 EMV（GPPro，perso/emv/sample.perso 生产集）
+make card-uninstall            # 真卡清卡（删除全部实例 + emv/emrtd package）
+make card-both-perso           # 真卡个性化 both（EMV 生产集 + eMRTD 样例）
+make card-emv-perso            # 真卡个性化 EMV（默认 perso/emv/sample-j3r180.perso）
 make card-emrtd-perso          # 真卡个性化 eMRTD（perso/emrtd/sample.perso）
 make card-emv-perso CARD_EMV_PERSO_SCRIPT=perso/emv/sample-test.perso  # 真卡含测试实例
 make card-emv-perso CARD_EMV_PERSO_SCRIPT=perso/emv/sample-j3r180.perso       # J3R180 生产集（无 DDA）

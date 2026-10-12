@@ -54,7 +54,7 @@
     不再创建只有 LDS1 用得到的 `LdsCatalog`（19 个 `LdsFile` + 数组）、`LdsPerso`
     （seed + 520 B scratch）、`BacCrypto` 与 2048-bit `AaCrypto`，每例省约 1.5–1.8 KB 持久堆。
     Java Card 不自动回收已删对象，反复失败的 INSTALL 会泄漏，故真卡复测前应
-    `make card-uninstall` 再 `make card-install`（新增卸载目标）。
+    `make card-uninstall` 再 `make card-both-install`（新增卸载目标）。
   - **读路径性能优化**：BAC/PACE 的 Alg-3 MAC 优先用平台 `Signature`（
     `ALG_DES_MAC8_ISO9797_M2`/`ALG_DES_MAC8_NOPAD` + 两次单 DES 终变换），平台不支持时自动回退
     到逐块手工构造，单测两条路径同向量；SM 的 1 KB scratch 改为包级共享 `SmScratch`（**2026-10-11
@@ -72,11 +72,11 @@
     3DES 93 ms；~8 KB DG2 全读 AES ~3.1 s / 3DES ~3.3 s（旧实现 AES ~1.4 s/包，约 17× 慢）。
     `ALG_AES_BLOCK_128_CBC_NOPAD` 在 jcsl 与 J3R180 均确认可用（AES-128 PACE 两侧通过）；
     因此 `EmrtdPersoExporter.cardAccessInfos` **重新宣告 3DES + AES-128**（`perso/emrtd/sample.perso`
-    的 `@cardaccess` 同步重新生成）。单测（含 >256 B 跨块向量）与 `make test`/`make test-emv` 全绿。
+    的 `@cardaccess` 同步重新生成）。单测（含 >256 B 跨块向量）与 `make test-both-sim`/`make test-emv-sim` 全绿。
   - **大照片（DG2）支持**：个性化改为**逐 DGI 流式落盘**（`DgiStream` + `LdsPerso`/`Lds2Perso`，
     不再有 4096 B 整段重组缓冲），LDS1/LDS2 透明 EF 与记录分别改为 **256 B 分页**与
     `beginRecord/appendChunk/endRecord` 流式记录（不复制增长、不需连续大数组）；DG2 预算
-    16384，演示样例 DG2 提升到 ~7 KB。模拟器 `make test-emrtd` / `make test` 全绿，新单测
+    16384，演示样例 DG2 提升到 ~7 KB。模拟器 `make test-emrtd-sim` / `make test-both-sim` 全绿，新单测
     `EmrtdPersoStreamTest`（分页边界、DGI 跨块/截断/超长、5000 B DG2、1 B 分块）。
   - **LDS2 命令级纯 JVM 单测**：`test/emrtd/unit/card/EmrtdCommandTest.java` 直接驱动
     `card/emrtd/command/Lds2Record.java`（SEARCH RECORD A2 含 P2、FMM 5F、UPDATE BINARY D7、
@@ -100,7 +100,7 @@
   `EmrtdLds2AppsIntegrationTest` 的 Additional Biometrics PACE step 4 曾在**多个 suite 连跑**时
   间歇回 `6F00`（特征更像读卡器/卡复位或持久堆余量，而非确定性逻辑）。在共享引擎/KDF/瞬态归并
   （`EmvEngines`/`MacEngines`/`KdfEngines`、`SmScratch` 收窄）之后不再复现；`test-emrtd-card`
-  已移除每 suite 重试，改为每个 suite 只运行一次（见 `test/rules.mk`）。若复发，失败时读
+  已移除每 suite 重试，改为每个 suite 只运行一次（见 `mk/test.mk`）。若复发，失败时读
   `JCSystem.getAvailableMemory(MEMORY_TYPE_PERSISTENT)`，并核对前置 suite 的持久写
   （LDS2 APPEND RECORD）与 PACE 会话次数。
 - [x] **T5.4 PACE-AES 读性能 / 重新宣告 AES（已完成）**：见状态快照「AES 安全报文提速 / 重新
@@ -145,6 +145,6 @@
 
 ## 统一验收门
 
-`make`/`make verify` 0 错 0 警告；`make test-unit`、`make test`（EMV+eMRTD 共存矩阵）、
-`make test-emrtd` 全绿；每条行为变更同步 `docs/specs/`；新增报文使用标准 BSI/ICAO
+`make`/`make verify` 0 错 0 警告；`make test-unit`、`make test-both-sim`（EMV+eMRTD 共存矩阵）、
+`make test-emrtd-sim` 全绿；每条行为变更同步 `docs/specs/`；新增报文使用标准 BSI/ICAO
 数据对象与状态字。

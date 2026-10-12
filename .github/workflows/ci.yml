@@ -1,9 +1,11 @@
 name: ci
 
-# Build the three CAPs (debug and release/no-debug) and the five host jars on
-# every push to the default branch and on pull requests, and upload them as
-# three artifacts (card / card-release / host).  Tag builds are handled by
-# release.yml instead.
+# Build the three CAPs (release + debug) and the five host jars on every push
+# to the default branch and on pull requests, and upload them as three
+# artifacts (card / card-debug / host).  Tag builds are handled by release.yml.
+#
+# `make` builds both CAP variants flat into build/deliverables/: the release CAP
+# is the canonical name and the debug CAP carries a -debug suffix.
 
 on:
   push:
@@ -32,8 +34,8 @@ jobs:
       - name: Provision Java Card tools and GlobalPlatform API
         run: bash .github/scripts/provision-tools.sh
 
-      - name: Build CAPs (debug + release) and host jars
-        run: make release
+      - name: Build CAPs (release + debug) and host jars
+        run: make
 
       - name: Verify export files
         run: make verify
@@ -41,26 +43,31 @@ jobs:
       - name: Unit tests (pure JVM, no simulator)
         run: make test-unit
 
-      - name: Stage deliverables
-        run: bash .github/scripts/stage-deliverables.sh
-
-      - name: Upload card artifact (debug CAPs)
+      - name: Upload card artifact (release CAPs)
         uses: actions/upload-artifact@v7
         with:
           name: card42-card
-          path: dist/card/
+          path: |
+            build/deliverables/card42-common.cap
+            build/deliverables/card42-common.exp
+            build/deliverables/card42-emv.cap
+            build/deliverables/card42-emv.exp
+            build/deliverables/card42-emrtd.cap
+            build/deliverables/card42-emrtd.exp
           if-no-files-found: error
 
-      - name: Upload release card artifact (no-debug CAPs)
+      - name: Upload debug card artifact (debug CAPs)
         uses: actions/upload-artifact@v7
         with:
-          name: card42-card-release
-          path: dist/card-release/
+          name: card42-card-debug
+          path: |
+            build/deliverables/*-debug.cap
+            build/deliverables/*-debug.exp
           if-no-files-found: error
 
       - name: Upload host artifact (jars)
         uses: actions/upload-artifact@v7
         with:
           name: card42-host
-          path: dist/host/
+          path: build/deliverables/*.jar
           if-no-files-found: error

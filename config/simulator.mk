@@ -21,11 +21,6 @@ DEPLOY_EMV_TEST_CONF ?= deploy/deploy-emv-test.conf
 DEPLOY_EMRTD_CONF    ?= deploy/deploy-emrtd.conf
 DEPLOY_BOTH_CONF     ?= deploy/deploy.conf
 
-# CAPs to deploy, in load order; comma separated.  The card42common library CAP
-# must be LOADed before the business CAP that imports it.
-SIM_CAPS      ?= $(COMMON_CAP_FILE),$(EMV_CAP_FILE)
-SIM_BOTH_CAPS ?= $(COMMON_CAP_FILE),$(EMV_CAP_FILE),$(EMRTD_CAP_FILE)
-
 # GPPro invocation for the simulator: the nextgen transport over the jcsl JCSDK
 # socket.  This is the only GPPro transport that speaks the simulator protocol,
 # and it is marked experimental upstream, so it is confined to the simulator

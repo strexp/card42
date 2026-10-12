@@ -78,7 +78,7 @@ import card42.host.emrtd.access.Iso7816Sm;
  * endurance figure.
  *
  * <p><b>Scenario 2 is component level.</b> {@code PaymentApplet} and
- * {@code AcProcessor} are not linked into the pure-JVM build (test/rules.mk
+ * {@code AcProcessor} are not linked into the pure-JVM build (mk/unit.mk
  * {@code UNIT_CARD_SRC}), so the EMV scenario replays their persistent-state
  * effects call by call against the real card classes instead of driving the
  * applet: the GPO step mirrors the GET PROCESSING OPTIONS branch of

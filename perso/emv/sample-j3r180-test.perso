@@ -12,9 +12,9 @@
 #                                key; AIP 0x5C00 does not advertise DDA)
 #   43415244420108                 CV '6' (AES-128) instance (no @sda)
 #
-# Deploy all seven instances (`make card-install`, DEPLOY_ALL_CONF) and
+# Deploy all seven instances (`make card-emv-install`, DEPLOY_ALL_CONF) and
 # personalize with:
-#   make card-perso CARD_PERSO_SCRIPT=perso/emv/sample-j3r180-test.perso
+#   make card-emv-perso CARD_EMV_PERSO_SCRIPT=perso/emv/sample-j3r180-test.perso
 # then run BoundaryTest / VelocityTest / AesFlowTest on the real card.
 #
 # See perso/emv/sample-test.perso for the directive reference and

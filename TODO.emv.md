@@ -37,8 +37,8 @@
   范围外项（XDA/ODE、生物 CVM、Book C-8 专属、国别变体等）见
   [`docs/specs/`](docs/specs/) 的范围声明，不再单列。
 
-**统一验收门**（每个行为变更步骤）：`make`/`make verify` 0 错 0 警告；`make test`、
-`make TEST_CONTACTLESS=1 test`、`make test-unit` 全绿；每条行为变更同步 `docs/specs/`；
+**统一验收门**（每个行为变更步骤）：`make`/`make verify` 0 错 0 警告；`make test-both-sim`、
+`make TEST_CONTACTLESS=1 test-both`、`make test-unit` 全绿；每条行为变更同步 `docs/specs/`；
 新增报文使用标准 EMV/GP 数据对象与状态字。
 
 ## 待办总览
@@ -88,7 +88,7 @@
       199→135 B；
       并把 `AbstractSecureMessaging.le`(2 B) 与 `LdsFileSystem` 当前 EF 选择移入瞬态，
       READ BINARY 热路径零 EEPROM 写（仅会话首个 SM 命令装载会话密钥）；
-      `make test-unit`、`make test-emrtd`（模拟器）全绿。**真卡（J3R180）**：`card-install`
+      `make test-unit`、`make test-emrtd-sim`（模拟器）全绿。**真卡（J3R180）**：`card-both-install`
       + `card-emrtd-perso` 成功（**无 `6F00`**，Plan A 净瞬态下降）；`EmrtdBacTest`/
       `EmrtdLds2IntegrationTest`（3/3）`/EmrtdPaceIntegrationTest`/`EmrtdChipAuthIntegrationTest`/
       `EmrtdLds1ChipAuthIntegrationTest` 单独运行通过；`EmrtdLds2AppsIntegrationTest` 单独
@@ -97,7 +97,7 @@
 - [ ] **A6 复用 `APDU.getBuffer()` 作算法暂存（可选，独立开关）**：若仍需更多 eMRTD 瞬态
       （例如把每实例 `RetailMac.loadedKey`/`AesCmac` 缓存转瞬态），可把 `response`(256) 等
       ≤ 短 APDU buffer 的缓冲改寄宿 APDU buffer（RAM、不占瞬态配额）。需先做逐 handler 的
-      别名静态分析，再加开关原型，经单测 / `make test` / `make test-emrtd` / 真卡（BAC 五组、
+      别名静态分析，再加开关原型，经单测 / `make test-both-sim` / `make test-emrtd-sim` / 真卡（BAC 五组、
       AA、PACE、CA、错误状态字封装、瞬态余量再 +256）验证后采用；失败即关开关。
 
 ## B. 卡侧实现与健壮性
@@ -115,8 +115,8 @@
       缓冲，两区合并）、`RetailMac`/`AesCmac` 收为包级 `MacEngines`、`LdsCatalog` 的 COM scratch 改
       包级 static、LDS2 实例不再分配只有 LDS1 用的 `LdsCatalog`/`LdsPerso`/`BacCrypto`/`AaCrypto`
       （每例省约 1.5–1.8 KB 持久堆）。**剩余仅真卡验收**：见 §A3，用生产+测试实例
-      重跑 `BoundaryTest`/`AesFlowTest`/非接触第二 AC；模拟器矩阵 `make test`/`make test-emv`/
-      `make TEST_CONTACTLESS=1 test-emv` 已全绿，真卡只读套件（Directory/ContactKernel/EmvFlow/
+      重跑 `BoundaryTest`/`AesFlowTest`/非接触第二 AC；模拟器矩阵 `make test-both-sim`/`make test-emv-sim`/
+      `make TEST_CONTACTLESS=1 test-emv-sim` 已全绿，真卡只读套件（Directory/ContactKernel/EmvFlow/
       OnlineClosedLoop/BAC/PACE/ChipAuth）亦已通过。回退到持久只影响 EEPROM 写量，不影响功能；
       真卡余量实测后再决定是否收紧。
 - [ ] **B2 健壮性与资源**：EEPROM 预算与事务原子性、模糊测试、日志格式可配置与审计。

@@ -6,7 +6,7 @@ libraries and their CLIs):
 
 | Deliverable | Location | Artifact |
 |-------------|----------|----------|
-| Shared Java Card library (no applet) | `card/common/` | `card42common.cap` / `.exp` |
+| Shared Java Card library (no applet) | `card/common/` | `card42-common.cap` / `.exp` |
 | EMV Java Card applet | `card/emv/` | `card42-emv.cap` |
 | eMRTD (ICAO 9303) Java Card applet | `card/emrtd/` | `card42-emrtd.cap` |
 | Host common library (transport/codec/crypto/util) | `host/common/` | `card42-common.jar` |
@@ -58,7 +58,9 @@ Details and tunables: [`docs/specs/common/toolchain.md`](docs/specs/common/toolc
 ## Repository layout
 
 ```
-Makefile      Build (3 CAPs + 5 host jars), verify, simulator and test targets
+Makefile      Top level: includes config/*.mk and mk/*.mk, plus `all`/`clean`/`help`
+mk/           Build rules (one file per category): paths, cap, host, sim,
+              deploy, test, unit
 card/common   Shared Java Card library (`card42.common`)
 card/emv      EMV applet (`card42.emv`), depends on card/common
 card/emrtd    eMRTD LDS1/LDS2 applet (`card42.emrtd`), depends on card/common
@@ -77,7 +79,8 @@ docs/         specs/{common,emv,emrtd} (current design)
 tools/        Reference standards, Java Card Dev Kit Tools/Simulator, toolchain
               (git-ignored); GlobalPlatformPro is system-provided at
               /usr/share/java/globalplatformpro/gp.jar
-build/        Generated output (git-ignored): the CAPs and `card42-*.jar`
+build/        Generated output (git-ignored): deliverables/ (both CAP variants
+              and the five jars) plus intermediate classes
 ```
 
 The full module, package and source layout is in
@@ -86,24 +89,38 @@ The full module, package and source layout is in
 ## Build and test
 
 ```
-make                 # build the three CAPs and the five host jars
-make release         # + no-debug (production) CAPs under build/release/
-make verify          # verify the generated export files
+make                 # debug + release CAPs and the five host jars
+make verify          # verify every generated export file
 make test-unit       # pure-JVM unit tests (no simulator required)
-make test            # both matrix: EMV + eMRTD coexist (no EMV card-block)
-make test-emv        # EMV matrix: deploy + personalize + EMV integration suites
-make test-emrtd      # eMRTD matrix: LDS1 + LDS2 + BAC + SM + PA + AA + PACE
-make TEST_CONTACTLESS=1 test-emv   # contactless flow via the PPSE (test build)
+make test-both-sim   # both matrix: EMV + eMRTD coexist (no EMV card-block)
+make test-emv-sim    # EMV matrix: deploy + personalize + every EMV suite
+make test-emrtd-sim  # eMRTD matrix: LDS1 + LDS2 + BAC + SM + PA + AA + PACE
+make CAP_MODE=release test-emv-sim  # run the matrix with the release CAPs
+make TEST_CONTACTLESS=1 test-emv-sim  # contactless flow via the PPSE (test build)
 make clean           # remove the build directory
 ```
 
-`make` produces the CAPs under `build/deliverables/`, the host libraries
-`card42-common.jar` / `card42-emv.jar` / `card42-emrtd.jar` (for third-party
-applications) and the runnable CLIs `card42-emv-cli.jar` / `card42-emrtd-cli.jar`
+One `make` produces both CAP variants under `build/deliverables/`: the release
+CAPs (`card42-common.cap` / `card42-emv.cap` / `card42-emrtd.cap`, no converter
+`-debug`) and the debug CAPs (`*-debug.cap`).  `CAP_MODE` (default `debug`)
+selects which variant the `sim-*`/`card-*`/`test-*` targets deploy and test; it
+never appears in a target name.  The install/perso/test targets share one shape
+for every module keyword `<mod>` = `emv` | `emrtd` | `both`:
+
+```
+make sim-<mod>-install / sim-<mod>-perso     simulator: load + create / store data
+make card-<mod>-install / card-<mod>-perso   real card: load + create / store data
+make test-<mod>-sim[-run S=]                 simulator integration suites
+make test-<mod>-card[-run S=]                real-card integration suites
+```
+
+`build/deliverables/` also holds the host libraries `card42-common.jar` /
+`card42-emv.jar` / `card42-emrtd.jar` (for third-party applications) and the
+runnable CLIs `card42-emv-cli.jar` / `card42-emrtd-cli.jar`
 (`java -jar ... <command> <subcommand>`, e.g. `perso export`, `terminal pay`,
-`terminal emrtd read`).  The complete
-target list, simulator and real-card workflows, configuration variables and CLI
-usage are in [`docs/specs/common/toolchain.md`](docs/specs/common/toolchain.md).
+`terminal emrtd read`).  The complete target list, simulator and real-card
+workflows, configuration variables and CLI usage are in
+[`docs/specs/common/toolchain.md`](docs/specs/common/toolchain.md).
 
 ## Documentation
 

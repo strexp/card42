@@ -210,7 +210,7 @@ context 共享）。因此"把照片放进内存"的正确目标是**持久**且
   最多分配一页，不需连续大数组，也不随写入复制历史。分页与"按容量一次分配"相比还省下未写
   满的持久空间（J3R180 NVM 虽大，但 180 KB 要与 EMV、SD、其他实例共享）。
 - **事务**：GP SD 在 `processData` 期间持事务（本实现约定，CPS 未强制）。逐块写入使单条命令
-  的日志很小；模拟器上 9943 B 的 LDS1 序列（DG2 7424 B）个性化通过，`make test` 的 EMV+eMRTD
+  的日志很小；模拟器上 9943 B 的 LDS1 序列（DG2 7424 B）个性化通过，`make test-both-sim` 的 EMV+eMRTD
   共存矩阵亦通过。真卡的 SD 事务粒度与 `getAvailableMemory(TRANSIENT_DESELECT)` 余量仍待
   T5.2 实测。
 

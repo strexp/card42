@@ -259,11 +259,11 @@ host/emrtd/
   往返与 PA 篡改拒绝、PACE KDF（`test/emrtd/unit`）；`EmrtdPersoStreamTest` 另覆盖分页 EF
   （跨页读写、更新 gap、容量/激活拒绝）、DGI 流式帧解析（头/值跨块、空值、截断、超长）与
   LDS1/LDS2 逐块（1–13 B）个性化，含 5000 B DG2。
-- `make test-emrtd` — 模拟器端到端：SELECT LDS1、AA、BAC、SM 读 DG1/DG2/COM/DG15/SOD、
+- `make test-emrtd-sim` — 模拟器端到端：SELECT LDS1、AA、BAC、SM 读 DG1/DG2/COM/DG15/SOD、
   PA（DSC 链 + 签名 + DG 哈希）、LDS2 Travel Records DF（CardAccess + READ/APPEND RECORD）、
   PACE（3DES/AES-128，MRZ 与 CAN）、LDS1 Chip Authentication（PACE → 主文件 EF.CardSecurity → CA →
   新 SM 下读 DG1）；样例 DG2 约 8 KB（>4096），覆盖流式个性化 + 分页 EF + 大 DG 读回。
-- `make test` — both 矩阵（EMV 生产 + eMRTD LDS1/LDS2 共存）。
+- `make test-both-sim` — both 矩阵（EMV 生产 + eMRTD LDS1/LDS2 共存）。
 
 ## 11. LDS2 应用 (Doc 9303-10 §5)
 

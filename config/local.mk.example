@@ -14,3 +14,4 @@
 #   SIM_MAC_KEY = 00112233445566778899aabbccddeeff
 #   SIM_DEK_KEY = 00112233445566778899aabbccddeeff
 #   GP_JAR     = /opt/globalplatformpro/gp.jar
+#   CAP_MODE   = release        # deploy/test the release CAPs instead of debug

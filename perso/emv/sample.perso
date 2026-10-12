@@ -27,7 +27,7 @@
 # PPSE).  The test-only instances (43415244420104/06/08) and their data live in
 # perso/emv/sample-test.perso, which the simulator suites use (`SIM_PERSO_SCRIPT`);
 # real-card testing of those instances uses
-# `make card-perso CARD_PERSO_SCRIPT=perso/emv/sample-test.perso`.
+# `make card-emv-perso CARD_EMV_PERSO_SCRIPT=perso/emv/sample-test.perso`.
 
 # --- Contact payment instance (43415244420101) --------------------------------
 @instance 43415244420101
