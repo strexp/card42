@@ -141,7 +141,7 @@ HOST_LIB_STAMP       := $(BUILD_DIR)/host/lib.stamp
 HOST_JAVA := $(JAVA) -p $(JC_SIM_CLIENT)/COMService \
               --add-modules ALL-MODULE-PATH -cp .
 
-.PHONY: all card card-common card-emv card-emrtd cap jar classes convert verify clean \
+.PHONY: all card card-common card-emv card-emrtd card-release release verify verify-release cap jar classes convert clean \
         host host-common host-emv host-emrtd host-emv-cli host-emrtd-cli \
         sim-install sim-perso sim-emv-install sim-emv-perso \
         sim-emrtd-install sim-emrtd-perso \
@@ -268,6 +268,45 @@ verify: card-common card-emv card-emrtd
 	@if [ -f $(EMRTD_EXP_FILE) ]; then \
 	  JAVA_HOME="$(JAVA_HOME)" $(JC_HOME_TOOLS)/bin/verifyexp.sh $(abspath $(EMRTD_EXP_FILE)); \
 	fi
+
+# --- Release (no -debug) CAPs -----------------------------------------------
+# `make` / `make card` build the CAPs with the converter's `-debug` flag (line
+# numbers and local-variable tables for on-card debugging, ~20-25% larger).
+# `make release` additionally re-runs the converter on the same compiled classes
+# WITHOUT `-debug`, into $(RELEASE_DIR), so a release can ship the smaller
+# production CAPs.  Only the CAP/JCA change; the .exp (imports/exports) is
+# identical.  The unsuffixed CAPs are the debug build; the release build is
+# staged with a `-release` suffix (see .github/scripts/stage-deliverables.sh).
+RELEASE_DIR        := $(BUILD_DIR)/release
+RELEASE_COMMON_OUT := $(RELEASE_DIR)/card42common
+RELEASE_COMMON_EXP := $(RELEASE_COMMON_OUT)/card42/common/javacard/common.exp
+RELEASE_EMV_EXP    := $(RELEASE_DIR)/card42/emv/javacard/emv.exp
+RELEASE_EMRTD_EXP  := $(RELEASE_DIR)/card42/emrtd/javacard/emrtd.exp
+
+# Debug CAPs first (their generated confs are the template), then the no-debug
+# copies; verify release asserts the release export files.
+release: card card-release verify-release
+
+card-release: card
+	@mkdir -p $(RELEASE_DIR)
+	@sed -e '/^-debug$$/d' -e 's#^-d deliverables#-d release#' \
+	  $(BUILD_DIR)/card42common.conf > $(BUILD_DIR)/card42common-release.conf
+	@cd $(BUILD_DIR) && JAVA_HOME="$(JAVA_HOME)" $(JC_HOME_TOOLS)/bin/converter.sh -config card42common-release.conf
+	@for p in card42-emv card42-emrtd; do \
+	  sed -e '/^-debug$$/d' -e 's#^-d deliverables#-d release#' \
+	      -e 's#$(abspath $(COMMON_OUT))#$(abspath $(RELEASE_COMMON_OUT))#' \
+	      $(BUILD_DIR)/$$p.conf > $(BUILD_DIR)/$$p-release.conf; \
+	  ( cd $(BUILD_DIR) && JAVA_HOME="$(JAVA_HOME)" $(JC_HOME_TOOLS)/bin/converter.sh -config $$p-release.conf ); \
+	done
+	@echo "release CAPs (no -debug) in $(RELEASE_DIR)"
+
+verify-release:
+	@if [ ! -f $(RELEASE_COMMON_EXP) ]; then \
+	  echo "no release CAPs; run 'make card-release' first"; exit 1; \
+	fi
+	JAVA_HOME="$(JAVA_HOME)" $(JC_HOME_TOOLS)/bin/verifyexp.sh $(abspath $(RELEASE_COMMON_EXP))
+	JAVA_HOME="$(JAVA_HOME)" $(JC_HOME_TOOLS)/bin/verifyexp.sh $(abspath $(RELEASE_EMV_EXP))
+	JAVA_HOME="$(JAVA_HOME)" $(JC_HOME_TOOLS)/bin/verifyexp.sh $(abspath $(RELEASE_EMRTD_EXP))
 
 # --- Host five modules ----------------------------------
 # card42-common.jar (library), card42-emv.jar / card42-emrtd.jar (libraries, no

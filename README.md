@@ -87,6 +87,7 @@ The full module, package and source layout is in
 
 ```
 make                 # build the three CAPs and the five host jars
+make release         # + no-debug (production) CAPs under build/release/
 make verify          # verify the generated export files
 make test-unit       # pure-JVM unit tests (no simulator required)
 make test            # both matrix: EMV + eMRTD coexist (no EMV card-block)

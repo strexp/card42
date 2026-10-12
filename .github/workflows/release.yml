@@ -1,9 +1,10 @@
 name: release
 
-# On a version tag, build the CAPs and host jars, upload them as the same two
-# artifacts as ci.yml (card / host) and additionally attach them to a DRAFT
-# GitHub release.  The release is left as a draft so the notes and the -debug
-# CAPs can be reviewed before publishing.
+# On a version tag, build the CAPs (debug and release/no-debug) and host jars,
+# upload them as the same three artifacts as ci.yml (card / card-release /
+# host) and additionally attach them to a DRAFT GitHub release.  The release is
+# left as a draft so the notes can be reviewed before publishing; ship the
+# `-release` CAPs, keep the debug ones for troubleshooting.
 
 on:
   push:
@@ -29,8 +30,8 @@ jobs:
       - name: Provision Java Card tools and GlobalPlatform API
         run: bash .github/scripts/provision-tools.sh
 
-      - name: Build CAPs and host jars
-        run: make
+      - name: Build CAPs (debug + release) and host jars
+        run: make release
 
       - name: Verify export files
         run: make verify
@@ -41,11 +42,18 @@ jobs:
       - name: Stage deliverables
         run: bash .github/scripts/stage-deliverables.sh
 
-      - name: Upload card artifact (CAPs)
+      - name: Upload card artifact (debug CAPs)
         uses: actions/upload-artifact@v7
         with:
           name: card42-card
           path: dist/card/
+          if-no-files-found: error
+
+      - name: Upload release card artifact (no-debug CAPs)
+        uses: actions/upload-artifact@v7
+        with:
+          name: card42-card-release
+          path: dist/card-release/
           if-no-files-found: error
 
       - name: Upload host artifact (jars)
@@ -55,18 +63,19 @@ jobs:
           path: dist/host/
           if-no-files-found: error
 
-      # Attach the CAPs and jars to a draft release for the pushed tag.  On a
-      # re-run of the same tag the assets are replaced instead of failing.
+      # Attach the debug + release CAPs and the jars to a draft release for the
+      # pushed tag.  On a re-run of the same tag the assets are replaced instead
+      # of failing.
       - name: Create draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" dist/card/* dist/host/* --clobber
+            gh release upload "${GITHUB_REF_NAME}" dist/card/* dist/card-release/* dist/host/* --clobber
           else
             gh release create "${GITHUB_REF_NAME}" \
               --draft \
               --title "${GITHUB_REF_NAME}" \
               --generate-notes \
-              dist/card/* dist/host/*
+              dist/card/* dist/card-release/* dist/host/*
           fi

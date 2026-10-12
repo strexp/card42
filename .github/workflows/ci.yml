@@ -1,8 +1,9 @@
 name: ci
 
-# Build the three CAPs and the five host jars on every push to the default
-# branch and on pull requests, and upload them as two artifacts (card / host).
-# Tag builds are handled by release.yml instead.
+# Build the three CAPs (debug and release/no-debug) and the five host jars on
+# every push to the default branch and on pull requests, and upload them as
+# three artifacts (card / card-release / host).  Tag builds are handled by
+# release.yml instead.
 
 on:
   push:
@@ -31,8 +32,8 @@ jobs:
       - name: Provision Java Card tools and GlobalPlatform API
         run: bash .github/scripts/provision-tools.sh
 
-      - name: Build CAPs and host jars
-        run: make
+      - name: Build CAPs (debug + release) and host jars
+        run: make release
 
       - name: Verify export files
         run: make verify
@@ -43,11 +44,18 @@ jobs:
       - name: Stage deliverables
         run: bash .github/scripts/stage-deliverables.sh
 
-      - name: Upload card artifact (CAPs)
+      - name: Upload card artifact (debug CAPs)
         uses: actions/upload-artifact@v7
         with:
           name: card42-card
           path: dist/card/
+          if-no-files-found: error
+
+      - name: Upload release card artifact (no-debug CAPs)
+        uses: actions/upload-artifact@v7
+        with:
+          name: card42-card-release
+          path: dist/card-release/
           if-no-files-found: error
 
       - name: Upload host artifact (jars)

@@ -15,17 +15,27 @@
 ## 2. 构建
 
 ```
-make                 # 三个 CAP + 五个主机 jar
+make                 # 三个 CAP + 五个主机 jar（调试 CAP，含 -debug）
 make card            # card-common + card-emv + card-emrtd
 make card-common     # 库 CAP card42common.cap/.exp（无 applet）
 make card-emv        # card42-emv.cap（依赖 card42common）
 make card-emrtd      # card42-emrtd.cap（依赖 card42common）
+make card-release    # 无 -debug 的 release CAP（build/release/，复用已编译类）
+make release         # 调试 CAP + release CAP + 五个 jar（CI/发布入口）
 make host            # host-common + host-emv + host-emrtd + host-emv-cli + host-emrtd-cli
-make verify          # 校验三个 export 文件
+make verify          # 校验三个（调试）export 文件
+make verify-release  # 校验三个 release export 文件
 make TEST_CONTACTLESS=1   # 测试构建（EMV）
 make test / test-emv / test-emrtd   # 三矩阵端到端
 make clean           # 清理 build/
 ```
+
+**调试 / release CAP**：默认 `make`/`make card` 用 converter 的 `-debug` 生成含行号/局部变量表的 CAP
+（便于卡内调试，体积约大 20–25%）。`make release` 额外用**同一批已编译类**去掉 `-debug` 重新转换到
+`build/release/`（仅 CAP/JCA 不同，`.exp` 相同），并跑 `verify-release`。发布物：`dist/card/`（调试，
+无后缀）、`dist/card-release/`（生产，`-release` 后缀）、`dist/host/`（五个 jar）；CI `ci.yml` 三件
+artifact（`card42-card`/`card42-card-release`/`card42-host`），`release.yml` 在 tag 上把三者附到 draft
+release（生产下发用 `-release`，排查用调试 CAP）。
 
 交付物（三个 CAP + 五个主机 jar）：
 
@@ -337,6 +347,7 @@ eMRTD 真卡：`card-emrtd-install` 创建的 LDS1 实例带 GP `CardReset` 权�
 make                       # 三个 CAP + 五个主机 jar
 make card / card-common / card-emv / card-emrtd
 make host / host-common / host-emv / host-emrtd / host-emv-cli / host-emrtd-cli
+make release / card-release / verify-release   # 调试 + 无 -debug 的 release CAP（build/release/）
 make TEST_CONTACTLESS=1    # 测试构建
 make verify                # 校验三个 export
 make sim-install / sim-emv-install / sim-emrtd-install   # both / EMV / eMRTD：启动 + 安装（加载 CAP + 建实例）

@@ -111,17 +111,20 @@ public final class TaContext {
     /** Role of the most recently imported certificate. */
     private static byte importedRole;
 
-    /* Staging for the key currently being parsed and the key selected by DST. */
-    private static final byte[] pkKey = new byte[MAX_MODULUS];
-    private static final byte[] pkExp = new byte[MAX_EXPONENT];
-    private static short pkKeyLength;
-    private static short pkExpLength;
-    private static byte pkKind;
-    private static final byte[] vKey = new byte[MAX_MODULUS];
-    private static final byte[] vExp = new byte[MAX_EXPONENT];
-    private static short vKeyLength;
-    private static short vExpLength;
-    private static byte vKind;
+    /*
+     * One staging buffer for the key currently parsed from a certificate, the
+     * key selected by MSE:Set DST (just verified) and the terminal-signature
+     * input.  The three never overlap: resolve+verify (DST key) runs before
+     * importCertificate parses the next key, and the terminal message is built
+     * after the imported key has been loaded into the Signature engine.  This
+     * replaces the former pkKey/vKey/signatureInput trio (docs/specs/common/
+     * risks.md §2).
+     */
+    private static final byte[] stagingKey = new byte[MAX_MODULUS];
+    private static final byte[] stagingExp = new byte[MAX_EXPONENT];
+    private static short stagingKeyLength;
+    private static short stagingExpLength;
+    private static byte stagingKind;
 
     /** Staging for the certificate's own relative authorization (4 bytes). */
     private static final byte[] certAuth = new byte[4];
@@ -145,9 +148,6 @@ public final class TaContext {
         0x04, 0x00, 0x7F, 0x00, 0x07, 0x02, 0x02, 0x02, 0x02, 0x03 };
     private static final byte[] OID_TA_RSA_PSS_SHA_256 = {
         0x04, 0x00, 0x7F, 0x00, 0x07, 0x02, 0x02, 0x02, 0x01, 0x04 };
-
-    /** ID_IC || rIC || Comp(PKDH,IFD) (32 + 8 + 32). */
-    private static final byte[] signatureInput = new byte[72];
 
     private static ECPublicKey ecKey;
     private static RSAPublicKey rsaKey1024;
@@ -420,11 +420,12 @@ public final class TaContext {
         if (!resolveDstKey()) {
             ISOException.throwIt((short) 0x6A88); // referenced data not found
         }
-        short expected = vKind == KIND_EC ? ECDSA_SIGNATURE_LENGTH : vKeyLength;
+        short expected = stagingKind == KIND_EC ? ECDSA_SIGNATURE_LENGTH : stagingKeyLength;
         if (signatureLength != expected) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
-        if (!verify(data, bodyStart, bodyTotal, data, signatureOffset, signatureLength)) {
+        if (!verifyKey(stagingKind, stagingKey, stagingKeyLength, stagingExp, stagingExpLength,
+                data, bodyStart, bodyTotal, data, signatureOffset, signatureLength)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
         importCertificate(data, bodyValueOffset, bodyValueLength, dstIssuerRole);
@@ -482,16 +483,15 @@ public final class TaContext {
         if (len != expected) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
-        Util.arrayCopyNonAtomic(idIc, (short) 0, signatureInput, (short) 0, (short) 32);
-        Util.arrayCopyNonAtomic(challenge, (short) 0, signatureInput, (short) 32, (short) 8);
-        Util.arrayCopyNonAtomic(caKeyHash, (short) 0, signatureInput, (short) 40, (short) 32);
-        // Load the imported key into the staging buffer used by verify().
-        Util.arrayCopyNonAtomic(importedKey, (short) 0, vKey, (short) 0, importedKeyLength);
-        Util.arrayCopyNonAtomic(importedExp, (short) 0, vExp, (short) 0, importedExpLength);
-        vKeyLength = importedKeyLength;
-        vExpLength = importedExpLength;
-        vKind = importedKind;
-        boolean ok = verify(signatureInput, (short) 0, (short) 72, data, off, len);
+        // Build ID_IC || rIC || Comp(PKDH,IFD) into the staging buffer; the
+        // imported key is verified straight from importedKey/importedExp, so the
+        // message does not overlap the key material.
+        Util.arrayCopyNonAtomic(idIc, (short) 0, stagingKey, (short) 0, (short) 32);
+        Util.arrayCopyNonAtomic(challenge, (short) 0, stagingKey, (short) 32, (short) 8);
+        Util.arrayCopyNonAtomic(caKeyHash, (short) 0, stagingKey, (short) 40, (short) 32);
+        boolean ok = verifyKey(importedKind, importedKey, importedKeyLength,
+                importedExp, importedExpLength,
+                stagingKey, (short) 0, (short) 72, data, off, len);
         challengeValid = false;
         terminalSelected = false;
         if (!ok) {
@@ -502,7 +502,7 @@ public final class TaContext {
 
     /**
      * Loads the key referenced by the pending MSE:Set DST into the verification
-     * staging ({@link #vKey}/{@link #vExp}/...), or returns false (6A88).  A
+     * staging ({@link #stagingKey}/{@link #stagingExp}/...), or returns false (6A88).  A
      * trust point whose Effective Date has not been reached is not selectable
      * (BSI TR-03110-3 §2.5.1).  Sets the issuer role.
      */
@@ -533,12 +533,12 @@ public final class TaContext {
 
     private static void loadVerificationKey(byte kind, byte[] key, short keyOff, short keyLen,
                                             byte[] exp, short expOff, short expLen) {
-        vKind = kind;
-        vKeyLength = keyLen;
-        vExpLength = expLen;
-        Util.arrayCopyNonAtomic(key, keyOff, vKey, (short) 0, keyLen);
+        stagingKind = kind;
+        stagingKeyLength = keyLen;
+        stagingExpLength = expLen;
+        Util.arrayCopyNonAtomic(key, keyOff, stagingKey, (short) 0, keyLen);
         if (expLen > 0) {
-            Util.arrayCopyNonAtomic(exp, expOff, vExp, (short) 0, expLen);
+            Util.arrayCopyNonAtomic(exp, expOff, stagingExp, (short) 0, expLen);
         }
     }
 
@@ -607,14 +607,15 @@ public final class TaContext {
 
         if (role == ROLE_CVCA) {
             // A CVCA Link Certificate: add/replace a CVCA trust-point slot.
-            storeTrustPoint(data, chrOff, chrLength, pkKey, pkKeyLength, pkKind,
-                    pkExp, pkExpLength, data, effectiveOff, effectiveFound, certAuth, (short) 0);
+            storeTrustPoint(data, chrOff, chrLength, stagingKey, stagingKeyLength, stagingKind,
+                    stagingExp, stagingExpLength, data, effectiveOff, effectiveFound,
+                    certAuth, (short) 0);
         } else {
-            Util.arrayCopyNonAtomic(pkKey, (short) 0, importedKey, (short) 0, pkKeyLength);
-            Util.arrayCopyNonAtomic(pkExp, (short) 0, importedExp, (short) 0, pkExpLength);
-            importedKind = pkKind;
-            importedKeyLength = pkKeyLength;
-            importedExpLength = pkExpLength;
+            Util.arrayCopyNonAtomic(stagingKey, (short) 0, importedKey, (short) 0, stagingKeyLength);
+            Util.arrayCopyNonAtomic(stagingExp, (short) 0, importedExp, (short) 0, stagingExpLength);
+            importedKind = stagingKind;
+            importedKeyLength = stagingKeyLength;
+            importedExpLength = stagingExpLength;
             Util.arrayCopyNonAtomic(data, chrOff, importedRef, (short) 0, chrLength);
             importedRefLength = chrLength;
             importedRole = role;
@@ -661,10 +662,10 @@ public final class TaContext {
                 rsaOid = matches(data, valueOff, valueLength, OID_TA_RSA_PSS_SHA_256);
             } else if (tag == EmrtdTags.TAG_TA_EC_POINT) {
                 if (valueLength == EC_KEY_LENGTH) {
-                    Util.arrayCopyNonAtomic(data, valueOff, pkKey, (short) 0, EC_KEY_LENGTH);
-                    pkKeyLength = EC_KEY_LENGTH;
-                    pkExpLength = 0;
-                    pkKind = KIND_EC;
+                    Util.arrayCopyNonAtomic(data, valueOff, stagingKey, (short) 0, EC_KEY_LENGTH);
+                    stagingKeyLength = EC_KEY_LENGTH;
+                    stagingExpLength = 0;
+                    stagingKind = KIND_EC;
                     ecPointFound = true;
                 }
             } else if (tag == EmrtdTags.TAG_TA_RSA_MODULUS) {
@@ -680,11 +681,11 @@ public final class TaContext {
             if (modLen < 1 || modLen > MAX_MODULUS || expLen < 1 || expLen > MAX_EXPONENT) {
                 return false;
             }
-            Util.arrayCopyNonAtomic(data, modOff, pkKey, (short) 0, modLen);
-            Util.arrayCopyNonAtomic(data, expOff, pkExp, (short) 0, expLen);
-            pkKeyLength = modLen;
-            pkExpLength = expLen;
-            pkKind = KIND_RSA;
+            Util.arrayCopyNonAtomic(data, modOff, stagingKey, (short) 0, modLen);
+            Util.arrayCopyNonAtomic(data, expOff, stagingExp, (short) 0, expLen);
+            stagingKeyLength = modLen;
+            stagingExpLength = expLen;
+            stagingKind = KIND_RSA;
             return true;
         }
         return ecPointFound;
@@ -849,24 +850,28 @@ public final class TaContext {
     }
 
     /**
-     * Verifies {@code message} against the resolved key with the algorithm
-     * selected by the key kind (ECDSA-SHA-256 plain, RSA-PSS-SHA-256).
+     * Verifies {@code message} against an explicit key with the algorithm
+     * selected by the key kind (ECDSA-SHA-256 plain, RSA-PSS-SHA-256).  The key
+     * is passed in rather than read from the staging buffer so the caller can
+     * reuse the staging buffer for the message (terminal authentication).
      */
-    private static boolean verify(byte[] message, short messageOff, short messageLength,
-                                  byte[] signature, short signatureOff, short signatureLength) {
+    private static boolean verifyKey(byte kind, byte[] key, short keyLen,
+                                     byte[] exp, short expLen,
+                                     byte[] message, short messageOff, short messageLength,
+                                     byte[] signature, short signatureOff, short signatureLength) {
         try {
-            if (vKind == KIND_EC) {
+            if (kind == KIND_EC) {
                 ensureKeys();
-                ecKey.setW(vKey, (short) 0, EC_KEY_LENGTH);
+                ecKey.setW(key, (short) 0, EC_KEY_LENGTH);
                 ecSig.init(ecKey, Signature.MODE_VERIFY);
                 return ecSig.verify(message, messageOff, messageLength,
                         signature, signatureOff, signatureLength);
             }
             ensureRsa();
-            RSAPublicKey key = vKeyLength <= 128 ? rsaKey1024 : rsaKey2048;
-            key.setModulus(vKey, (short) 0, vKeyLength);
-            key.setExponent(vExp, (short) 0, vExpLength);
-            rsaSig.init(key, Signature.MODE_VERIFY);
+            RSAPublicKey rsa = keyLen <= 128 ? rsaKey1024 : rsaKey2048;
+            rsa.setModulus(key, (short) 0, keyLen);
+            rsa.setExponent(exp, (short) 0, expLen);
+            rsaSig.init(rsa, Signature.MODE_VERIFY);
             return rsaSig.verify(message, messageOff, messageLength,
                     signature, signatureOff, signatureLength);
         } catch (Exception e) {
