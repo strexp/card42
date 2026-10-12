@@ -45,8 +45,10 @@ public final class Lds2File {
             return 0;
         }
         // Every DF file needs PACE and, when a Terminal Authentication trust
-        // point is personalized, the LDS2 read authorization (Doc 9303-10 §5.4).
-        applet.requireLds2Access(EmrtdApplet.LDS2_READ_BIT);
+        // point is personalized, the LDS2 read authorization; Travel/Visa
+        // EF.Certificates use b3 while the record/transparent EFs use b1
+        // (Doc 9303-10 §5.4.2 Table 96/97/98).
+        applet.requireLds2Access(applet.lds2ReadBit(fid));
         applet.selectedMf = null;
         applet.lds2.select(fid);
         return 0;

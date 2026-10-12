@@ -11,8 +11,8 @@
 
 ## 1. 结论摘要
 
-- **当前项目不支持 TA**（卡侧与主机侧均无实现，见 [`TODO.emrtd.md`](../../../TODO.emrtd.md)）。
-- **TAv2 + ECDSA-SHA-256 方案在本卡可行**：真实 J3R180 上 `Signature.ALG_ECDSA_SHA_256`
+- **TA 已实现**（卡侧与主机侧；见本文与 [`emrtd.md`](emrtd.md) §17）。
+- **可行性来源（TA v1 + ECDSA-SHA-256）**：真实 J3R180 上 `Signature.ALG_ECDSA_SHA_256`
   验签通过；`RSA-PSS-SHA-256` 亦通过，作为备选。
 - **plain（r‖s）可直接验签，无需转换**：Java Card 两参 `getInstance(ALG_ECDSA_SHA_256)`
   的签名编码是 ANSI X9.62 **DER**（API 规范如此），但四参

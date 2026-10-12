@@ -49,7 +49,6 @@ public final class Lds2Record {
 
     /** READ RECORD (B2): P2 b8-b4 SFI, b3=1, b2b1 = single (00) / all (01). */
     public static short readRecord(EmrtdApplet applet, byte p1, byte p2, short le) {
-        applet.requireLds2Access(EmrtdApplet.LDS2_READ_BIT);
         // The short EF identifier is P2 b8..b4 (Doc 9303-10 §3.7.2 Table 13),
         // i.e. (p2 >> 3) & 0x1F; SFI 0 addresses the current EF.
         short sfi = (short) ((p2 >> 3) & 0x1F);
@@ -59,6 +58,7 @@ public final class Lds2Record {
         if (file == null) {
             ISOException.throwIt(ISO7816.SW_FILE_NOT_FOUND);
         }
+        applet.requireLds2Access(applet.lds2ReadBit(file.getFid()));
         applet.lds2.selectRecord(file);
         short number = (short) (p1 & 0xFF);
         if (number == 0) {
@@ -84,7 +84,6 @@ public final class Lds2Record {
     /** APPEND RECORD (E2): P2 b8-b4 SFI, data is the record. */
     public static short appendRecord(EmrtdApplet applet, byte p1, byte p2,
                                      byte[] data, short off, short len) {
-        applet.requireLds2Access(EmrtdApplet.LDS2_APPEND_BIT);
         if ((p1 & 0xFF) != 0) {
             ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
         }
@@ -95,6 +94,7 @@ public final class Lds2Record {
         if (file == null) {
             ISOException.throwIt(ISO7816.SW_FILE_NOT_FOUND);
         }
+        applet.requireLds2Access(applet.lds2AppendBit(file.getFid()));
         applet.lds2.selectRecord(file);
         file.append(data, off, len);
         return 0;
@@ -103,7 +103,7 @@ public final class Lds2Record {
     /** FMM (5F): P1 selects the EF, P2 the requested information. */
     public static short fileMemoryManagement(EmrtdApplet applet, byte p1, byte p2,
                                              byte[] data, short off, short len) {
-        applet.requireLds2Access(EmrtdApplet.LDS2_READ_BIT);
+        applet.requirePace();
         if ((p1 & 0xFF) == 0x01) {
             short[] ref = REF;
             if (!find(data, off, len, EmrtdTags.DO_FILE_REFERENCE, ref)) {
@@ -133,6 +133,7 @@ public final class Lds2Record {
     }
 
     private static short fmmResponse(EmrtdApplet applet, byte p2) {
+        applet.requireLds2Access(applet.lds2ReadBit(applet.lds2.selectedFid()));
         byte[] body = FMM_BODY;
         short p = 0;
         Lds2TransparentFile t = applet.lds2.getSelectedTransparent();
@@ -165,7 +166,6 @@ public final class Lds2Record {
 
     /** SEARCH RECORD (A2): data is a Record handling DO '7F76'. */
     public static short searchRecord(EmrtdApplet applet, byte p2, byte[] data, short off, short len) {
-        applet.requireLds2Access(EmrtdApplet.LDS2_READ_BIT);
         // P2 = 11111000b: search through multiple EFs (Doc 9303-10 §3.7.3 Table 16).
         if ((p2 & 0xFF) != 0xF8) {
             ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
@@ -184,6 +184,7 @@ public final class Lds2Record {
         if (file == null) {
             ISOException.throwIt(ISO7816.SW_FILE_NOT_FOUND);
         }
+        applet.requireLds2Access(applet.lds2ReadBit(file.getFid()));
         applet.lds2.selectRecord(file);
 
         short[] searchString = SEARCH_STRING;

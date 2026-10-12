@@ -523,10 +523,35 @@ public final class EmrtdApplet extends AppletBase
     static final byte LDS2_READ_BIT = 0;
     /** LDS2 append authorization bit (b2 of the application authorization byte). */
     static final byte LDS2_APPEND_BIT = 1;
+    /** Travel/Visa EF.Certificates read authorization bit (b3, Doc 9303-10 Table 96/97). */
+    static final byte LDS2_CERT_READ_BIT = 2;
+    /** Travel/Visa EF.Certificates append authorization bit (b4). */
+    static final byte LDS2_CERT_APPEND_BIT = 3;
     /** ePassport CHAT bit b1: read EF.DG3 (fingerprints). */
     static final byte EPASS_DG3_BIT = 0;
     /** ePassport CHAT bit b2: read EF.DG4 (irises). */
     static final byte EPASS_DG4_BIT = 1;
+
+    /**
+     * The LDS2 read authorization bit of a DF file: the Travel/Visa
+     * EF.Certificates use b3 while EF.EntryRecords/ExitRecords/VisaRecords and
+     * the Additional Biometrics files use b1 (Doc 9303-10 §5.4.2 Table 96/97/98).
+     */
+    byte lds2ReadBit(short fid) {
+        return lds2Certificates(fid) ? LDS2_CERT_READ_BIT : LDS2_READ_BIT;
+    }
+
+    /** The LDS2 append authorization bit of a DF file (b4 for Travel/Visa EF.Certificates). */
+    byte lds2AppendBit(short fid) {
+        return lds2Certificates(fid) ? LDS2_CERT_APPEND_BIT : LDS2_APPEND_BIT;
+    }
+
+    /** True for the Travel/Visa EF.Certificates (011A), whose bits are b3/b4. */
+    private boolean lds2Certificates(short fid) {
+        return fid == EmrtdTags.FID_CERTIFICATES
+                && (role == EmrtdInstallParameters.ROLE_LDS2_TRAVEL
+                        || role == EmrtdInstallParameters.ROLE_LDS2_VISA);
+    }
 
     /**
      * LDS1 DG3/DG4 access control (ICAO Doc 9303-10 §5.4.2 Table 96/97): once a

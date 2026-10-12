@@ -57,6 +57,7 @@ final class EmrtdTaCardTest {
         rejectsBadTerminalSignature();
         rejectsExternalAuthenticateWithoutMseAt();
         travelAuthorization();
+        travelCertificatesBits();
         currentDateMechanism();
         twoTrustPoints();
         trustPointEffectiveDate();
@@ -524,6 +525,38 @@ final class EmrtdTaCardTest {
         Asserts.sw((short) 0x6982,
                 () -> Lds2Record.readRecord(denied, (byte) 1, (byte) 0x0C, (short) 0),
                 "LDS2 read without the Travel authorization -> 6982");
+    }
+
+    /**
+     * Travel/Visa EF.Certificates use b3 (read) / b4 (append) while
+     * EF.EntryRecords/ExitRecords use b1/b2 (ICAO Doc 9303-10 §5.4.2 Table 96/97).
+     * P2 in READ RECORD is {@code sfi << 3 | 0b100}: SFI 0x1A = EF.Certificates,
+     * SFI 0x01 = EF.EntryRecords.
+     */
+    private static void travelCertificatesBits() throws Exception {
+        TaChain.Chain chain = TaChain.create(new SecureRandom());
+
+        // Only b3 (read EF.Certificates): Certificates reachable, records denied.
+        EmrtdApplet certOnly = travelApplet();
+        setTravelTrustPoint(certOnly, chain, (byte) 0x04);
+        authenticateTerminal(certOnly, chain);
+        Asserts.sw((short) 0x6A83,
+                () -> Lds2Record.readRecord(certOnly, (byte) 1, (byte) 0xD4, (short) 0),
+                "b3 grants EF.Certificates read (no records -> 6A83)");
+        Asserts.sw((short) 0x6982,
+                () -> Lds2Record.readRecord(certOnly, (byte) 1, (byte) 0x0C, (short) 0),
+                "b3 does not grant EF.EntryRecords read -> 6982");
+
+        // Only b1 (read EF.EntryRecords): records reachable, Certificates denied.
+        EmrtdApplet recordsOnly = travelApplet();
+        setTravelTrustPoint(recordsOnly, chain, (byte) 0x01);
+        authenticateTerminal(recordsOnly, chain);
+        Asserts.sw((short) 0x6A83,
+                () -> Lds2Record.readRecord(recordsOnly, (byte) 1, (byte) 0x0C, (short) 0),
+                "b1 grants EF.EntryRecords read (no records -> 6A83)");
+        Asserts.sw((short) 0x6982,
+                () -> Lds2Record.readRecord(recordsOnly, (byte) 1, (byte) 0xD4, (short) 0),
+                "b1 does not grant EF.Certificates read -> 6982");
     }
 
     private static void authenticateTerminal(EmrtdApplet applet, TaChain.Chain chain)

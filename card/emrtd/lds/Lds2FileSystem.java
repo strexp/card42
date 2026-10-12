@@ -73,6 +73,17 @@ public final class Lds2FileSystem {
                     new Lds2RecordFile(EmrtdTags.FID_CERTIFICATES, (short) 1024, (short) 64, (short) 900) });
     }
 
+    /** The FID of the currently selected LDS2 DF file (transparent or record), or 0. */
+    public short selectedFid() {
+        if (selectedTransparent != null) {
+            return selectedTransparent.getFid();
+        }
+        if (selectedRecord != null) {
+            return selectedRecord.getFid();
+        }
+        return 0;
+    }
+
     /** Selects a transparent or record EF by FID; 6A82 when unknown. */
     public void select(short fid) {
         for (short i = 0; i < transparent.length; i++) {

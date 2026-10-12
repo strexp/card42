@@ -118,11 +118,12 @@
   SFI（EF.Certificates 的 `1A`），两者不一致，需按正文复核。
   （`card/emrtd/command/Lds2Record.java`；测试 `test/emrtd/unit/card/EmrtdCommandTest.java`。）
 - [ ] **C2 主机纯 JVM 卡仿真**：用第三方纯 JVM 卡仿真库跑主机 PA/读流程（无 jcsl）。
-- [x] **LDS2 Terminal Authentication 授权位（已实现 2026-10-12）**：TAv2 + ECDSA-SHA-256 已落地
+- [x] **LDS2 Terminal Authentication 授权位（已实现 2026-10-12）**：TA v1 + ECDSA-SHA-256 已落地
   （卡侧 `card/emrtd/ta/TaContext` + `MSE:Set DST`/`PSO:Verify Certificate`/`MSE:Set AT`/
   `EXTERNAL AUTHENTICATE`，主机 `host/emrtd/ta/`，个性化 DGI `FF07`/`FF08`）。LDS2 各 EF 的
   访问条件为 PACE+TA：`requireLds2Access(bit)` 按 `effectiveAuth`（信任点 ∧ 各证书 CHAT/应用
-  扩展逐位 AND，Doc 9303-10 §5.4 Table 96/97/98）门控选择/读/写/追加；`EmrtdTerminalAuthIntegrationTest`
+  扩展逐位 AND，Doc 9303-10 §5.4 Table 96/97/98）门控选择/读/写/追加；授权位按文件选
+  （Travel/Visa 的 EF.Certificates 用 **b3/b4**，其余用 b1/b2）；`EmrtdTerminalAuthIntegrationTest`
   端到端。设计见 [`docs/specs/emrtd/terminal-authentication.md`](docs/specs/emrtd/terminal-authentication.md)。
   **真卡复测已通过（2026-10-12，J3R180 / ACR1581 PICC）**：全部 7 个 eMRTD suite（含
   `EmrtdTerminalAuthIntegrationTest` 的 PACE→CA→TA 与扩展长度 PSO）全绿。**教训**：TA 的 ECDSA
