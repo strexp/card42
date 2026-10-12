@@ -1,5 +1,6 @@
 package card42.emrtd;
 
+import javacard.framework.Util;
 import javacard.security.MessageDigest;
 
 /* BAC key seed from the MRZ information (ICAO Doc 9303-11 §4.3.2).
@@ -17,6 +18,10 @@ public final class MrzKeySeed {
 
     /** Length of the TD3 MRZ information used for BAC: 3 fields of 8 bytes. */
     public static final short MRZ_INFO_LENGTH = (short) 24;
+
+    /** Reused SHA-1 and its 20-byte output; only the first 16 bytes are the seed. */
+    private static MessageDigest sha1;
+    private static byte[] digest;
 
     private MrzKeySeed() {
     }
@@ -42,8 +47,16 @@ public final class MrzKeySeed {
      * are the seed (Doc 9303-11 §4.3.2).
      */
     public static short seed(byte[] mrzInfo, short off, byte[] out, short outOff) {
-        MessageDigest sha1 = MessageDigest.getInstance(MessageDigest.ALG_SHA, false);
-        sha1.doFinal(mrzInfo, off, MRZ_INFO_LENGTH, out, outOff);
+        // SHA-1 is 20 bytes but the BAC seed is its first 16 (Doc 9303-11
+        // §4.3.2).  The digest goes through a 20-byte scratch so the caller's
+        // buffer only has to hold the 16 bytes this method returns.
+        if (sha1 == null) {
+            sha1 = MessageDigest.getInstance(MessageDigest.ALG_SHA, false);
+            digest = new byte[20];
+        }
+        sha1.reset();
+        sha1.doFinal(mrzInfo, off, MRZ_INFO_LENGTH, digest, (short) 0);
+        Util.arrayCopyNonAtomic(digest, (short) 0, out, outOff, (short) 16);
         return (short) 16;
     }
 

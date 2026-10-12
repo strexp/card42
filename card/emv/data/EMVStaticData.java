@@ -43,8 +43,11 @@ public class EMVStaticData {
      */
     private static final short MAX_RECORD_LENGTH = (short) 254;
 
-    /** Scratch / output buffers. */
-    private final byte[] scratch = new byte[(short) 128];
+    /** Scratch / output buffers.  The working scratch is package-shared
+     *  transient scratch ({@link EmvScratch}); the built FCI/GPO stay per
+     *  instance because they are handed out whole and may be scanned as a
+     *  buffer (sharing them would expose another instance's stale tail). */
+    private final byte[] scratch;
     private final byte[] fci = new byte[(short) 192];
     private short fciLength;
     private final byte[] gpo = new byte[(short) 64];
@@ -59,6 +62,8 @@ public class EMVStaticData {
     private final RecordBuilder.View directView = new RecordBuilder.View();
 
     public EMVStaticData() {
+        EmvScratch.init();
+        scratch = EmvScratch.staticScratch;
         data = new PaymentData();
         records = new RecordStore();
     }

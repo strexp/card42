@@ -51,14 +51,29 @@ public class DirectoryApplet extends EMVAppletBase {
 	private final byte[] directoryRecord = new byte[(short)128];
 	private short directoryRecordLength;
 
-	/** Scratch buffers used while building the default FCI and record. */
-	private final byte[] scratch1 = new byte[(short)64];
-	private final byte[] scratch2 = new byte[(short)64];
+	/**
+	 * Package-shared scratch used while building the default FCI and record.
+	 * The directory instances (PSE/PPSE) never build at the same time, so one
+	 * pair per package replaces two arrays per instance
+	 * (docs/specs/common/risks.md §2).  Unlike {@link #fci}/{@link #fciOverride}
+	 * these are never handed out, so there is no cache to invalidate.
+	 */
+	private static byte[] scratch1;
+	private static byte[] scratch2;
 
 	private boolean sawFci;
 
 	private DirectoryApplet() {
 		super();
+		allocScratch();
+	}
+
+	/** Allocates the package-shared scratch once.  Idempotent. */
+	private static void allocScratch() {
+		if (scratch1 == null) {
+			scratch1 = new byte[(short)64];
+			scratch2 = new byte[(short)64];
+		}
 	}
 
 	/**

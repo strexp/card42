@@ -212,10 +212,13 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         if (do87Start < 0) {
             return 0;
         }
-        // DO87 value = 0x01 || ciphertext; decrypt then unpad.
+        // DO87 value = 0x01 || ciphertext.  Decrypt straight into the caller's
+        // plaintext buffer and strip the M2 padding in place: the cipher input
+        // (the command APDU) and the output are distinct arrays, so the former
+        // scratch round-trip (decrypt to scratch, then copy to out) is dropped.
         short cipherLen = (short) (do87Len - 1);
-        decryptBlock(ksEnc, apdu, (short) (do87Val + 1), cipherLen, scratch, (short) 0);
-        return unpad(scratch, cipherLen, out, outOff);
+        decryptBlock(ksEnc, apdu, (short) (do87Val + 1), cipherLen, out, outOff);
+        return unpadInPlace(out, outOff, cipherLen);
     }
 
     public final short wrap(byte[] ksEnc, byte[] ksMac, byte[] ssc,
@@ -340,16 +343,15 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         return (short) (dstOff + len);
     }
 
-    /** Strips the 0x80 00.. M2 padding written by the peer. */
-    private static short unpad(byte[] buf, short len, byte[] out, short outOff) {
-        short i = (short) (len - 1);
-        while (i >= 0 && buf[i] == 0) {
+    /** Strips the 0x80 00.. M2 padding written by the peer, in place. */
+    private static short unpadInPlace(byte[] buf, short off, short len) {
+        short i = (short) (off + len);
+        while (i > off && buf[(short) (i - 1)] == 0) {
             i--;
         }
-        if (i < 0 || buf[i] != (byte) 0x80) {
+        if (i <= off || buf[(short) (i - 1)] != (byte) 0x80) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
-        Util.arrayCopyNonAtomic(buf, (short) 0, out, outOff, i);
-        return i;
+        return (short) (i - 1 - off);
     }
 }

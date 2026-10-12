@@ -34,19 +34,27 @@ public class PaymentPerso {
     private boolean sawFci;
     private boolean sawOfflinePin;
 
-    /* ICC RSA key parts accumulated during personalization: the EMV CPS v2.0 DGIs
-     * '8103'/'8101' (DDA) and '8104'/'8102' (PIN) carry the modulus and the
-     * private exponent separately; the key is built once both have arrived
-     * (EMV CPS v2.0 §A.2). */
-    private final byte[] ddaModulus = new byte[(short) 256];
+    /*
+     * Package-shared RSA key scratch: the modulus and exponent of the DDA/CDA
+     * ('8103'/'8101') and PIN ('8104'/'8102') keys arrive as separate DGIs and
+     * are assembled once both are present (EMV CPS v2.0 §A.2).  Only one
+     * instance is personalized at a time, so one set of buffers per package
+     * replaces ~1.5 KB per payment instance (docs/specs/common/risks.md §2).
+     * {@link #scratchOwner} guards an interleaved personalization: a new
+     * sequence claims the buffers and drops any half-assembled key of another
+     * instance.
+     */
+    private static byte[] ddaModulus;
+    private static byte[] ddaExponent;
+    private static byte[] pinModulus;
+    private static byte[] pinExponent;
+    private static byte[] keyContainer;
+    private static PaymentPerso scratchOwner;
+
     private short ddaModulusLength;
-    private final byte[] ddaExponent = new byte[(short) 256];
     private short ddaExponentLength;
-    private final byte[] pinModulus = new byte[(short) 256];
     private short pinModulusLength;
-    private final byte[] pinExponent = new byte[(short) 256];
     private short pinExponentLength;
-    private final byte[] keyContainer = new byte[(short) 530];
 
     /** Reused TLV cursor for the personalization walks, so no per-DGI object is allocated. */
     private final TlvReader tlvReader = new TlvReader();
@@ -55,6 +63,7 @@ public class PaymentPerso {
             OfflineRisk offlineRisk, TransactionLog transactionLog, OfflinePinState pin,
             EMVCrypto theCrypto, SecureMessaging secureMessaging,
             DdaCrypto ddaCrypto, PinCrypto pinCrypto) {
+        alloc();
         this.staticData = staticData;
         this.protocolState = protocolState;
         this.offlineRisk = offlineRisk;
@@ -64,6 +73,17 @@ public class PaymentPerso {
         this.secureMessaging = secureMessaging;
         this.ddaCrypto = ddaCrypto;
         this.pinCrypto = pinCrypto;
+    }
+
+    /** Allocates the package-shared key scratch once.  Idempotent. */
+    private static void alloc() {
+        if (keyContainer == null) {
+            ddaModulus = new byte[(short) 256];
+            ddaExponent = new byte[(short) 256];
+            pinModulus = new byte[(short) 256];
+            pinExponent = new byte[(short) 256];
+            keyContainer = new byte[(short) 530];
+        }
     }
 
     /**
@@ -353,6 +373,7 @@ public class PaymentPerso {
      * stale marker set and an incomplete retry could be judged complete.
      */
     public void resetState() {
+        scratchOwner = this;
         sawKeys = false;
         sawFci = false;
         sawOfflinePin = false;

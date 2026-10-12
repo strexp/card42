@@ -127,8 +127,23 @@ public final class FciBuilder {
             labelLength = data.getLabelLength();
         }
 
-        // Build the A5 value first, then prefix the tag and length.
-        short p = 0;
+        // The A5 value length is known from the component sizes, so the tag and
+        // length field are written first and the value follows in place.  The
+        // older form built the value at offset 0 and shifted the whole value
+        // right by the header width to insert the tag/length.
+        short pdolLength = data.getPdolLength();
+        short valueLength = (short) (Tlv.tlvSize(TlvTags.TAG_APPLICATION_LABEL, labelLength)
+                + 3 // 87 01 <priority>
+                + 7 // 5F 2D 04 "nlen"
+                + (pdolLength > 0 ? Tlv.tlvSize(TlvTags.TAG_PDOL, pdolLength) : 0)
+                + discretionarySize(data));
+        short header = (short) (1 + Tlv.lengthSize(valueLength));
+        if ((short) (header + valueLength) > out.length) {
+            ISOException.throwIt(SW_WRONG_DATA);
+        }
+        out[0] = (byte) TlvTags.TAG_FCI_PROPRIETARY; // A5
+        short p = Tlv.appendLength(valueLength, out, (short) 1);
+
         p = Tlv.append(TlvTags.TAG_APPLICATION_LABEL, label, (short) 0, labelLength, out, p);
         out[p++] = (byte) TlvTags.TAG_PRIORITY_INDICATOR;
         out[p++] = (byte) 0x01;
@@ -140,24 +155,17 @@ public final class FciBuilder {
         out[p++] = (byte) 0x6C;
         out[p++] = (byte) 0x65;
         out[p++] = (byte) 0x6E;
-        if (data.getPdolLength() > 0) {
+        if (pdolLength > 0) {
             // The PDOL is advertised in the FCI proprietary template (EMV v4.4 Book 3 §6.5.8).
-            p = Tlv.append(TlvTags.TAG_PDOL, data.getPdol(), (short) 0,
-                    data.getPdolLength(), out, p);
+            p = Tlv.append(TlvTags.TAG_PDOL, data.getPdol(), (short) 0, pdolLength, out, p);
         }
         p = appendDiscretionary(out, p, data);
-
-        short valueLength = p;
-        short header = (short) (1 + Tlv.lengthSize(valueLength));
-        if ((short) (header + valueLength) > out.length) {
+        if (p != (short) (header + valueLength)) {
+            // The precomputed length must match the bytes written; a mismatch
+            // would corrupt the template (defensive, never expected).
             ISOException.throwIt(SW_WRONG_DATA);
         }
-        for (short i = (short) (valueLength - 1); i >= 0; i--) {
-            out[(short) (i + header)] = out[i];
-        }
-        out[0] = (byte) TlvTags.TAG_FCI_PROPRIETARY; // A5
-        Tlv.appendLength(valueLength, out, (short) 1);
-        return (short) (header + valueLength);
+        return p;
     }
 
     /**

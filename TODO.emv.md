@@ -73,7 +73,10 @@
       仅余 ~32 B，而 A4 需再放 `AaCrypto`(522)+`Pace`(481)+`ChipAuth`(64)+`BacCrypto`(8)≈1075 B，
       放不下。**（2026-10-11）** `SmScratch` 压缩为 352 B 后 eMRTD 余量约 540 B（含 `AesCmac` 256 B CBC 暂存），A4 的 ~1075 B
       仍放不下，但已可容纳其中一部分；`AaCrypto`/`Pace`/`ChipAuth` scratch 暂**保持持久**，待
-      真卡复测余量后再评估。
+      真卡复测余量后再评估。**（2026-10-12）** 其中纯工作 scratch 已改为**包级 static 持久共享**
+      （非瞬时）：`Pace` 的 `nonceScalar/peer/ephPicc/mapped/scratch/tokenInput/tokenMac`（~435 B）
+      与 `ChipAuth.secret`（64 B），4 个 eMRTD 实例共存时省 ~1.5 KB 持久堆（真卡 7 EMV + 4 eMRTD
+      实例全部安装成功）；`AaCrypto`/`Pace`/`ChipAuth` 的**瞬时**收口仍延后。
 - [x] **A5 `raw` 置换热路径共享 scratch（已完成，Plan A）**：实测 `raw` 原为瞬态；将
       `EmrtdScratch.raw`(320) 固定为**持久**，腾出的空间换成包级瞬态：会话密钥/计数器
       (`challenge/kenc/kmac/ksEnc/ksMac/ssc/caEnc/caMac` 112 B)、BAC scratch
@@ -101,7 +104,7 @@
 
 - [ ] **B1 瞬态预算压缩（§B3 的修复）——已完成，保留真卡验收**：P2 批次把 EMV 的全部
       per-instance 瞬态缓冲收拢为包级共享的 `card/emv/mem/EmvScratch`
-      （response/work/chain/pdol/firstCdol/cda*/SM/会话/CVR/protocol，共 **1184 B**），在
+      （response/work/chain/pdol/firstCdol/cda*/SM/会话/CVR/protocol/staticScratch，共 **1312 B**），在
       `EMVProtocolState` 构造（即安装期）分配一次；`work` 288 B 覆盖 2048-bit DDA/CDA 消息
       （prefix 234 + 实际 DDOL）、`chain` 255 B、`firstCdol` 128 B、`pdol` 64 B 亦共享。命令
       路径已无任何 `makeTransient*`（单元测试逐步断言）。**真卡实测教训**：把全部缓冲在安装期

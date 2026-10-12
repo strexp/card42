@@ -112,7 +112,7 @@ final class EmrtdScratch {
 
     /**
      * Allocates the BAC/PACE/Chip-Authentication session state once, at install;
-     * idempotent.  Called after {@code SmScratch.init()} so the 800-byte SM
+     * idempotent.  Called after {@code SmScratch.init()} so the 352-byte SM
      * framing scratch (written by every secure-messaging response) keeps the
      * transient budget ahead of these smaller session buffers.
      */

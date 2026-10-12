@@ -13,7 +13,7 @@ import javacard.framework.Util;
  * Personalization.processData() (docs/specs/emv/personalization.md §1); the SD
  * has already checked the SCP03 MAC and the block number, so no applet-level
  * authentication is required.  The SD does *not* reassemble blocks, so the DGI
- * sequence is accumulated in a per-instance buffer and applied when the block
+ * sequence is accumulated in a package-shared buffer and applied when the block
  * with P1.bit8 set (the last one) arrives.  The Security Domain already holds a
  * transaction over processData (EMV CPS v2.0 §4.3.4.5), so no nested
  * transaction is opened here.
@@ -31,8 +31,18 @@ public class PersoHandler {
 
     private final EMVAppletBase applet;
 
-    /** Reassembly buffer for the DGI sequence of the current session. */
-    private final byte[] buffer;
+    /**
+     * Package-shared reassembly buffer for the DGI sequence.  A payment
+     * personalization is applied to one instance at a time, so one buffer per
+     * package replaces the former 2 KB per EMV instance (payment and
+     * directory), which was the dominant per-instance persistent cost
+     * (docs/specs/common/risks.md §2).  {@link #owner} guards against an
+     * interleaved personalization of two instances: a fragment is only accepted
+     * while its instance owns the buffer.
+     */
+    private static byte[] sharedBuffer;
+    private static PersoHandler owner;
+
     private short bufferLength;
 
     /** Reused DGI cursor, so a personalization allocates no persistent object. */
@@ -44,8 +54,15 @@ public class PersoHandler {
 
     public PersoHandler(EMVAppletBase applet) {
         this.applet = applet;
-        buffer = new byte[BUFFER_SIZE];
+        alloc();
         reset();
+    }
+
+    /** Allocates the package-shared buffer once.  Idempotent. */
+    private static void alloc() {
+        if (sharedBuffer == null) {
+            sharedBuffer = new byte[BUFFER_SIZE];
+        }
     }
 
     private void reset() {
@@ -107,15 +124,21 @@ public class PersoHandler {
             if (expectedBlock != 0 || bufferLength != 0) {
                 reset();
             }
+            // Claim the shared buffer for this instance's sequence.
+            owner = this;
             applet.resetPersoState();
+        } else if (owner != this) {
+            // Another instance started a sequence on the shared buffer since
+            // this one did, so this fragment cannot continue it.
+            ISOException.throwIt(SW_INCORRECT_P1P2);
         }
         if (p2 != expectedBlock) {
             ISOException.throwIt(SW_INCORRECT_P1P2);
         }
-        if ((short) (bufferLength + len) > BUFFER_SIZE) {
+        if ((short) (bufferLength + len) > sharedBuffer.length) {
             ISOException.throwIt(SW_WRONG_LENGTH);
         }
-        Util.arrayCopyNonAtomic(src, off, buffer, bufferLength, len);
+        Util.arrayCopyNonAtomic(src, off, sharedBuffer, bufferLength, len);
         bufferLength += len;
 
         // P1.b1 is "Response expected (R-MAC)" in EMV CPS v2.0 Table 4-9.
@@ -159,10 +182,10 @@ public class PersoHandler {
     private short applyAll() {
         short dgiCount = 0;
         try {
-            DgiReader reader = dgiReader.reset(buffer, (short) 0, bufferLength);
+            DgiReader reader = dgiReader.reset(sharedBuffer, (short) 0, bufferLength);
             while (reader.hasNext()) {
                 reader.next();
-                applet.applyPersoDgi(reader.dgi(), buffer,
+                applet.applyPersoDgi(reader.dgi(), sharedBuffer,
                         reader.valueOffset(), reader.valueLength());
                 dgiCount++;
             }

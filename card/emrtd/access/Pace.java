@@ -67,14 +67,22 @@ public final class Pace implements PaceSeedSink {
 
     private final byte[] kpi = new byte[16];
     private final byte[] nonce = new byte[16];
-    private final byte[] nonceScalar = new byte[32];
 
-    private final byte[] peer = new byte[65];      // PK_PCD~ (for T_PICC)
-    private final byte[] ephPicc = new byte[65];   // PK_ICC~ (for T_PCD)
-    private final byte[] mapped = new byte[65];    // G'
-    private final byte[] scratch = new byte[96];
-    private final byte[] tokenInput = new byte[96];
-    private final byte[] tokenMac = new byte[16];
+    /*
+     * Package-shared PACE working scratch.  Only one instance runs a PACE
+     * session at a time (a SELECT resets the session, so no step straddles an
+     * application switch), so these large buffers are shared across the eMRTD
+     * instances instead of ~435 B per instance (docs/specs/common/risks.md §2).
+     * The per-instance session values ({@link #nonce}, {@link #kpi}, the stage
+     * and the EC key objects) stay per instance.
+     */
+    private static byte[] nonceScalar;
+    private static byte[] peer;      // PK_PCD~ (for T_PICC)
+    private static byte[] ephPicc;   // PK_ICC~ (for T_PCD)
+    private static byte[] mapped;    // G'
+    private static byte[] scratch;
+    private static byte[] tokenInput;
+    private static byte[] tokenMac;
 
     /*
      * The PACE EC keys are built once and reused across sessions.  Allocating a
@@ -118,6 +126,20 @@ public final class Pace implements PaceSeedSink {
         xy = KeyAgreement.getInstance(KeyAgreement.ALG_EC_SVDP_DH_PLAIN_XY, false);
         plain = KeyAgreement.getInstance(KeyAgreement.ALG_EC_SVDP_DH_PLAIN, false);
         stage = STAGE_IDLE;
+        initShared();
+    }
+
+    /** Allocates the package-shared working scratch once.  Idempotent. */
+    private static void initShared() {
+        if (peer == null) {
+            nonceScalar = new byte[32];
+            peer = new byte[65];
+            ephPicc = new byte[65];
+            mapped = new byte[65];
+            scratch = new byte[96];
+            tokenInput = new byte[96];
+            tokenMac = new byte[16];
+        }
     }
 
     /** Stores the 20-byte PACE key seed SHA-1(MRZ_info) (perso DGI FF04). */
@@ -339,17 +361,17 @@ public final class Pace implements PaceSeedSink {
 
     /** 7F49 { 06 <OID> 86 <uncompressed point> } for the auth token MAC. */
     private short tokenInput(byte[] point) {
-        short p = 0;
-        p = Tlv.append((short) 0x06, oid, (short) 0, (short) 10, tokenInput, p);
-        p = Tlv.append((short) 0x86, point, (short) 0, (short) 65, tokenInput, p);
-        short header = (short) (2 + Tlv.lengthSize(p)); // 7F49 + BER length
-        for (short i = (short) (p - 1); i >= 0; i--) {
-            tokenInput[(short) (i + header)] = tokenInput[i];
-        }
+        // The outer length is known from the fixed component sizes (a 10-byte
+        // OID and a 65-byte point), so write the 7F49 header first and the two
+        // data objects in place instead of appending and shifting them right.
+        short inner = (short) (Tlv.tlvSize((short) 0x06, (short) 10)
+                + Tlv.tlvSize((short) 0x86, (short) 65));
         tokenInput[0] = (byte) 0x7F;
         tokenInput[1] = (byte) 0x49;
-        Tlv.appendLength(p, tokenInput, (short) 2);
-        return (short) (header + p);
+        short p = Tlv.appendLength(inner, tokenInput, (short) 2);
+        p = Tlv.append((short) 0x06, oid, (short) 0, (short) 10, tokenInput, p);
+        p = Tlv.append((short) 0x86, point, (short) 0, (short) 65, tokenInput, p);
+        return p;
     }
 
     /** KDF(x, counter) = SHA-1(x || 00 00 00 counter), 16-byte key. */

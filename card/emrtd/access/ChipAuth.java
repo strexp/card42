@@ -34,11 +34,18 @@ public final class ChipAuth {
     private ECPrivateKey privateKey;
     private KeyAgreement agreement;
     private final Sha1Kdf kdf;
-    /** Reused ECDH output; a per-session array would leak persistent memory. */
-    private final byte[] secret = new byte[64];
+    /**
+     * Reused ECDH output, package-shared: only one instance runs a Chip
+     * Authentication at a time, and the secret is consumed within one call, so
+     * one array per package is enough (docs/specs/common/risks.md §2).
+     */
+    private static byte[] secret;
 
     public ChipAuth() {
         kdf = KdfEngines.kdf();
+        if (secret == null) {
+            secret = new byte[64];
+        }
     }
 
     /** Sets the static private scalar (personalization DGI FF03). */

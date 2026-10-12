@@ -46,6 +46,15 @@ final class EmvScratch {
     /** Command-chaining accumulation buffer (short-APDU maximum). */
     static byte[] chain;
 
+    /**
+     * EMVStaticData working scratch: the FCI assembly staging buffer.  It was a
+     * per-instance persistent array; it is only written and read while the
+     * applet is selected (SELECT), so it is shared transient scratch.  The
+     * built FCI/GPO themselves stay per instance (they are whole-buffer-scanned
+     * response buffers, so sharing them would expose a stale tail).
+     */
+    static byte[] staticScratch;
+
     /** PDOL-related data of the current GPO. */
     static byte[] pdol;
 
@@ -98,6 +107,7 @@ final class EmvScratch {
         response = TransientBuffers.makeByteArray((short) 256);
         work = TransientBuffers.makeByteArray((short) 288);
         chain = TransientBuffers.makeByteArray((short) 255);
+        staticScratch = TransientBuffers.makeByteArray((short) 128);
         pdol = TransientBuffers.makeByteArray((short) 64);
         firstCdol = TransientBuffers.makeByteArray((short) 128);
         cdaHeader = TransientBuffers.makeByteArray((short) 48);
