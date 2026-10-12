@@ -105,7 +105,7 @@
 |------|------|------|
 | **A** | **Terminal Authentication v1**（ICAO Doc 9303-11 §9.2.8 `version MUST be 1`），终结签名算法 **ECDSA-SHA-256**（`id-TA-ECDSA-SHA-256`）；`RSA-PSS-SHA-256`（`id-TA-RSA-PSS-SHA-256`）为已备选 | Doc 9303-11 §7.1.4 Table 7/8；实测两者在 J3R180 均可用；ECDSA 与既有 P-256/CA 栈同族 |
 | **B** | TA 必须**跟在 Chip Authentication 之后**（本项目 PACE 是通用映射而非 CAM），授权绑定到 CA 会话的终端临时公钥 | Doc 9303-11 §7.1.2/§7.1.3 |
-| **C** | 使用 **EF.CVCA**（LDS1 DF，默认 FID `011C`/SFI `1C`，36 B，≤2 CAR，PACE 读，Doc 9303-11 Annex K.2）；EF.CardAccess 归 MF（同 FID 不同 DF）。信任点（CVCA 公钥/引用/Effective Date/相对授权）由个性化注入，`TerminalAuthenticationInfo` 宣告 version 1（默认 FID，`efCVCA` 省略） | Doc 9303-11 §7.1.4.3.1 + Annex K.2；Doc 9303-10 §3.11.3/§3.11.4 |
+| **C** | 使用 **EF.CVCA**（LDS1 DF，默认 FID `011C`/SFI `1C`，36 B，≤2 CAR，PACE 读，Doc 9303-11 Annex K.2）；EF.CardAccess 归 MF（同 FID 不同 DF）。卡侧按上下文解析 `011C`：未建立安全报文（PACE 前）为 MF `EF.CardAccess`（明文可读，真实读卡器如 ReadID 在选应用后直接读 `011C` 取 PACE 参数），建立安全报文后为 DF `EF.CVCA`；`SELECT MF` 亦强制取 MF `EF.CardAccess`。信任点（CVCA 公钥/引用/Effective Date/相对授权）由个性化注入，`TerminalAuthenticationInfo` 宣告 version 1（默认 FID，`efCVCA` 省略） | Doc 9303-11 §7.1.4.3.1 + Annex K.2；Doc 9303-10 §3.11.3/§3.11.4 |
 | **D** | LDS2 访问 = `PACE`（或 CA）+ **有效授权**：对 IS/DV/CVCA 的 CHAT/扩展逐位 AND，按 Doc 9303-10 §5.4 Table 96/97/98 门控读/写/追加 | Doc 9303-10 §5.4.1/§5.4.2 |
 | **E** | **Chip Authentication 仅 `id-CA-ECDH-3DES-CBC-CBC`**（CA v1，CA 后 SM 为 3DES+SHA-1）；`id-CA-ECDH-AES-CBC-CMAC-128` 等 AES 变体**未宣告、未实现**（ICAO 可选）。影响：拒绝 3DES 的终端无法完成 CA；未使用 AES-CMAC CA。 | Doc 9303-11 §9.2.5；延后见 [`TODO.emrtd.md`](../../../TODO.emrtd.md) |
 

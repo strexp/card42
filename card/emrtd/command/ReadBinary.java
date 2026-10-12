@@ -34,6 +34,16 @@ public final class ReadBinary {
         if ((p1 & EmrtdTags.READ_P1_SFI) == 0 && applet.selectedMf != null) {
             return readSelectedMf(applet, p1, p2, le);
         }
+        if ((p1 & EmrtdTags.READ_P1_SFI) != 0
+                && (short) (p1 & EmrtdTags.SFI_MASK)
+                        == (EmrtdTags.FID_CARD_ACCESS & EmrtdTags.SFI_MASK)
+                && !applet.smEstablished) {
+            // Short-EF-identifier read of EF.CardAccess (SFI 0x1C) before PACE:
+            // the master-file EF.CardAccess, readable in the clear.
+            applet.selectedMf = null;
+            return readMfFile(applet,
+                    LdsMfStore.fileBySfi((short) (p1 & EmrtdTags.SFI_MASK)), p2, le);
+        }
         if ((p1 & EmrtdTags.READ_P1_SFI) != 0) {
             // A valid SFI sets that EF as the current EF, so a master-file EF
             // selected earlier is no longer current.
@@ -98,17 +108,26 @@ public final class ReadBinary {
             applet.requirePace();
         }
         short offset = (short) (((p1 & 0x7F) << 8) | p2);
+        return readMfFile(applet, applet.selectedMf, offset, le);
+    }
+
+    /** Reads a window of a master-file transparent EF (EF.CardAccess/CardSecurity). */
+    private static short readMfFile(EmrtdApplet applet, Lds2TransparentFile file,
+                                    short offset, short le) {
+        if (file == null) {
+            ISOException.throwIt(ISO7816.SW_FILE_NOT_FOUND);
+        }
         short want = le <= 0 ? (short) 256 : le;
         short cap = applet.sm.maxResponseData();
         if (want > cap) {
             want = cap;
         }
-        short available = (short) (applet.selectedMf.getLength() - offset);
+        short available = (short) (file.getLength() - offset);
         if (available < 0) {
             ISOException.throwIt(ISO7816.SW_WRONG_P1P2);
         }
         short n = want < available ? want : available;
-        applet.selectedMf.read(offset, n, applet.response, (short) 0);
+        file.read(offset, n, applet.response, (short) 0);
         return n;
     }
 

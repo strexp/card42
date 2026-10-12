@@ -10,6 +10,7 @@ import card42.host.common.cli.Args;
 import card42.host.common.transport.Terminal;
 import card42.host.emrtd.access.LdsReader;
 import card42.host.emrtd.access.Pace;
+import card42.host.emrtd.lds.CardAccess;
 import card42.host.emrtd.lds.LdsFileUtil;
 import card42.host.emrtd.perso.EmrtdPersoExporter;
 import card42.host.emrtd.transport.EmrtdTerminal;
@@ -56,11 +57,13 @@ public final class EmrtdCvcaTest {
     static void run(EmrtdTerminal terminal) throws Exception {
         Checks.check("SELECT LDS1", terminal.selectLds1().getSW(), 0x9000);
 
-        // EF.CVCA read access is PACE: a plaintext read before PACE is refused
-        // (Doc 9303-11 K.2).  SELECT FILE itself is not gated.
-        terminal.selectFile(LdsFileUtil.FID_CVCA);
-        int beforePace = terminal.readBinary(0, 36).getSW();
-        Checks.check("EF.CVCA read before PACE -> 6982", beforePace == 0x6982);
+        // Before PACE, FID 011C is the master-file EF.CardAccess, readable in
+        // the clear so a reader learns the PACE parameters.  Real readers (e.g.
+        // ReadID) select 011C right after the eMRTD application and read it
+        // before PACE; this must not be gated.
+        byte[] beforePace = LdsReader.read(terminal, LdsFileUtil.FID_CARD_ACCESS);
+        Checks.check("EF.CardAccess readable at 011C before PACE",
+                !CardAccess.parse(beforePace).paceInfos().isEmpty());
 
         // PACE requests the CARs (DO'7F4C'); the card returns them as DO'87'.
         Pace.Session pace = Pace.authenticate(terminal,

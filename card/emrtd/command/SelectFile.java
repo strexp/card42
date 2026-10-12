@@ -9,11 +9,9 @@ import javacard.framework.Util;
  * (P1=04) that reaches the applet did not match the DF name.
  *
  * The MF forms (P1=00 with no data, or P1=00/02 with FID 3F00) are also served:
- * EF.CardAccess belongs to the master file (Doc 9303-10 §3.11.3), so a reader
- * reads it with SELECT MF followed by SELECT 011C before selecting the eMRTD
- * application.  The LDS1 file set is flat, so SELECT MF only clears the current
- * EF; the following by-FID SELECT then picks EF.CardAccess from the same
- * catalog.
+ * EF.CardAccess belongs to the master file (Doc 9303-10 §3.11.3).  FID 011C is
+ * overloaded: it is the MF EF.CardAccess before secure messaging (readable in
+ * the clear) and the DF EF.CVCA (Doc 9303-11 Annex K.2, PACE read) afterwards.
  *
  * @author card42
  */
@@ -47,15 +45,23 @@ public final class SelectFile {
             selectMf(applet);
             return 0;
         }
-        // Master-file EFs (Doc 9303-10 §3.11.3/§3.11.4): after SELECT MF, FID
-        // 011D is the MF EF.CardSecurity (the DF's 011D is EF.SOD) and FID 011C
-        // is the MF EF.CardAccess (the DF's 011C is EF.CVCA).
-        if (applet.atMf && (fid == EmrtdTags.FID_CARD_SECURITY
-                || fid == EmrtdTags.FID_CARD_ACCESS)) {
-            if (fid == EmrtdTags.FID_CARD_SECURITY) {
-                // EF.CardSecurity read access is PACE (Doc 9303-10 §3.11.4 Table 34).
-                applet.requirePace();
-            }
+        // FID 011C is EF.CardAccess in the master file (Doc 9303-10 §3.11.3) and
+        // EF.CVCA in the LDS1 DF (Doc 9303-11 Annex K.2).  Before secure
+        // messaging 011C is EF.CardAccess, readable in the clear so a reader can
+        // learn the PACE parameters (this is what real readers select right after
+        // the eMRTD application); once PACE is established it is EF.CVCA (PACE
+        // read).  A SELECT MF also forces the master-file EF.CardAccess.
+        if (fid == EmrtdTags.FID_CARD_ACCESS && (!applet.smEstablished || applet.atMf)) {
+            applet.atMf = false;
+            applet.catalog.selectMf();
+            applet.selectedMf = LdsMfStore.file(fid);
+            return 0;
+        }
+        // Master-file EF.CardSecurity (Doc 9303-10 §3.11.4): after SELECT MF,
+        // FID 011D is the MF EF.CardSecurity, not the DF's EF.SOD.
+        if (applet.atMf && fid == EmrtdTags.FID_CARD_SECURITY) {
+            // EF.CardSecurity read access is PACE (Doc 9303-10 §3.11.4 Table 34).
+            applet.requirePace();
             applet.atMf = false;
             applet.catalog.selectMf();
             applet.selectedMf = LdsMfStore.file(fid);
