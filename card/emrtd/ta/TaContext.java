@@ -264,7 +264,6 @@ public final class TaContext {
                 || (short) (EC_KEY_LENGTH + 1 + refLen) > len) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
-        ensureKeys();
         Util.arrayCopyNonAtomic(src, off, trustKey, (short) (slot * MAX_MODULUS), EC_KEY_LENGTH);
         trustKind[slot] = KIND_EC;
         trustKeyLength[slot] = EC_KEY_LENGTH;
@@ -832,6 +831,8 @@ public final class TaContext {
             ecKey = (ECPublicKey) KeyBuilder.buildKey(
                     KeyBuilder.TYPE_EC_FP_PUBLIC, KeyBuilder.LENGTH_EC_FP_256, false);
             P256.setCurve(ecKey);
+        }
+        if (ecSig == null) {
             ecSig = Signature.getInstance(MessageDigest.ALG_SHA_256,
                     Signature.SIG_CIPHER_ECDSA_PLAIN, Cipher.PAD_NULL, false);
         }

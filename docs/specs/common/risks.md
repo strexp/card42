@@ -46,4 +46,5 @@ CVCA 信任点槽 + 导入公钥/引用/授权/当前日期，约 1 KB）与算�
 | `processData` 期间 applet 未被选中，`CLEAR_ON_DESELECT` 不可用 | 中 | 个性化路径用实例字段（不用 `selectingApplet()`）；流式状态（DGI 头、scratch）也是实例/持久字段，不依赖瞬态 |
 | 逐块写入大 EF 依赖 SD 的 `processData` 事务粒度 | 中 | 每条 STORE DATA 只应用 ≤231 B（至多一个新 256 B 页），峰值日志与照片大小无关；模拟器/GPPro 实测 9943 B 序列通过。若换用整段持事务的 SD 管理端，需复测事务缓冲（`BUFFER_FULL`，真卡 T5.2） |
 | 跨 APDU 事务不可用 | 中 | 原子性由应用负责（GP `Personalization.processData`）；applet 依赖 SD 的事务语义、不自行 `beginTransaction`（嵌套会 `BUFFER_FULL`），并以 `P2=0`/失败路径复位完成标志，避免「不完整却判成功」 |
+| 个性化事务内构建加密引擎 | 中 | **不得在 SD 的 `processData` 事务内 `buildKey`/`getInstance`**：J3R180 实测在 TA 信任点 DGI `FF07` 处理中构建 `ECPublicKey` + ECDSA `Signature`（`SIG_CIPHER_ECDSA_PLAIN`）**会 `6F00`**（随后 `ecSig` 为空、验签失败表现为 `6A80`）。改为**安装期**构建（`EmrtdApplet` 构造器调用 `TaContext.ensureKeys()`），个性化只写密钥字节；`ChipAuth`/`AaCrypto` 等既有对象亦在构造器/首次使用构建，不受影响（2026-10-12） |
 | AA 的 256 B RSA 签名无法装入 SM 短 APDU | 低 | AA 在明文下执行（DG15 为公钥，可无 BAC 读取），已在 `EmrtdBacTest` 固化 |

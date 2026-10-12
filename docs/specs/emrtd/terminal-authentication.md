@@ -60,15 +60,18 @@
   BCD YYMMDD）由个性化 DGI `FF08` 注入；`PSO:Verify Certificate` 对**非 CVCA Link** 证书做
   过期判断（`Expiration < current` → `6A80`），并把 `Effective Date` 前移当前日期（CVCA/DV，
   以及由**本国 DV** 签发的 Accurate Terminal 证书）；卡侧单测覆盖"日期前移"与"过期拒绝"。
-- **残余（非阻塞）**：① 真卡 J3R180 上的 TA 复测（接触/非接触）；② RSA-PSS-SHA-256 profile 已在
-  卡侧/主机侧接线并由单测覆盖（`EmrtdTaCardTest.rsaTerminalAuthentication`、`EmrtdTaTest`），
-  但示例个性化仍用 ECDSA；③ EAC 1.11（TAv1/EF.CVCA）。
-- **（2026-10-12 增强）** 原残余 ②/③/④ 已落地：LDS1 的 DG3/DG4 按 ePassport CHAT 位门控
-  （`EmrtdApplet.requireLds1ChatAccess`，无信任点时为 PACE-only）；信任点改为**最多两个**并支持
+- **残余（非阻塞）**：EAC 1.11（TAv1/EF.CVCA）。
+- **（2026-10-12 增强 + 真卡复测）** 原残余 ②/③/④ 已落地：LDS1 的 DG3/DG4 按 ePassport CHAT 位
+  门控（`EmrtdApplet.requireLds1ChatAccess`，无信任点时为 PACE-only）；信任点改为**最多两个**并支持
   运行期 **CVCA Link Certificate** 导入与**按 Effective Date 启用**（未到期不可作 DST 校验键、最新
   到期者播种会话授权，`TaContext.activeTrustPoint`/`slotEffective`）；**RSA-PSS-SHA-256** 备选
   profile 按证书 `7F49` 公钥 OID 选择（卡侧 `Signature.ALG_RSA_SHA_256_PKCS1_PSS`，主机
   `host/common/crypto/RsaPss` + `CvCertificateCodec.encodeBodyRsa` + `TerminalAuth` RSA 分支）。
+  **真卡 J3R180（ACR1581 PICC）复测通过**：全部 7 个 eMRTD suite（含
+  `EmrtdTerminalAuthIntegrationTest` 的 PACE→CA→TA 与扩展长度 PSO）全绿。
+  **关键教训**：ECDSA 验签引擎（`ECPublicKey` + `Signature(SIG_CIPHER_ECDSA_PLAIN)`）**不得在 SD
+  的个性化事务内构建**——J3R180 实测在 `FF07` 处理中构建会 `6F00`（事务/系统限制）；改为在
+  **安装期**（`EmrtdApplet` 构造器调用 `TaContext.ensureKeys()`）构建，个性化只存密钥字节。
 
 ## 2. 平台实测（一次性探针，探针已移除）
 

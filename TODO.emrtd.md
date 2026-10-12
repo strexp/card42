@@ -124,11 +124,10 @@
   访问条件为 PACE+TA：`requireLds2Access(bit)` 按 `effectiveAuth`（信任点 ∧ 各证书 CHAT/应用
   扩展逐位 AND，Doc 9303-10 §5.4 Table 96/97/98）门控选择/读/写/追加；`EmrtdTerminalAuthIntegrationTest`
   端到端。设计见 [`docs/specs/emrtd/terminal-authentication.md`](docs/specs/emrtd/terminal-authentication.md)。
-  **残余**：真卡 J3R180 TA 复测（接触/非接触）。**（2026-10-12 补全）** LDS1 的 DG3/DG4 已按
-  ePassport CHAT 位门控（`requireLds1ChatAccess`）；信任点改为最多两个并支持 CVCA Link 导入与
-  按 Effective Date 启用（`TaContext.activeTrustPoint`）；RSA-PSS-SHA-256 备选 profile 已接线
-  （卡侧验签 + 主机 `RsaPss`/`CvCertificateCodec.encodeBodyRsa` + `TerminalAuth` RSA 分支），
-  由 `EmrtdTaCardTest`/`EmrtdTaTest` 单测覆盖。
+  **真卡复测已通过（2026-10-12，J3R180 / ACR1581 PICC）**：全部 7 个 eMRTD suite（含
+  `EmrtdTerminalAuthIntegrationTest` 的 PACE→CA→TA 与扩展长度 PSO）全绿。**教训**：TA 的 ECDSA
+  验签引擎须在**安装期**构建，不得在 SD 个性化事务内（DGI `FF07`）构建——J3R180 会 `6F00`。
+  RsaPss/双信任点/DG3-DG4 门控由单测覆盖；示例个性化仍用 ECDSA。仅 EAC 1.11 待办。
 - [ ] **Chip Authentication AES profile（`id-CA-*-AES-CBC-CMAC-*`）**：主机 `ChipAuth` 仅
   ECDH+3DES；AES CA 需 MSE:Set AT + GENERAL AUTHENTICATE 流程（Doc 9303-11 §6.2.4.2），
   卡侧亦仅 3DES CA。

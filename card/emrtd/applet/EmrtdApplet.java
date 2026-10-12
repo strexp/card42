@@ -162,6 +162,9 @@ public final class EmrtdApplet extends AppletBase
         chipAuth = new ChipAuth();
         pace = new Pace();
         ta = new TaContext();
+        // Build the TA verification engines at install (not inside the Security
+        // Domain's personalization transaction, see docs/specs/common/risks.md §4).
+        TaContext.ensureKeys();
         perso = lds1Role ? new LdsPerso(catalog, aa, chipAuth, pace, ta) : null;
         lds2Perso = lds2 == null ? null : new Lds2Perso(lds2, chipAuth, pace, ta);
         expectedBlock = 0;

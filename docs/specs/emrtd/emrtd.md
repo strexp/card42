@@ -440,8 +440,9 @@ DER 转换。完整决策、APDU 序列与开放点见 [terminal-authentication.
   另有 `MSE:Set AT`(`81A4`)、`EXTERNAL AUTHENTICATE`（`ID_IC‖rIC‖Comp(PKDH,IFD)`）。`ID_IC`
   取 PACE step-3 卡侧临时公钥 x 坐标，`Comp(PKDH,IFD)` 取 CA 终端临时公钥 x 坐标。当前日期
   `FF08`（6 octet 未打包 BCD）用于拒绝过期证书。**TA 状态为包级 static 共享**（一张卡一个
-  信任点集/当前日期，同一时刻只选一个实例）；EC/RSA 密钥与 `Signature` 在首次使用（个性化）
-  时建一次，命令路径不分配（`docs/specs/common/risks.md` §2）。
+  信任点集/当前日期，同一时刻只选一个实例）；EC/RSA 密钥与 `Signature` 在**安装期**（applet
+  构造器 `TaContext.ensureKeys()`）建一次，个性化只写密钥字节、命令路径不分配——J3R180 实测在
+  个性化事务内构建会 `6F00`（`docs/specs/common/risks.md` §2/§4）。
 - **授权**：`TaContext.effectiveAuth` = 活跃信任点授权 ∧ 每张已验证证书的 CHAT/应用扩展逐位
   AND（App 序号 Travel/Visa/Bio = 1/2/3）；`EmrtdApplet.requireLds2Access(bit)` 门控 LDS2 选择/
   读/写/追加，`requireLds1ChatAccess(fid)` 在存在信任点时按 ePassport CHAT 位（b1=DG3、
