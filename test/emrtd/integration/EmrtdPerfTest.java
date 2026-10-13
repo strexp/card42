@@ -119,7 +119,10 @@ public final class EmrtdPerfTest {
         Pace.Session pace = Pace.authenticate(terminal, EmrtdPersoExporter.DOCUMENT_NUMBER,
                 EmrtdPersoExporter.DATE_OF_BIRTH, EmrtdPersoExporter.DATE_OF_EXPIRY);
         terminal.setSecureMessaging(pace.secureMessaging());
-        chipAuthentication(terminal, cipher);
+        if (!chipAuthentication(terminal, cipher)) {
+            System.out.println("  " + label + "                      n/a (not advertised)");
+            return;
+        }
         long total = 0;
         int bytes = 0;
         for (int i = 0; i < READ_ROUNDS; i++) {
@@ -131,7 +134,7 @@ public final class EmrtdPerfTest {
         report(label + " DG2(" + bytes + "B)", READ_ROUNDS, total);
     }
 
-    /** Full TA exchange with the ECDSA or RSA-PSS profile. */
+    /** Full TA exchange with the ECDSA or RSA-PSS profile (n/a when not personalized). */
     private static void ta(EmrtdTerminal terminal, String label, boolean rsa)
             throws Exception {
         Checks.check("SELECT LDS1 " + label, terminal.selectLds1().getSW(), 0x9000);
@@ -140,13 +143,20 @@ public final class EmrtdPerfTest {
         terminal.setSecureMessaging(pace.secureMessaging());
         ChipAuth.Result ca = TaSupport.chipAuthentication(terminal);
         long t0 = System.nanoTime();
-        TaSupport.terminalAuthentication(terminal, pace,
-                TerminalAuth.chipAuthenticationKeyHash(ca.terminalPublicKeyW),
-                new SecureRandom(), rsa);
+        try {
+            TaSupport.terminalAuthentication(terminal, pace,
+                    TerminalAuth.chipAuthenticationKeyHash(ca.terminalPublicKeyW),
+                    new SecureRandom(), rsa);
+        } catch (Exception e) {
+            System.out.println("  " + label + "                         n/a (no "
+                    + (rsa ? "RSA-PSS" : "ECDSA") + " trust point)");
+            return;
+        }
         report(label, 1, System.nanoTime() - t0);
     }
 
-    private static void chipAuthentication(EmrtdTerminal terminal, String cipher)
+    /** Runs CA with the given cipher; false when the card does not advertise it. */
+    private static boolean chipAuthentication(EmrtdTerminal terminal, String cipher)
             throws Exception {
         CardAccess cardAccess = CardAccess.parse(
                 LdsReader.readMf(terminal, LdsFileUtil.FID_CARD_ACCESS));
@@ -156,11 +166,14 @@ public final class EmrtdPerfTest {
                 info = candidate;
             }
         }
-        Checks.check("CA profile " + cipher + " advertised", info != null);
+        if (info == null) {
+            return false;
+        }
         terminal.selectMf();
         CardSecurity cardSecurity = CardSecurity.parse(
                 LdsReader.read(terminal, LdsFileUtil.FID_CARD_SECURITY));
         ChipAuth.authenticate(terminal, cardSecurity.publicKeyInfos().get(0).rawPoint(), info);
+        return true;
     }
 
     private static void report(String label, int rounds, long nanos) {
