@@ -23,8 +23,9 @@
         card-uninstall card-keychange perso-emrtd-emit
 
 # Regenerates the AA-algorithm sample variants (perso/emrtd/sample-<aa>.perso,
-# aa = sha1 | sha256 | ecdsa; sample.perso is the default sha256).  Every sample
-# carries all simultaneously-compatible algorithms; only AA is selected here.
+# aa = sha1 | sha256 | ecdsa; EMRTD_PERSO_SCRIPT defaults to sample-sha256).
+# Every sample carries all simultaneously-compatible algorithms; only AA is
+# selected here.
 EMRTD_AA_VARIANTS := sha1 sha256 ecdsa
 perso-emrtd-emit: $(HOST_STAMP)
 	@for aa in $(EMRTD_AA_VARIANTS); do \
@@ -32,7 +33,6 @@ perso-emrtd-emit: $(HOST_STAMP)
 	  $(JAVA) -cp $(abspath $(HOST_CLASSES)) card42.host.emrtd.perso.EmrtdPersoExporter \
 	    -emit -aa=$$aa > perso/emrtd/sample-$$aa.perso; \
 	done
-	@cp perso/emrtd/sample-sha256.perso perso/emrtd/sample.perso
 
 # --- Simulator: install (load + create) -------------------------------------
 sim-emv-install: sim-wait card

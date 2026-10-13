@@ -137,8 +137,8 @@ TAv1 or 2 for TAv2, efCVCA FileID OPTIONAL -- MUST NOT be used for version 2 }`
 eMRTD 代码（release 组件）≈36 KB（`Method.cap` ≈19 KB）。
 依据见 [`../common/risks.md`](../common/risks.md) §2 与 [`../../../TODO.emrtd.md`](../../../TODO.emrtd.md)。
 
-**样例与变体**：`perso/emrtd/sample-<aa>.perso`（`aa = sha1 | sha256 | ecdsa`，`sample.perso` 为
-默认 `sha256`）由 `make perso-emrtd-emit` 生成。**能同时支持的算法在每个 sample 里全开**：PACE 与
+**样例与变体**：`perso/emrtd/sample-<aa>.perso`（`aa = sha1 | sha256 | ecdsa`，默认
+`sample-sha256.perso`）由 `make perso-emrtd-emit` 生成。**能同时支持的算法在每个 sample 里全开**：PACE 与
 Chip Authentication 宣告 3DES+AES-128；Terminal Authentication 同时个性化 **ECDSA 与 RSA-PSS 两个
 CVCA 信任点**（DGI `FF07` + `FF0B`，卡侧两槽并存），主机可任选其一认证。**唯一互斥轴是 AA**（卡侧
 一次只能签一种），故按后缀拆分。每个 sample 数据齐全（DG1–DG16 除保留的 DG6、LDS2 三应用多记录）。

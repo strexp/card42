@@ -55,7 +55,7 @@ EMV_PERSO_KEYS           ?= perso/emv/sample.perso.sda.keys
 SIM_EMV_PERSO_SCRIPT     ?= perso/emv/sample-test.perso
 SIM_BOTH_EMV_PERSO_SCRIPT ?= perso/emv/sample.perso
 CARD_EMV_PERSO_SCRIPT    ?= perso/emv/sample-j3r180.perso
-EMRTD_PERSO_SCRIPT       ?= perso/emrtd/sample.perso
+EMRTD_PERSO_SCRIPT       ?= perso/emrtd/sample-sha256.perso
 
 # --- Host tooling -----------------------------------------------------------
 MAIN_CLASS       ?= card42.host.emv.cli.Main

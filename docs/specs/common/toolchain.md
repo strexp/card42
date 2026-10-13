@@ -145,12 +145,13 @@ target）。加 `TEST_CONTACTLESS=1` 走非接触流（经 PPSE）。
 
 `make test-emrtd-sim`：`sim-emrtd-install` + `sim-emrtd-perso`（加载 `card42-common` +
 `card42-emrtd`，创建 `A0000002471001` 与 LDS2 DF，用 `EmrtdPersoExporter
--script=$(EMRTD_PERSO_SCRIPT)` 把 `perso/emrtd/sample.perso` 的 DGI 序列经 GPPro `--store-data`
+-script=$(EMRTD_PERSO_SCRIPT)` 把 `perso/emrtd/sample-sha256.perso`
+（默认；可换 `sample-sha1.perso`/`sample-ecdsa.perso`）的 DGI 序列经 GPPro `--store-data`
 个性化样例护照），再跑 `EMRTD_SUITES`；这些 suite 从仓库根读取 PA 的 CSCA 夹具
 `perso/emrtd/csca.crt`。
 
 `make test-both-sim`：`sim-both-install` + `sim-both-perso`（加载三个 CAP，按 `deploy.conf` 创建 EMV +
-eMRTD 实例，EMV 用 `perso/emv/sample.perso`（生产集 + DDA）、eMRTD 用 `perso/emrtd/sample.perso`），再跑
+eMRTD 实例，EMV 用 `perso/emv/sample.perso`（生产集 + DDA）、eMRTD 用 `perso/emrtd/sample-sha256.perso`），再跑
 `BOTH_EMV_SUITES` 与 `EMRTD_SUITES`。
 
 `make test-emv-sim-run S=<Suite>`（`S` 默认 `EmvFlowTest`）先执行 `sim-emv-install` +
@@ -378,7 +379,7 @@ make card-emrtd-install        # 真卡安装 eMRTD（common+emrtd）
 make card-uninstall            # 真卡清卡（删除全部实例 + emv/emrtd package）
 make card-both-perso           # 真卡个性化 both（EMV 生产集 + eMRTD 样例）
 make card-emv-perso            # 真卡个性化 EMV（默认 perso/emv/sample-j3r180.perso）
-make card-emrtd-perso          # 真卡个性化 eMRTD（perso/emrtd/sample.perso）
+make card-emrtd-perso          # 真卡个性化 eMRTD（默认 perso/emrtd/sample-sha256.perso）
 make card-emv-perso CARD_EMV_PERSO_SCRIPT=perso/emv/sample-test.perso  # 真卡含测试实例
 make card-emv-perso CARD_EMV_PERSO_SCRIPT=perso/emv/sample-j3r180.perso       # J3R180 生产集（无 DDA）
 make card-emv-perso CARD_EMV_PERSO_SCRIPT=perso/emv/sample-j3r180-test.perso  # J3R180 测试集（04/06/08）

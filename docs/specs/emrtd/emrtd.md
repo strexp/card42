@@ -238,7 +238,8 @@ SHA-256 哈希（A3）。DG11/DG12 由 `EmrtdPersoExporter.dg11/dg12` 按 Doc 93
 DG14 由 `dg14` 按 §4.7.14 构造为 `6E { SecurityInfos }`，复用
 `CardSecurityBuilder.securityInfos` 生成的 `SET OF SecurityInfo`——EF.CardAccess 的 SecurityInfos
 加芯片静态 CA 公钥，与 EF.CardSecurity 的 eContent 同源。
-`LdsScript` 是人类可读输入格式；`perso/emrtd/sample.perso` 是演示集，
+`LdsScript` 是人类可读输入格式；`perso/emrtd/sample-sha256.perso` 是默认演示集（另有
+`sample-sha1.perso`/`sample-ecdsa.perso`），
 `EmrtdPersoExporter -script=<path>` 个性化每个 `@instance` 段（`-emit` 打印内置样例脚本；
 无 `-script` 时用内置样例，头像取自 `-face=<path>`，默认 `perso/emrtd/portrait.png`）。
 LDS2 指令为 `@lds2 <role>`、`@cardaccess`、`@cardsecurity`、`@record <fid> <hex>`。
@@ -277,8 +278,8 @@ host/emrtd/
   ECDSA 与 RSA-PSS 链做 PACE→CA→TA，并读 CHAT 门控的 DG3/DG4。
 - `EmrtdPerfTest`（在套件内）— 打印各算法耗时：AA（随 `sample-<aa>` 变体）、PACE/CA 3DES vs
   AES-128 整段 DG2 读、TA ECDSA vs RSA-PSS；模拟器与真卡可对照。
-- 样例按 AA 算法分档：`perso/emrtd/sample-{sha1,sha256,ecdsa}.perso`（`sample.perso` = 默认
-  `sha256`），由 `make perso-emrtd-emit` 生成；个性化用
+- 样例按 AA 算法分档：`perso/emrtd/sample-{sha1,sha256,ecdsa}.perso`（默认
+  `sample-sha256.perso`），由 `make perso-emrtd-emit` 生成；个性化用
   `EMRTD_PERSO_SCRIPT=perso/emrtd/sample-<aa>.perso` 切换。
 
 ## 11. LDS2 应用 (Doc 9303-10 §5)

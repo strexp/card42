@@ -71,7 +71,7 @@
     ACR1581 PICC，DG2 8309 B）：AES-128 每 `READ BINARY` **81 ms**（min 76.9 / max 84.0，3 遍）、
     3DES 93 ms；~8 KB DG2 全读 AES ~3.1 s / 3DES ~3.3 s（旧实现 AES ~1.4 s/包，约 17× 慢）。
     `ALG_AES_BLOCK_128_CBC_NOPAD` 在 jcsl 与 J3R180 均确认可用（AES-128 PACE 两侧通过）；
-    因此 `EmrtdPersoExporter.cardAccessInfos` **重新宣告 3DES + AES-128**（`perso/emrtd/sample.perso`
+    因此 `EmrtdPersoExporter.cardAccessInfos` **重新宣告 3DES + AES-128**（`perso/emrtd/sample-sha256.perso`
     的 `@cardaccess` 同步重新生成）。单测（含 >256 B 跨块向量）与 `make test-both-sim`/`make test-emv-sim` 全绿。
   - **大照片（DG2）支持**：个性化改为**逐 DGI 流式落盘**（`DgiStream` + `LdsPerso`/`Lds2Perso`，
     不再有 4096 B 整段重组缓冲），LDS1/LDS2 透明 EF 与记录分别改为 **256 B 分页**与
@@ -87,7 +87,8 @@
 
 - [ ] **算法支持增量（可选，按 matrix §4）**：**第一期（PA PSS、AA SHA-256、CA AES-128）与第二期
   AA ECDSA-SHA-256 已完成（2026-10-13）**，jcsl 与 J3R180 实测通过。样例改为按 AA 算法分档的
-  `perso/emrtd/sample-<aa>.perso`（`-emit -aa=`，`make perso-emrtd-emit`），每个 sample 同时含
+  `perso/emrtd/sample-<aa>.perso`（`-emit -aa=`，`make perso-emrtd-emit`；默认
+  `sample-sha256.perso`），每个 sample 同时含
   PACE/CA 3DES+AES 与 ECDSA+RSA-PSS 两个 TA 信任点；`EmrtdPerfTest` 计时各算法。剩余：多 CA
   密钥/keyId 选择（第二期）；PACE ECDH-CAM、DH 版 CA、TA 非 SHA-1 变体、非标域参数/Brainpool
   （第三期，须先探针）。平台不可能项（AES-192/256、PACE DH-GM/IM）见 matrix §3；附加生物识别加密
