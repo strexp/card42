@@ -22,6 +22,7 @@ import card42.host.common.util.Hex;
  *   @dg &lt;n&gt; &lt;hex&gt;               EF.DG&lt;n&gt; content (DG1 mandatory)
  *   @sod &lt;hex&gt;                  EF.SOD content
  *   @aa &lt;hex&gt;                   AA private key (modLen || modulus || expLen || exponent)
+ *   @aa-alg sha1|sha256         AA signature algorithm (default sha1; DGI FF0A)
  *   @ca &lt;hex&gt;                   Chip Authentication P-256 private scalar (DGI FF03)
  *   @cardsecurity &lt;hex&gt;         LDS1 master-file EF.CardSecurity SignedData (DGI FF05)
  *   @ta-date &lt;YYMMDD&gt;           ICC current date (DGI FF08)
@@ -58,6 +59,8 @@ public final class LdsScript {
         public final Map<Integer, byte[]> dataGroups = new LinkedHashMap<Integer, byte[]>();
         public byte[] sod;
         public byte[] aaKey;
+        /** AA signature algorithm: {@code sha1} (default) or {@code sha256}. */
+        public String aaAlgorithm = "sha1";
         /** Chip Authentication static P-256 private scalar (DGI FF03). */
         public byte[] caKey;
         /** LDS2 EF.CardAccess / EF.CardSecurity content. */
@@ -166,6 +169,9 @@ public final class LdsScript {
                 break;
             case "@aa":
                 current.aaKey = Hex.parse(parts[1]);
+                break;
+            case "@aa-alg":
+                current.aaAlgorithm = parts[1];
                 break;
             case "@ca":
                 current.caKey = Hex.parse(parts[1]);

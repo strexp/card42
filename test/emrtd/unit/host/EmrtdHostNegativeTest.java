@@ -276,9 +276,9 @@ final class EmrtdHostNegativeTest {
      */
     private static void hostChipAuthRejection() {
         ChipAuthenticationInfo dh = caInfo(SecurityInfo.ID_CA_DH_3DES);
-        ChipAuthenticationInfo aes = caInfo(SecurityInfo.ID_CA_ECDH_AES_128);
+        ChipAuthenticationInfo aes192 = caInfo(SecurityInfo.ID_CA_ECDH_AES_192);
         Asserts.rejects(() -> hostChipAuth(dh), "host CA rejects a non-ECDH profile");
-        Asserts.rejects(() -> hostChipAuth(aes), "host CA rejects a non-3DES profile");
+        Asserts.rejects(() -> hostChipAuth(aes192), "host CA rejects a non-AES-128 profile");
     }
 
     private static ChipAuthenticationInfo caInfo(String oid) {

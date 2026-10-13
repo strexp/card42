@@ -85,11 +85,13 @@
 
 ## 待办
 
-- [ ] **算法支持增量（可选，按 matrix §4 三期）**：第一期 PA RSASSA-PSS/SHA-224 映射、
-  AA 卡侧 SHA-256 接线 + `ActiveAuthenticationInfo`、CA ECDH-AES-128；第二期 AA 卡侧
-  ECDSA-SHA-256、多 CA 密钥/keyId 选择；第三期 PACE ECDH-CAM、DH 版 CA、TA 非 SHA-1 变体、
-  非标域参数/Brainpool（须先探针）。平台不可能项（AES-192/256、PACE DH-GM/IM）见 matrix §3；
-  附加生物识别加密见「延后 / 范围外」。判据与复杂度/瞬态评估见
+- [ ] **算法支持增量（可选，按 matrix §4）**：**第一期已完成（2026-10-13）**——PA
+  RSASSA-PSS/SHA-224 映射、AA 卡侧 SHA-256 接线（DGI FF0A）、CA ECDH-AES-128（`MSE:Set AT` +
+  `GENERAL AUTHENTICATE`），jcsl 与 J3R180 实测通过（新增 `EmrtdChipAuthAesIntegrationTest`）。
+  剩余：第二期 AA 卡侧 ECDSA-SHA-256（+ EF.CardAccess `ActiveAuthenticationInfo`）、多 CA 密钥/
+  keyId 选择；第三期 PACE ECDH-CAM、DH 版 CA、TA 非 SHA-1 变体、非标域参数/Brainpool（须先探针）。
+  平台不可能项（AES-192/256、PACE DH-GM/IM）见 matrix §3；附加生物识别加密见「延后 / 范围外」。
+  判据与复杂度/瞬态评估见
   [`docs/specs/emrtd/algorithm-support.md`](docs/specs/emrtd/algorithm-support.md) §4。
 - [ ] **T5.1 PACE 官方 BSI 测试向量**：BSI TR-03110 Test-Vector 文档未提供；现以 BSI KDF
   定义独立计算的 KAT + 第三方独立主机库互操作验证。
@@ -134,10 +136,6 @@
   验签引擎须在**安装期**构建，不得在 SD 个性化事务内（DGI `FF07`）构建——J3R180 会 `6F00`。
   RsaPss/双信任点/DG3-DG4 门控由单测覆盖；示例个性化仍用 ECDSA。附加生物识别加密
   （Doc 9303-11 §7.2，旧称 EAC 1.11）属范围外，见「延后 / 范围外」。
-- [!] **Chip Authentication AES profile（`id-CA-*-AES-CBC-CMAC-*`，延后）**：卡侧与主机
-  `ChipAuth` 均仅 ECDH+3DES（服务器宣告 `id-CA-ECDH-3DES-CBC-CBC`）；AES CA 需算法/密钥引用
-  绑定（`MSE:Set KAT` 的 keyId）与 AES-CMAC KDF/SM 切换。影响：拒绝 3DES 的终端无法完成 CA，
-  CA 后 SM 为 3DES+SHA-1（已弃用）。ICAO Doc 9303-11 §9.2.5 的 AES OID 属可选，故不宣告。
 
 ## 延后 / 范围外
 

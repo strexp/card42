@@ -95,6 +95,8 @@ public final class EmrtdApplet extends AppletBase
     final byte[] caEnc;
     final byte[] caMac;
     boolean caPending;
+    /** True when the pending CA profile is AES-128 (SM switches to the AES wrapper). */
+    boolean caAes;
 
     /* Plaintext command data and response data (SM unwrap/wrap).  Package-shared
      * transient buffers (CLEAR_ON_DESELECT, allocated once at install), so no
@@ -236,6 +238,7 @@ public final class EmrtdApplet extends AppletBase
         }
         challengeValid = false;
         caPending = false;
+        caAes = false;
         Util.arrayFillNonAtomic(kenc, (short) 0, (short) 16, (byte) 0);
         Util.arrayFillNonAtomic(kmac, (short) 0, (short) 16, (byte) 0);
         Util.arrayFillNonAtomic(ksEnc, (short) 0, (short) 16, (byte) 0);
@@ -249,6 +252,7 @@ public final class EmrtdApplet extends AppletBase
         smAes.reset();
         sm = sm3des;
         pace.reset();
+        chipAuth.reset();
         if (ta != null) {
             ta.clearSession();
         }
@@ -352,12 +356,12 @@ public final class EmrtdApplet extends AppletBase
         if (caPending) {
             // Chip Authentication: switch the SM session keys for the next
             // command, after this response was wrapped with the old ones.  The
-            // CA profile implemented here is ECDH-3DES, so SM falls back to the
-            // retail-MAC wrapper even if PACE had negotiated AES.
+            // profile is ECDH-3DES (MSE:Set KAT) or ECDH-AES-128 (MSE:Set AT +
+            // GENERAL AUTHENTICATE); the wrapper follows the negotiated cipher.
             Util.arrayCopyNonAtomic(caEnc, (short) 0, ksEnc, (short) 0, (short) 16);
             Util.arrayCopyNonAtomic(caMac, (short) 0, ksMac, (short) 0, (short) 16);
             Util.arrayFillNonAtomic(ssc, (short) 0, (short) 8, (byte) 0);
-            sm = sm3des;
+            sm = caAes ? smAes : sm3des;
             smEstablished = true;
             caPending = false;
         }

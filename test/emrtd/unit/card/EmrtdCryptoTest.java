@@ -74,6 +74,27 @@ final class EmrtdCryptoTest {
         Asserts.bytes(card42.host.emrtd.access.ChipAuth.deriveKey(z, 2), mac,
                 "card CA Ks_mac matches host ECDH");
 
+        // AES-128 profile: MSE:Set AT (DO'80' = id-CA-ECDH-AES-CBC-CMAC-128) then
+        // GENERAL AUTHENTICATE (DO'80' = the ephemeral key); the KDF omits the
+        // DES parity (BSI TR-03110-3 A.2.3.2/B.2).
+        byte[] mseAt = Hex.parse("800A04007F00070202030202840101");
+        cardCa.mseSetAt(mseAt, (short) 0, (short) mseAt.length);
+        Asserts.check(cardCa.isGaPending(), "card CA AES MSE:Set AT arms the GA step");
+        Asserts.check(cardCa.isAes(), "card CA AES profile selected");
+        byte[] ga = new byte[peerW.length + 2];
+        ga[0] = (byte) 0x80;
+        ga[1] = (byte) peerW.length;
+        System.arraycopy(peerW, 0, ga, 2, peerW.length);
+        byte[] encAes = new byte[16];
+        byte[] macAes = new byte[16];
+        cardCa.generalAuthenticate(ga, (short) 0, (short) ga.length,
+                encAes, (short) 0, macAes, (short) 0);
+        Asserts.check(!cardCa.isGaPending(), "card CA AES GA clears the pending flag");
+        Asserts.bytes(card42.host.emrtd.access.ChipAuth.deriveKey(z, 1, true), encAes,
+                "card CA AES Ks_enc matches host ECDH (no DES parity)");
+        Asserts.bytes(card42.host.emrtd.access.ChipAuth.deriveKey(z, 2, true), macAes,
+                "card CA AES Ks_mac matches host ECDH (no DES parity)");
+
         byte[] offCurve = peerW.clone();
         offCurve[64] ^= 0x01;
         Asserts.sw((short) 0x6A80, () -> cardCa.deriveSessionKeys(offCurve, (short) 0,
@@ -422,6 +443,32 @@ final class EmrtdCryptoTest {
         Asserts.check(!ActiveAuthentication.verifySignature(pub, Hex.parse("0102030405060709"),
                         java.util.Arrays.copyOf(sig, sigLen)),
                 "AA signature rejects a different challenge");
+
+        // SHA-256 (trailer option 2, DGI FF0A): the same instance is switched by
+        // personalization and the host verifier recovers the option-2 trailer
+        // (Doc 9303-11 §6.1.2.2).
+        Asserts.eq(AaCrypto.AA_SHA1, aa.getAlgorithm(), "AA defaults to SHA-1");
+        aa.setAlgorithm(AaCrypto.AA_SHA256);
+        Asserts.eq(AaCrypto.AA_SHA256, aa.getAlgorithm(), "AA switched to SHA-256");
+        byte[] sig256 = new byte[256];
+        short len256 = aa.sign(challenge, (short) 0, (short) 8, sig256, (short) 0);
+        Asserts.eq(256, len256, "AA SHA-256 signature length");
+        Asserts.check(ActiveAuthentication.verifySignature(pub, challenge,
+                        java.util.Arrays.copyOf(sig256, len256)),
+                "AA SHA-256 signature verifies (trailer option 2)");
+        Asserts.check(!ActiveAuthentication.verifySignature(pub, Hex.parse("0102030405060709"),
+                        java.util.Arrays.copyOf(sig256, len256)),
+                "AA SHA-256 signature rejects a different challenge");
+
+        // A fresh instance constructed directly for SHA-256.
+        AaCrypto direct = new AaCrypto((short) 2048, AaCrypto.AA_SHA256);
+        direct.setPrivateKey(mod, (short) 0, (short) mod.length,
+                exp, (short) 0, (short) exp.length);
+        byte[] sigDirect = new byte[256];
+        short directLen = direct.sign(challenge, (short) 0, (short) 8, sigDirect, (short) 0);
+        Asserts.check(ActiveAuthentication.verifySignature(pub, challenge,
+                        java.util.Arrays.copyOf(sigDirect, directLen)),
+                "AA SHA-256 direct construction verifies");
     }
 
     // BouncyCastle ISO9796d2Signer KAT (1024-bit key, SHA-1, M = RND.IC || RND.IFD).

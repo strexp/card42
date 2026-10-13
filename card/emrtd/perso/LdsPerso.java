@@ -24,6 +24,8 @@ public final class LdsPerso extends DgiStream.Sink {
     public static final short DGI_SEED = EmrtdTags.DGI_BAC_SEED;
     /** DGI carrying the AA private key (modLen || modulus || expLen || exponent). */
     public static final short DGI_AA_KEY = EmrtdTags.DGI_AA_KEY;
+    /** DGI carrying the AA signature algorithm (1 octet: 1 = SHA-1, 2 = SHA-256). */
+    public static final short DGI_AA_ALGORITHM = EmrtdTags.DGI_AA_ALGORITHM;
     /** DGI carrying the Chip Authentication static private scalar (32 bytes). */
     public static final short DGI_CA_KEY = EmrtdTags.DGI_CA_KEY;
     /** DGI carrying the PACE key seed SHA-1(MRZ_info) (20 bytes). */
@@ -52,6 +54,7 @@ public final class LdsPerso extends DgiStream.Sink {
     private static final byte MODE_TA = 9;
     private static final byte MODE_TA_DATE = 10;
     private static final byte MODE_TA2 = 11;
+    private static final byte MODE_AA_ALG = 12;
 
     private final LdsCatalog catalog;
     private final AaCrypto aa;
@@ -132,6 +135,8 @@ public final class LdsPerso extends DgiStream.Sink {
             mode = MODE_SEED;
         } else if (dgi == DGI_AA_KEY) {
             mode = MODE_AA;
+        } else if (dgi == DGI_AA_ALGORITHM) {
+            mode = MODE_AA_ALG;
         } else if (dgi == DGI_CA_KEY) {
             mode = MODE_CA;
         } else if (dgi == DGI_PACE_SEED) {
@@ -202,6 +207,11 @@ public final class LdsPerso extends DgiStream.Sink {
             seedSet = true;
         } else if (mode == MODE_AA) {
             setAaKey();
+        } else if (mode == MODE_AA_ALG) {
+            if (scratchLen != (short) 1) {
+                ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+            }
+            aa.setAlgorithm(scratch[0]);
         } else if (mode == MODE_CA) {
             chipAuth.setPrivateKey(scratch, (short) 0, scratchLen);
         } else if (mode == MODE_PACE) {

@@ -31,45 +31,64 @@ public final class AaCrypto {
     public static final byte AA_SHA1 = (byte) 0x01;
     public static final byte AA_SHA256 = (byte) 0x02;
 
-    private final byte algorithm;
+    private byte algorithm;
     private final RSAPrivateKey privateKey;
     private final Cipher rsa;
-    private final MessageDigest digest;
+    private final MessageDigest sha1;
+    private final MessageDigest sha256;
+    private MessageDigest digest;
     private final RandomData random;
     private final short keyBytes;
-    private final short digestLength;
-    private final short trailerLength;
-    /** M1 = RND.IC, the recoverable message part. */
+    private short digestLength;
+    private short trailerLength;
+    /** M1 = RND.IC length for the active algorithm (keyBytes - 1 - Lh - 4t bits). */
+    private short nonceLength;
+    /** M1 = RND.IC, the recoverable message part (sized for SHA-1, the longest). */
     private final byte[] nonce;
     /** The ISO/IEC 9796-2 encoded message to be raised to the private exponent. */
     private final byte[] block;
-    /** H(M), reused across calls. */
+    /** H(M), reused across calls (sized for the longest digest, SHA-256). */
     private final byte[] hash;
 
     public AaCrypto(short keyBits, byte algorithm) {
-        this.algorithm = algorithm;
         keyBytes = (short) (keyBits / 8);
         privateKey = (RSAPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PRIVATE,
                 keyBits, false);
         // Raw RSA (modular exponentiation) so the card controls the ISO/IEC
         // 9796-2 encoding itself; the platform only performs the RSA primitive.
         rsa = Cipher.getInstance(Cipher.ALG_RSA_NOPAD, false);
+        // Both digests are built at install: the personalization may switch the
+        // algorithm (DGI FF0A) but must not allocate crypto objects inside the
+        // Security Domain's processData transaction (docs/specs/common/risks.md §4).
+        sha1 = MessageDigest.getInstance(MessageDigest.ALG_SHA, false);
+        sha256 = MessageDigest.getInstance(MessageDigest.ALG_SHA_256, false);
+        // SHA-1 leaves the longest recoverable part, so it sizes nonce; SHA-256
+        // the longest digest, so it sizes hash.
+        nonce = new byte[(short) (keyBytes - 22)];
+        block = new byte[keyBytes];
+        hash = new byte[32];
+        random = KdfEngines.random();
+        setAlgorithm(algorithm);
+    }
+
+    /**
+     * Selects the ISO/IEC 9796-2 trailer and digest (DGI FF0A): SHA-1 uses
+     * trailer option 1 ({@code 0xBC}), SHA-256 option 2 ({@code 0x34CC})
+     * (ICAO Doc 9303-11 §6.1.2.2).  No crypto object is allocated here, so it
+     * is safe during personalization.
+     */
+    public void setAlgorithm(byte algorithm) {
         if (algorithm == AA_SHA256) {
-            digest = MessageDigest.getInstance(MessageDigest.ALG_SHA_256, false);
+            digest = sha256;
             digestLength = (short) 32;
             trailerLength = (short) 2;
         } else {
-            digest = MessageDigest.getInstance(MessageDigest.ALG_SHA, false);
+            digest = sha1;
             digestLength = (short) 20;
             trailerLength = (short) 1;
         }
-        short nonceLength = (short) (keyBytes - digestLength);
-        nonceLength = (short) (nonceLength - trailerLength);
-        nonceLength = (short) (nonceLength - 1);
-        nonce = new byte[nonceLength];
-        block = new byte[keyBytes];
-        hash = new byte[digestLength];
-        random = KdfEngines.random();
+        this.algorithm = algorithm;
+        nonceLength = (short) (keyBytes - 1 - digestLength - trailerLength);
     }
 
     /** Sets the AA private key (modulus || exponent) from personalization data. */
@@ -95,7 +114,7 @@ public final class AaCrypto {
         if (len != (short) 8) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
-        random.generateData(nonce, (short) 0, (short) nonce.length);
+        random.generateData(nonce, (short) 0, nonceLength);
         return sign(nonce, (short) 0, challenge, off, len, out, outOff);
     }
 
@@ -113,15 +132,15 @@ public final class AaCrypto {
         }
         // H(M) = H(RND.IC || RND.IFD).
         digest.reset();
-        digest.update(rndIc, rndOff, (short) nonce.length);
+        digest.update(rndIc, rndOff, nonceLength);
         digest.update(challenge, off, len);
         digest.doFinal(block, (short) 0, (short) 0, hash, (short) 0);
 
         // Encoded message: 0x6A || M1 || H(M) || trailer.
         short p = 0;
         block[p++] = (byte) 0x6A;
-        Util.arrayCopyNonAtomic(rndIc, rndOff, block, p, (short) nonce.length);
-        p += nonce.length;
+        Util.arrayCopyNonAtomic(rndIc, rndOff, block, p, nonceLength);
+        p += nonceLength;
         Util.arrayCopyNonAtomic(hash, (short) 0, block, p, digestLength);
         p += digestLength;
         if (trailerLength == (short) 1) {

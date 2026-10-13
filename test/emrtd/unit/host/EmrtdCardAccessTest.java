@@ -7,6 +7,8 @@ import java.security.MessageDigest;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.cert.X509Certificate;
+import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.PSSParameterSpec;
 
 import card42.host.common.codec.DerWriter;
 import card42.host.common.codec.TlvWriter;
@@ -41,6 +43,7 @@ final class EmrtdCardAccessTest {
         genericDataGroups();
         passiveAuthenticationTamper();
         passiveAuthenticationSignerSelection();
+        passiveAuthenticationPss();
     }
 
     /** EF.CardSecurity is a CMS SignedData over the SecurityInfo set (H7.2). */
@@ -245,6 +248,81 @@ final class EmrtdCardAccessTest {
                 throw new RuntimeException(e);
             }
         }, "SOD signer sid without a matching certificate rejected");
+    }
+
+    /**
+     * Passive Authentication accepts an RSASSA-PSS SOD signature (RFC 4055):
+     * the PSS parameters are read from the signature AlgorithmIdentifier and
+     * applied to the JDK verifier.
+     */
+    private static void passiveAuthenticationPss() throws Exception {
+        byte[] dg1 = tlv(0x61, tlv(0x5F1F, (EmrtdPersoExporter.LINE1 + EmrtdPersoExporter.LINE2)
+                .getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
+        java.util.Map<Integer, byte[]> hashes = new java.util.LinkedHashMap<Integer, byte[]>();
+        hashes.put(1, MessageDigest.getInstance("SHA-256").digest(dg1));
+        PrivateKey key = EmrtdPersoExporter.loadPrivateKey("perso/emrtd/dsc.key");
+        X509Certificate cert = EmrtdPersoExporter.loadCertificate("perso/emrtd/dsc.crt");
+        CscaKeyStore trust = CscaKeyStore.fromFiles(new java.io.File("perso/emrtd/csca.crt"));
+
+        byte[] eContent = Sod.parse(SodBuilder.build(hashes, key, cert)).cms.eContent;
+        byte[] sid = DerWriter.sequence(cert.getIssuerX500Principal().getEncoded(),
+                DerWriter.integer(cert.getSerialNumber()));
+        byte[] cms = pssCms(sid, eContent, key, cert);
+
+        LdsSecurityObject securityObject = PassiveAuthentication.verify(Sod.parse(cms), trust);
+        Asserts.check(PassiveAuthentication.verifyDataGroup(securityObject, 1, dg1),
+                "RSASSA-PSS SOD accepted and DG1 verified");
+
+        byte[] tampered = cms.clone();
+        tampered[tampered.length - 1] ^= 0x01;
+        Asserts.rejects(() -> {
+            try {
+                PassiveAuthentication.verify(Sod.parse(tampered), trust);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }, "tampered RSASSA-PSS SOD rejected");
+    }
+
+    /** A CMS SignedData whose SignerInfo is RSASSA-PSS (SHA-256, 32-byte salt). */
+    private static byte[] pssCms(byte[] sid, byte[] eContent, PrivateKey key,
+                                 X509Certificate cert) throws Exception {
+        byte[] digest = MessageDigest.getInstance("SHA-256").digest(eContent);
+        byte[] signedAttrsContent = DerWriter.concat(
+                DerWriter.sequence(DerWriter.oid("1.2.840.113549.1.9.3"),
+                        DerWriter.set(DerWriter.oid("2.23.136.1.1.1"))),
+                DerWriter.sequence(DerWriter.oid("1.2.840.113549.1.9.4"),
+                        DerWriter.set(DerWriter.octetString(digest))));
+        Signature signer = Signature.getInstance("RSASSA-PSS");
+        signer.setParameter(new PSSParameterSpec("SHA-256", "MGF1",
+                MGF1ParameterSpec.SHA256, 32, 1));
+        signer.initSign(key);
+        signer.update(DerWriter.set(signedAttrsContent));
+        byte[] signature = signer.sign();
+
+        byte[] sha256 = DerWriter.sequence(DerWriter.oid("2.16.840.1.101.3.4.2.1"),
+                DerWriter.nullValue());
+        byte[] mgf1 = DerWriter.sequence(DerWriter.oid("1.2.840.113549.1.1.8"),
+                DerWriter.sequence(DerWriter.oid("2.16.840.1.101.3.4.2.1"),
+                        DerWriter.nullValue()));
+        byte[] pssParams = DerWriter.sequence(
+                DerWriter.context(0, sha256),
+                DerWriter.context(1, mgf1),
+                DerWriter.context(2, DerWriter.integer(32)),
+                DerWriter.context(3, DerWriter.integer(1)));
+        byte[] sigAlg = DerWriter.sequence(DerWriter.oid("1.2.840.113549.1.1.10"), pssParams);
+
+        byte[] digestAlg = DerWriter.sequence(DerWriter.oid("2.16.840.1.101.3.4.2.1"),
+                DerWriter.nullValue());
+        byte[] signerInfo = DerWriter.sequence(DerWriter.integer(1), sid, digestAlg,
+                DerWriter.context(0, signedAttrsContent), sigAlg,
+                DerWriter.octetString(signature));
+        byte[] signedData = DerWriter.sequence(DerWriter.integer(1), DerWriter.set(digestAlg),
+                DerWriter.sequence(DerWriter.oid("2.23.136.1.1.1"),
+                        DerWriter.context(0, DerWriter.octetString(eContent))),
+                DerWriter.context(0, cert.getEncoded()), DerWriter.set(signerInfo));
+        return DerWriter.sequence(DerWriter.oid("1.2.840.113549.1.7.2"),
+                DerWriter.context(0, signedData));
     }
 
     /**

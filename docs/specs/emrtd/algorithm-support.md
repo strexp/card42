@@ -78,7 +78,7 @@ TAv1 or 2 for TAv2, efCVCA FileID OPTIONAL -- MUST NOT be used for version 2 }`
 | 组合 | 卡侧 | 主机侧 | 说明 |
 |------|------|--------|------|
 | ECDH + 3DES（`id-CA-ECDH-3DES-CBC-CBC`，v1） | ✅ | ✅ | 唯一已宣告/实现；P-256 静态密钥，KDF SHA-1，CA 后 SM=3DES |
-| ECDH + AES-128（`…3.2.2`） | ○ | ○ | ECDH 与 AES-128 SM 均具备；KDF 仍为 SHA-1（BSI TR-03110-3 A.2.3.2，仅不做 DES parity），需 CA profile 标志、CA 后切 AES SM 与 keyId 绑定 |
+| ECDH + AES-128（`…3.2.2`） | ✅ | ✅ | 卡侧 `MSE:Set AT`（DO`80'`=CA OID）+ `GENERAL AUTHENTICATE`（DO`80'`=临时公钥，v1 无响应数据），KDF 仍为 SHA-1 但不做 DES parity（BSI TR-03110-3 A.2.3.2/B.2）；CA 后 SM 切 AES-CMAC。jcsl + J3R180 真卡实测（2026-10-13） |
 | ECDH/DH + AES-192/256（`…3.2.3`/`…3.2.4`、`…3.1.3`/`…3.1.4`） | ⛔ | ⛔ | jcsl 无 AES-192/256 |
 | DH + 3DES（`id-CA-DH-3DES-CBC-CBC`） | ○ | ○ | `KeyAgreement.ALG_DH_PLAIN` 可算 CA 的 `Z = PK^SK mod p`（不需要 PACE-GM 的模乘） |
 | 多 CA 密钥 / keyId 选择语义 | ⚠️ | ⚠️ | 卡侧仅存一个 CA 私钥（DGI `FF03`）；主机取 `publicKeyInfos().get(0)` |
@@ -88,11 +88,11 @@ TAv1 or 2 for TAv2, efCVCA FileID OPTIONAL -- MUST NOT be used for version 2 }`
 | 方向/组合 | 状态 | 说明 |
 |-----------|------|------|
 | 卡侧签发：RSA-2048 + ISO/IEC 9796-2 DS1 + SHA-1 | ✅ | `EmrtdApplet` 固定 `new AaCrypto(2048, AA_SHA1)`；编码用 `Cipher.ALG_RSA_NOPAD` 手工完成 |
-| 卡侧签发：RSA ISO 9796-2 + SHA-256（option 2 trailer `0x34CC`） | ○ | `AaCrypto.AA_SHA256` 分支已实现，仅未接线 |
-| 卡侧签发：ECDSA-SHA-256（Doc 9303-11 §6.1.2.3） | ○ | 平台探针显示 `getInstance(ALG_SHA_256, SIG_CIPHER_ECDSA_PLAIN, PAD_NULL)` 可用 |
+| 卡侧签发：RSA ISO 9796-2 + SHA-256（option 2 trailer `0x34CC`） | ✅ | 经个性化 DGI `FF0A` 接线；示例个性化已用 SHA-256（jcsl + J3R180 实测） |
+| 卡侧签发：ECDSA-SHA-256（Doc 9303-11 §6.1.2.3） | ○ | 平台探针显示 `getInstance(ALG_SHA_256, SIG_CIPHER_ECDSA_PLAIN, PAD_NULL)` 可用；**签名方向未真卡实测** |
 | 主机校验：RSA ISO 9796-2 DS1，SHA-1 / SHA-256 / SHA-384 / SHA-512 | ✅ | `ActiveAuthentication.verifySignature`（trailer 选项 1/2） |
 | 主机校验：ECDSA-SHA-256（plain `r‖s` → DER） | ✅ | `verifyEcdsa` |
-| EF.CardAccess 宣告 `ActiveAuthenticationInfo` | ○ | 可选（ICAO §9.2.4）；解析器已支持，样例未写 |
+| EF.CardAccess 宣告 `ActiveAuthenticationInfo` | ○ | ICAO §9.2.4 仅在 **ECDSA** AA 时必需（signatureAlgorithm 为 TR-03111 OID）；RSA ISO 9796-2 无此 OID，故不宣告。随第二期 ECDSA AA 一起做 |
 
 ### 2.5 Terminal Authentication / CVCA
 
@@ -113,7 +113,7 @@ TAv1 or 2 for TAv2, efCVCA FileID OPTIONAL -- MUST NOT be used for version 2 }`
 |------|------|------|
 | 摘要 SHA-1 / SHA-256 / SHA-384 / SHA-512 | ✅ | `AlgorithmIds.digest` |
 | 签名 RSA v1.5（SHA-1/256/384/512）、ECDSA（SHA-256/384） | ✅ | `AlgorithmIds.signature` |
-| RSASSA-PSS OID（`1.2.840.113549.1.1.10`）、SHA-224 等映射 | ○ | 纯主机 JDK 可补 |
+| RSASSA-PSS OID（`1.2.840.113549.1.1.10`）、SHA-224/ECDSA OID 映射 | ✅ | `AlgorithmIds` 映射 + `PassiveAuthentication` 解析 RSASSA-PSS-params（RFC 4055）；单测覆盖 |
 | 证书链/策略/有效期/吊销检查 | ⚠️ | 仅校验 DSC 由 CSCA 签名（`DscVerifier`）；生产需补策略/有效期/吊销 |
 | LDS2 附加生物识别加密（Doc 9303-11 §7.2） | ▢ | ICAO 不定义算法/密钥（State-specific），无可互操作线上格式；见 §5 |
 
@@ -133,30 +133,31 @@ TAv1 or 2 for TAv2, efCVCA FileID OPTIONAL -- MUST NOT be used for version 2 }`
 
 ## 4. 可实现但未做项（○ 的清单）
 
-按**性价比**分三期推进。复杂度/瞬态按现有实测口径评估：eMRTD context 瞬态预算 ≈2056 B、热路径
+按**性价比**分期推进。复杂度/瞬态按现有实测口径评估：eMRTD context 瞬态预算 ≈2056 B、热路径
 ≈1514 B（余量 ≈540 B）；on-card eMRTD 代码（release 组件）≈36 KB（`Method.cap` ≈19 KB）。
 依据见 [`../common/risks.md`](../common/risks.md) §2 与 [`../../../TODO.emrtd.md`](../../../TODO.emrtd.md)。
 
-### 4.1 第一期（低复杂度、高价值，建议先做）
+### 4.1 第一期（已完成，2026-10-13）
 
-1. **PA 映射补全**（纯主机 JDK）：RSASSA-PSS OID（`1.2.840.113549.1.1.10`，需
-   `PSSParameterSpec`）、SHA-224 等；生产环境另需证书策略/有效期/吊销检查
-   （`AlgorithmIds`/`DscVerifier`/`PassiveAuthentication`）。卡侧零改动。
-2. **AA 卡侧接线 SHA-256**：`AaCrypto.AA_SHA256` 分支已存在，仅未接线；个性化选定算法，并在
-   EF.CardAccess 增加 `ActiveAuthenticationInfo`（`id-AA` + signatureAlgorithm）。
-3. **CA ECDH + AES-128**（`id-CA-ECDH-AES-CBC-CMAC-128`）：ECDH 与 AES-128 SM 均已具备。
-   **KDF 仍为 SHA-1**（BSI TR-03110-3 A.2.3.2，仅不做 DES parity；不是 "AES-CMAC 形式的 KDF"）；
-   改动为 `ChipAuth` 加 profile 标志、`EmrtdApplet` 在 CA 后按 profile 选 `sm3des`/`smAes`
-   （当前硬编码回退 3DES）、主机接受 AES OID 并用无 parity KDF + `Iso7816SmAes`，以及
-   `MSE:Set KAT` 的 keyId→静态密钥绑定。
+1. **PA 映射补全**（纯主机 JDK）：`AlgorithmIds` 增加 RSASSA-PSS（`1.2.840.113549.1.1.10`）、
+   SHA-224 与 ECDSA SHA-1/224/512 映射；`PassiveAuthentication` 从签名 AlgorithmIdentifier 解析
+   RSASSA-PSS-params（RFC 4055）。单测覆盖（`EmrtdCardAccessTest`，PSS SOD 正/负例）。
+2. **AA 卡侧接线 SHA-256**：项目 DGI `FF0A` 选择算法（`AaCrypto.setAlgorithm`），示例个性化改用
+   SHA-256（trailer option 2）；主机校验已支持。jcsl + J3R180 实测。
+   `ActiveAuthenticationInfo` 属 ECDSA AA（见 4.2）。
+3. **CA ECDH + AES-128**（`id-CA-ECDH-AES-CBC-CMAC-128`）：卡侧 `MSE:Set AT` + `GENERAL
+   AUTHENTICATE`（v1 无响应数据），KDF 仍 SHA-1 但不做 DES parity；CA 后 SM 切 `Iso7816SmAes`。
+   主机 `ChipAuth` 支持两种 profile。真卡实测（新增 `EmrtdChipAuthAesIntegrationTest`）。
 
 ### 4.2 第二期（中复杂度）
 
 4. **AA 卡侧 ECDSA-SHA-256**（Doc 9303-11 §6.1.2.3）：平台探针显示
    `getInstance(ALG_SHA_256, SIG_CIPHER_ECDSA_PLAIN, PAD_NULL)` 可用，但**签名方向未经真卡实测**；
-   `AaCrypto` 现为 RSA-only，需并列 EC 路径，DG15 改 RFC 5480 SPKI。主机 `verifyEcdsa` 已就绪。
-5. **多 CA 密钥 / keyId 选择语义**：卡侧 keyId→静态私钥表 + `MSE:Set KAT` DO`84'` 选键，
-   EF.CardSecurity 适配多 `ChipAuthenticationPublicKeyInfo`；主机按 keyId 取键（现取 `get(0)`）。
+   `AaCrypto` 现为 RSA-only，需并列 EC 路径，DG15 改 RFC 5480 SPKI；并在 EF.CardAccess 增加
+   `ActiveAuthenticationInfo`（§9.2.4 仅 ECDSA 需要）。主机 `verifyEcdsa` 已就绪。
+5. **多 CA 密钥 / keyId 选择语义**：卡侧 keyId→静态私钥表 + `MSE:Set KAT`/`MSE:Set AT` DO`84'`
+   选键，EF.CardSecurity 适配多 `ChipAuthenticationPublicKeyInfo`；主机按 keyId 取键（现取
+   `get(0)`），并可优先 AES。
 
 ### 4.3 第三期（低价值 / 需先探针）
 

@@ -25,11 +25,18 @@ public final class CmsSignedData {
     public final byte[] signedAttrs;
     public final String digestAlgorithm;
     public final String signatureAlgorithm;
+    /**
+     * The DER-encoded parameters of the signature {@code AlgorithmIdentifier},
+     * or null when absent.  RSASSA-PSS needs them (RFC 4055); the PKCS#1 v1.5
+     * and ECDSA OIDs carry {@code NULL}/absent parameters and ignore this.
+     */
+    public final byte[] signatureAlgorithmParameters;
     public final byte[] signature;
 
     private CmsSignedData(byte[] eContent, String eContentType, byte[] signerCertificate,
                           List<byte[]> certificates, byte[] signerIdentifier, byte[] signedAttrs,
-                          String digestAlgorithm, String signatureAlgorithm, byte[] signature) {
+                          String digestAlgorithm, String signatureAlgorithm,
+                          byte[] signatureAlgorithmParameters, byte[] signature) {
         this.eContent = eContent;
         this.eContentType = eContentType;
         this.signerCertificate = signerCertificate;
@@ -38,6 +45,7 @@ public final class CmsSignedData {
         this.signedAttrs = signedAttrs;
         this.digestAlgorithm = digestAlgorithm;
         this.signatureAlgorithm = signatureAlgorithm;
+        this.signatureAlgorithmParameters = signatureAlgorithmParameters;
         this.signature = signature;
     }
 
@@ -83,10 +91,14 @@ public final class CmsSignedData {
         }
         String sigAlg = AlgorithmIds.signature(
                 Der.oid(sod, Der.children(sod, si.get(p)).get(0)));
+        // The signature AlgorithmIdentifier may carry parameters (RSASSA-PSS,
+        // RFC 4055); PKCS#1 v1.5 and ECDSA use NULL/absent.
+        List<Der.Tlv> sigFields = Der.children(sod, si.get(p));
+        byte[] sigParams = sigFields.size() > 1 ? Der.encoded(sod, sigFields.get(1)) : null;
         p++;
         byte[] signature = Der.value(sod, si.get(p));
 
         return new CmsSignedData(eContent, eContentType, signerCert, certificates,
-                signerIdentifier, signedAttrs, digestAlg, sigAlg, signature);
+                signerIdentifier, signedAttrs, digestAlg, sigAlg, sigParams, signature);
     }
 }

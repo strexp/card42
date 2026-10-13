@@ -7,17 +7,20 @@ import javacard.security.ECPrivateKey;
 import javacard.security.KeyAgreement;
 import javacard.security.KeyBuilder;
 
-/* Chip Authentication, ECDH variant (ICAO Doc 9303-11 §6.2, BSI TR-03110-3 A.4/B.2).
+/* Chip Authentication (ICAO Doc 9303-11 §6.2, BSI TR-03110-3 A.4/B.2).
+ *
+ * CA v1 with 3DES uses MSE:Set KAT (DO'91' = the terminal's ephemeral key);
+ * CA v1 with AES uses MSE:Set AT (DO'80' = the CA OID) followed by GENERAL
+ * AUTHENTICATE (DO'80' = the ephemeral key), with no protocol response data
+ * (BSI TR-03110-3 B.2/B.14.3).  Both derive Z = ECDH(static_priv, ephemeral_pub)
+ * and Ks_enc/Ks_mac = KDF(Z, 1/2); only the 3DES keys take DES parity.
  *
  * The chip holds a static P-256 key pair; its public key is published in
- * EF.CardSecurity (ChipAuthenticationPublicKeyInfo).  The terminal generates an
- * ephemeral key pair, sends its public key with MSE:SET KAT (DO'91'), and both
- * sides derive the shared secret Z = ECDH(static_priv, ephemeral_pub).  The new
- * secure-messaging keys are KDF(Z, 1/2) (SHA-1 for the 3DES profile), reusing
- * the ISO/IEC 7816-4 SM framework; the session counter restarts at zero.
+ * EF.CardSecurity (ChipAuthenticationPublicKeyInfo).
  *
- * The card switches keys only after the response to MSE:SET KAT has been wrapped
- * with the old keys, so the terminal can restart SM on the next command.
+ * The card switches keys only after the response to the authenticating command
+ * has been wrapped with the old keys, so the terminal can restart SM on the
+ * next command.
  *
  * @author card42
  */
@@ -25,6 +28,11 @@ import javacard.security.KeyBuilder;
 public final class ChipAuth {
 
     private static final short SCALAR_LENGTH = (short) 32;
+    /** id-CA-ECDH-<cipher> OID prefix (0.4.0.127.0.7.2.2.3.2); the last byte selects. */
+    private static final byte[] CA_OID_PREFIX = {
+        0x04, 0x00, 0x7F, 0x00, 0x07, 0x02, 0x02, 0x03, 0x02 };
+    /** Reusable TLV search result; a per-command array would leak persistent memory. */
+    private static final short[] FIND = new short[2];
 
     /*
      * The EC key and KeyAgreement are built lazily: an LDS1/LDS2 instance that
@@ -40,6 +48,10 @@ public final class ChipAuth {
      * one array per package is enough (docs/specs/common/risks.md §2).
      */
     private static byte[] secret;
+    /** True when the pending/negotiated CA profile uses AES-128 (no DES parity). */
+    private boolean aes;
+    /** True between MSE:Set AT (CA) and the GENERAL AUTHENTICATE that completes it. */
+    private boolean gaPending;
 
     public ChipAuth() {
         kdf = KdfEngines.kdf();
@@ -63,9 +75,79 @@ public final class ChipAuth {
         return privateKey != null && privateKey.isInitialized();
     }
 
+    /** True when the pending/negotiated CA profile is AES-128 (else 3DES). */
+    public boolean isAes() {
+        return aes;
+    }
+
+    /** True between a CA MSE:Set AT and its GENERAL AUTHENTICATE. */
+    public boolean isGaPending() {
+        return gaPending;
+    }
+
+    /** Clears the pending CA state on application selection (ISO/IEC 7816-4). */
+    public void reset() {
+        gaPending = false;
+    }
+
     /**
-     * Runs ECDH with the terminal's ephemeral public key and writes the new
-     * session keys Ks_enc/Ks_mac to the caller's buffers (3DES CA profile).
+     * True when the MSE:Set AT DO'80' names a Chip Authentication ECDH profile
+     * (as opposed to PACE), so {@link Mse} routes the command to
+     * {@link #mseSetAt} rather than to PACE.
+     */
+    static boolean isChipAuthenticationData(byte[] data, short off, short len) {
+        short[] r = FIND;
+        if (!Lds2Record.find(data, off, len, EmrtdTags.DO_PACE_NONCE, r)
+                || r[1] != (short) 10) {
+            return false;
+        }
+        for (short i = 0; i < (short) 9; i++) {
+            if (data[(short) (r[0] + i)] != CA_OID_PREFIX[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * MSE:Set AT for CA v1 with AES (BSI TR-03110-3 B.2/B.14.1): DO'80' = the CA
+     * OID, DO'84' = the key reference.  The GENERAL AUTHENTICATE step follows.
+     */
+    public void mseSetAt(byte[] data, short off, short len) {
+        short[] r = FIND;
+        if (!isChipAuthenticationData(data, off, len)) {
+            ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+        }
+        byte variant = data[(short) (r[0] + 9)];
+        if (variant == (byte) 0x01) {
+            aes = false;
+        } else if (variant == (byte) 0x02) {
+            aes = true;
+        } else {
+            ISOException.throwIt(ISO7816.SW_WRONG_DATA); // only 3DES / AES-128
+        }
+        gaPending = true;
+    }
+
+    /**
+     * GENERAL AUTHENTICATE for CA v1 with AES: DO'80' = the terminal's ephemeral
+     * public key.  No protocol response data is returned for version 1
+     * (BSI TR-03110-3 B.2).
+     */
+    public void generalAuthenticate(byte[] data, short off, short len,
+                                    byte[] encOut, short encOff,
+                                    byte[] macOut, short macOff) {
+        short[] r = FIND;
+        if (!Lds2Record.find(data, off, len, EmrtdTags.DO_PACE_NONCE, r)) {
+            ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+        }
+        gaPending = false;
+        derive(data, r[0], r[1], encOut, encOff, macOut, macOff);
+    }
+
+    /**
+     * Runs ECDH with the terminal's ephemeral public key for the 3DES profile
+     * (MSE:Set KAT path) and writes Ks_enc/Ks_mac.
      *
      * <p>The peer point is validated before the scalar multiplication
      * (BSI TR-03110-3 A.3.4.1): a wrong length/prefix, a coordinate outside
@@ -75,6 +157,12 @@ public final class ChipAuth {
     public void deriveSessionKeys(byte[] peerW, short off, short len,
                                   byte[] encOut, short encOff,
                                   byte[] macOut, short macOff) {
+        aes = false;
+        derive(peerW, off, len, encOut, encOff, macOut, macOff);
+    }
+
+    private void derive(byte[] peerW, short off, short len,
+                        byte[] encOut, short encOff, byte[] macOut, short macOff) {
         if (!isInitialized()) {
             ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
         }
@@ -113,6 +201,7 @@ public final class ChipAuth {
     /** KDF(Z, counter) = SHA-1(Z || 00 00 00 counter) truncated to 16 bytes. */
     private void deriveKey(byte[] z, short zOff, short zLen, byte counter,
                            byte[] out, short outOff) {
-        kdf.derive(z, zOff, zLen, counter, out, outOff, true);
+        // DES parity applies to the 3DES profile only (BSI A.2.3.1/A.2.3.2).
+        kdf.derive(z, zOff, zLen, counter, out, outOff, !aes);
     }
 }

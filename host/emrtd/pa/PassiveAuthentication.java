@@ -6,11 +6,14 @@ import java.security.MessageDigest;
 import java.security.Signature;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.PSSParameterSpec;
 import java.util.Arrays;
 import java.util.List;
 
 import card42.host.common.codec.Der;
 import card42.host.common.codec.DerWriter;
+import card42.host.emrtd.lds.AlgorithmIds;
 import card42.host.emrtd.lds.CmsSignedData;
 import card42.host.emrtd.lds.LdsSecurityObject;
 import card42.host.emrtd.lds.Sod;
@@ -121,12 +124,74 @@ public final class PassiveAuthentication {
         } else {
             data = cms.eContent;
         }
-        Signature verifier = Signature.getInstance(cms.signatureAlgorithm);
+        Signature verifier = signatureVerifier(cms);
         verifier.initVerify(dsc.getPublicKey());
         verifier.update(data);
         if (!verifier.verify(cms.signature)) {
             throw new IllegalStateException("SOD signature is invalid");
         }
+    }
+
+    /**
+     * Builds the JDK verifier for the SignerInfo signature algorithm.
+     * RSASSA-PSS (RFC 4055) needs the parameters carried in the signature
+     * AlgorithmIdentifier; PKCS#1 v1.5 and ECDSA are self-describing.
+     */
+    private static Signature signatureVerifier(CmsSignedData cms) throws Exception {
+        if (!AlgorithmIds.RSASSA_PSS.equals(cms.signatureAlgorithm)) {
+            return Signature.getInstance(cms.signatureAlgorithm);
+        }
+        Signature verifier = Signature.getInstance(AlgorithmIds.RSASSA_PSS);
+        verifier.setParameter(pssParameterSpec(cms.signatureAlgorithmParameters));
+        return verifier;
+    }
+
+    /**
+     * Parses an RSASSA-PSS-params SEQUENCE (RFC 4055) into a
+     * {@code PSSParameterSpec}.  Absent fields take the RFC 4055 defaults
+     * (SHA-1, MGF1-SHA1, 20-byte salt, trailer 1).
+     */
+    private static PSSParameterSpec pssParameterSpec(byte[] params) {
+        String hash = "SHA-1";
+        String mgfHash = "SHA-1";
+        int saltLength = 20;
+        int trailerField = 1;
+        if (params != null && params.length > 0) {
+            Der.Tlv sequence = Der.read(params, 0);
+            for (Der.Tlv field : Der.children(params, sequence)) {
+                switch (field.tag & 0xFF) {
+                case 0xA0:
+                    hash = AlgorithmIds.digest(algorithmOid(params, field));
+                    break;
+                case 0xA1:
+                    Der.Tlv maskGen = Der.children(params, field).get(0);
+                    List<Der.Tlv> mgf = Der.children(params, maskGen);
+                    if (mgf.size() > 1) {
+                        mgfHash = AlgorithmIds.digest(algorithmOid(params, mgf.get(1)));
+                    }
+                    break;
+                case 0xA2:
+                    saltLength = Der.intValue(params, Der.children(params, field).get(0));
+                    break;
+                case 0xA3:
+                    trailerField = Der.intValue(params, Der.children(params, field).get(0));
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+        return new PSSParameterSpec(hash, "MGF1", new MGF1ParameterSpec(mgfHash),
+                saltLength, trailerField);
+    }
+
+    /**
+     * The hash OID of an AlgorithmIdentifier, whether passed directly (a
+     * SEQUENCE) or wrapped in an explicit tag such as {@code [0] { SEQ { OID } }}.
+     */
+    private static String algorithmOid(byte[] buf, Der.Tlv tlv) {
+        Der.Tlv algorithm = tlv.tag == 0x30 ? tlv : Der.children(buf, tlv).get(0);
+        return Der.oid(buf, Der.children(buf, algorithm).get(0));
     }
 
     /** The dotted-decimal contentType signed attribute, or null when absent. */

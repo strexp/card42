@@ -2,7 +2,7 @@
 
 > eMRTD 实现的当前设计：LDS1 + BAC + ISO/IEC 7816-4 安全报文 + Passive Authentication +
 > Active Authentication，以及 LDS2 应用、EF.CardAccess/SecurityInfo 解析、Chip
-> Authentication（ECDH）、PACE（ECDH 通用映射，3DES 与 AES-128 宣告，MRZ 与 CAN）与
+> Authentication（ECDH，3DES / AES-128）、PACE（ECDH 通用映射，3DES 与 AES-128 宣告，MRZ 与 CAN）与
 > **Terminal Authentication（v1，ECDSA-SHA-256 / RSA-PSS-SHA-256；含 EF.CVCA 与 PACE 下发
 > CAR）**。EAC 1.11 的附加生物识别加密属 ICAO 范围外（Doc 9303-11 §7.2 未定义算法/密钥，
 > 见 [`algorithm-support.md`](algorithm-support.md) §5），不作为缺口
@@ -172,7 +172,8 @@ DG15 以 RFC 5280 `SubjectPublicKeyInfo` 存放 AA 公钥
 卡用个性化注入的 AA 私钥对消息 `M = RND.IC ‖ RND.IFD` 做 **ISO/IEC 9796-2 Digital
 Signature Scheme 1** 签名（消息恢复）：`RND.IC` 由卡生成（可恢复部分 M1），`RND.IFD` 为
 8 字节 INTERNAL AUTHENTICATE 挑战；SHA-1 用 trailer 选项 1（`0xBC`），SHA-256 用选项 2
-（`0x34CC`）。终端用 DG15 公钥做消息恢复并校验 `H(M)`（Doc 9303-11 §6.1.2.2）。256 字节
+（`0x34CC`），算法由个性化 DGI `FF0A` 选择（示例用 SHA-256）。终端用 DG15 公钥做消息恢复并校验
+`H(M)`（Doc 9303-11 §6.1.2.2）。256 字节
 RSA 签名装不进 SM 封装的短 APDU，故 AA 在明文下执行（DG15 为公钥，可无 BAC 读取）。
 
 ## 7. Passive Authentication (Doc 9303-10 §4.6.2, Doc 9303-11 §5.1)
@@ -211,6 +212,7 @@ DGI 编号即目标 FID；两个项目 DGI 承载 BAC 与 AA 密钥材料：
 | `FF04` | PACE 密钥种子 SHA-1(MRZ_information)（20 字节，口令引用 `01`） |
 | `FF05` | LDS1 主文件 EF.CardSecurity CMS SignedData（DGI 专用：DF 的 `011D` 已是 EF.SOD） |
 | `FF06` | PACE 口令编码 f(CAN) = 原始 CAN 字符（6 字节，口令引用 `02`） |
+| `FF0A` | AA 签名算法（1 字节：`01` = ISO 9796-2 + SHA-1，`02` = + SHA-256） |
 | `<FID>` | EF 内容（DG1 `0101`、DG2 `0102`、DG14 `010E`、DG15 `010F`、COM `011E`、SOD `011D`、EF.CardAccess `011C` 等） |
 
 对 LDS2 角色，DGI 编号是透明 EF 的 FID；EF.CardAccess `011C` 与 EF.CardSecurity `011D`
@@ -338,6 +340,13 @@ EF.CardAccess 的 SecurityInfos 与 CA 公钥，故示例中 LDS1 与 LDS2 使�
 ephemeral_pub)`。新的安全报文密钥为 `Ks_enc = KDF(Z, 1)`、`Ks_mac = KDF(Z, 2)`，其中
 `KDF(Z, c) = SHA-1(Z ‖ 00 00 00 c)`，截断到 16 字节并加奇 DES 奇偶校验（3DES profile）；
 发送序列计数器归零，复用现有 `Iso7816Sm`。
+
+**AES-128 profile**（`id-CA-ECDH-AES-CBC-CMAC-128`）：CA v1 的 3DES 走 `MSE:Set KAT`，AES
+走 `MSE:SET AT`（P1=41，P2=A4，DO`80'` = CA OID、DO`84'` = keyId）后接 `GENERAL
+AUTHENTICATE`（`7C { 80 <临时公钥> }`），**版本 1 不回响应数据**（BSI TR-03110-3 B.2/B.14.1）。
+KDF 同为 SHA-1，但**不做 DES 奇偶校验**；CA 后 SM 切到 `Iso7816SmAes`。EF.CardAccess 同时
+宣告 3DES 与 AES-128（`cardAccessInfos`），终端按 OID 选择序列。端到端由
+`EmrtdChipAuthAesIntegrationTest`（LDS1，jcsl + J3R180）覆盖。
 
 卡只有在 `MSE:SET KAT` 的响应用旧密钥封装后才应用新密钥，故终端可在下一条命令切换 SM。
 卡在处理前对终端的临时公钥做结构校验（长度、`0x04` 前缀、两坐标 `< p`，BSI TR-03110-3

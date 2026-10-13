@@ -75,6 +75,12 @@ public final class EmrtdTags {
     public static final short DGI_BAC_SEED = (short) 0xFF01;
     /** AA RSA private key: modLen || modulus || expLen || exponent. */
     public static final short DGI_AA_KEY = (short) 0xFF02;
+    /**
+     * AA signature algorithm (project DGI FF0A): 1 octet, 0x01 = RSA ISO/IEC
+     * 9796-2 + SHA-1 (trailer option 1), 0x02 = + SHA-256 (option 2)
+     * (ICAO Doc 9303-11 §6.1.2.2).  Absent keeps the SHA-1 default.
+     */
+    public static final short DGI_AA_ALGORITHM = (short) 0xFF0A;
     /** Chip Authentication static P-256 private scalar (32 bytes). */
     public static final short DGI_CA_KEY = (short) 0xFF03;
     /** PACE key seed SHA-1(MRZ_information) (20 bytes), password reference 0x01. */

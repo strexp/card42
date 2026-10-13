@@ -45,6 +45,12 @@ public final class Mse {
             ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
         }
         if ((p2 & 0xFF) == (EmrtdTags.MSE_P2_AT & 0xFF)) {
+            // MSE:Set AT carries either a PACE OID (PACE setup) or a Chip
+            // Authentication OID (CA v1 with AES, BSI TR-03110-3 B.2).
+            if (ChipAuth.isChipAuthenticationData(data, off, len)) {
+                applet.chipAuth.mseSetAt(data, off, len);
+                return 0;
+            }
             applet.pace.mseSetAt(data, off, len);
             applet.useSecureMessaging(applet.pace.isAes());
             return 0;
@@ -66,8 +72,18 @@ public final class Mse {
         return 0;
     }
 
-    /** GENERAL AUTHENTICATE (86) runs the PACE steps. */
+    /** GENERAL AUTHENTICATE (86) runs the PACE steps or the CA-via-GA step. */
     public static short generalAuthenticate(EmrtdApplet applet, byte[] data, short off, short len) {
+        if (applet.chipAuth.isGaPending()) {
+            // Chip Authentication v1 with AES: the ephemeral key exchange rekeys
+            // secure messaging; no protocol response data for version 1
+            // (BSI TR-03110-3 B.2/B.14.1).
+            applet.chipAuth.generalAuthenticate(data, off, len,
+                    applet.caEnc, (short) 0, applet.caMac, (short) 0);
+            applet.caPending = true;
+            applet.caAes = applet.chipAuth.isAes();
+            return 0;
+        }
         return applet.pace.generalAuthenticate(applet, data, off, len, applet.response);
     }
 }

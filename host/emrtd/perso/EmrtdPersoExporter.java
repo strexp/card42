@@ -51,12 +51,21 @@ public final class EmrtdPersoExporter {
     private static final String DEFAULT_DSC = "perso/emrtd/dsc.crt";
     private static final String DEFAULT_DSC_KEY = "perso/emrtd/dsc.key";
 
+    /** DGI FF0A value: RSA ISO/IEC 9796-2 Scheme 1 + SHA-1 (trailer option 1). */
+    private static final byte AA_ALGORITHM_SHA1 = (byte) 0x01;
+    /** DGI FF0A value: RSA ISO/IEC 9796-2 Scheme 1 + SHA-256 (trailer option 2). */
+    private static final byte AA_ALGORITHM_SHA256 = (byte) 0x02;
+    /** The demo AA signature algorithm (wired to DGI FF0A; ICAO Doc 9303-11 §6.1.2.2). */
+    private static final String DEMO_AA_ALGORITHM = "sha256";
+
     /** LDS1 project DGI: Chip Authentication static P-256 private scalar. */
     private static final int DGI_CA_KEY = 0xFF03;
     /** LDS1 project DGI: master-file EF.CardSecurity CMS SignedData. */
     private static final int DGI_CARD_SECURITY = 0xFF05;
     /** LDS1 project DGI: PACE password encoding f(CAN) = raw CAN (ref 0x02). */
     private static final int DGI_PACE_CAN_SEED = 0xFF06;
+    /** LDS1 project DGI: AA signature algorithm (1 = SHA-1, 2 = SHA-256). */
+    private static final int DGI_AA_ALGORITHM = 0xFF0A;
     /** Terminal Authentication CVCA trust point (W || refLen || CAR || auth). */
     private static final int DGI_TA_TRUST_POINT = 0xFF07;
     /** Terminal Authentication current date (6 octets, unpacked BCD YYMMDD). */
@@ -126,6 +135,7 @@ public final class EmrtdPersoExporter {
         writeDgi(out, DGI_TA_TRUST_POINT, trustPointValue(demoTrustPoint()));
         writeDgi(out, DGI_TA_CURRENT_DATE, taCurrentDate(null));
         writeDgi(out, 0xFF02, aaPrivateKey(modulus, privateExponent));
+        writeDgi(out, DGI_AA_ALGORITHM, new byte[] { AA_ALGORITHM_SHA256 });
         return out.toByteArray();
     }
 
@@ -179,6 +189,7 @@ public final class EmrtdPersoExporter {
         }
         if (entry.aaKey != null) {
             writeDgi(out, 0xFF02, entry.aaKey);
+            writeDgi(out, DGI_AA_ALGORITHM, new byte[] { aaAlgorithmByte(entry.aaAlgorithm) });
         }
         writeTrustPoints(out, entry);
         return out.toByteArray();
@@ -271,6 +282,7 @@ public final class EmrtdPersoExporter {
         sb.append("#   @dg <n> <hex>                EF.DG<n> content (DG1 mandatory)\n");
         sb.append("#   @sod <hex>                   EF.SOD content (built from the DG hashes when absent)\n");
         sb.append("#   @aa <hex>                    AA private key (modLen || modulus || expLen || exponent)\n");
+        sb.append("#   @aa-alg sha1|sha256          AA signature algorithm (default sha1; DGI FF0A)\n");
         sb.append("#   @ca <hex>                    CA static P-256 private scalar (DGI FF03)\n");
         sb.append("#   @cardsecurity <hex>          master-file EF.CardSecurity CMS SignedData (DGI FF05)\n");
         sb.append("#\n");
@@ -292,6 +304,7 @@ public final class EmrtdPersoExporter {
         sb.append("@dg 15 ").append(Hex.format(dg15)).append('\n');
         sb.append("@sod ").append(Hex.format(sod)).append('\n');
         sb.append("@aa ").append(Hex.format(aaPrivateKey(modulus, privateExponent))).append('\n');
+        sb.append("@aa-alg ").append(DEMO_AA_ALGORITHM).append('\n');
 
         // Terminal Authentication (ICAO Doc 9303-11 §7.1.4.3): the ICC current
         // date and the CVCA trust point; the export injects DGI FF08/FF07.
@@ -313,7 +326,7 @@ public final class EmrtdPersoExporter {
 
         // --- LDS2 Travel Records instance -----------------------------------
         sb.append("\n# LDS2 Travel Records instance: EF.CardAccess advertises PACE\n");
-        sb.append("# (ECDH generic mapping) and Chip Authentication (ECDH 3DES);\n");
+        sb.append("# (ECDH generic mapping) and Chip Authentication (ECDH 3DES + AES-128);\n");
         sb.append("# @ca is the CA static P-256 private scalar (DGI FF03), @cardsecurity\n");
         sb.append("# publishes the matching public key, @record appends a record.\n");
         sb.append("@instance ").append(LdsFileUtil.AID_TRAVEL).append('\n');
@@ -365,21 +378,21 @@ public final class EmrtdPersoExporter {
     }
 
     /**
-     * EF.CardAccess SecurityInfos: PACE ECDH-GM 3DES + AES-128, CA ECDH 3DES.
+     * EF.CardAccess SecurityInfos: PACE ECDH-GM 3DES + AES-128, CA ECDH 3DES +
+     * AES-128.
      *
-     * <p>AES-128 is advertised: the card-side CMAC is batched through the
-     * platform CBC engine, so on the J3R180 an AES-128 {@code READ BINARY} costs
-     * about the same as (marginally less than) the native-DES retail MAC
-     * (~81 ms vs ~93 ms per ~231 B, jcsl and real card both run AES-128 PACE).
-     * A reader that negotiates the strongest advertised profile (e.g. ReadID)
-     * therefore finishes the ~8 KB DG2 read.  Both profiles remain offered
-     * (ICAO Doc 9303-11 §4.4).
+     * <p>AES-128 is advertised for both PACE and Chip Authentication; the card
+     * runs CA v1 with AES via {@code MSE:Set AT + GENERAL AUTHENTICATE}
+     * (BSI TR-03110-3 B.2).  A reader that negotiates the strongest advertised
+     * profile (e.g. ReadID) therefore finishes the ~8 KB DG2 read.  Both
+     * profiles remain offered (ICAO Doc 9303-11 §4.4/§6.2).
      */
     private static byte[] cardAccessInfos() {
         return DerWriter.set(
                 paceInfo(SecurityInfo.ID_PACE_ECDH_GM_3DES),
                 paceInfo(SecurityInfo.ID_PACE_ECDH_GM_AES_128),
                 caInfo(SecurityInfo.ID_CA_ECDH_3DES),
+                caInfo(SecurityInfo.ID_CA_ECDH_AES_128),
                 taInfo());
     }
 
@@ -577,6 +590,11 @@ public final class EmrtdPersoExporter {
     private static void ascii(ByteArrayOutputStream out, int tag, String value) {
         TlvWriter.writeTlv(out, tag,
                 value.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    }
+
+    /** The DGI FF0A value for a script's {@code @aa-alg} keyword. */
+    private static byte aaAlgorithmByte(String algorithm) {
+        return "sha256".equalsIgnoreCase(algorithm) ? AA_ALGORITHM_SHA256 : AA_ALGORITHM_SHA1;
     }
 
     private static byte[] aaPrivateKey(BigInteger modulus, BigInteger privateExponent) {
