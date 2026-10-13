@@ -252,6 +252,8 @@ public final class LdsPerso extends DgiStream.Sink {
         scratchLen = 0;
     }
 
+    /** Completes the LDS1 personalization; the mandatory BAC K_seed (FF01) and
+     * DG1 must have been received (docs/specs/emrtd/emrtd.md §8). */
     public void onFinish() {
         catalog.finalizeCatalog();
         if (!seedSet || !dg1Set) {

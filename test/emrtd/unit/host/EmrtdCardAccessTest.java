@@ -1,5 +1,7 @@
 package card42.test;
 
+import card42.host.emrtd.lds.security.*;
+
 import java.io.ByteArrayOutputStream;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -14,14 +16,14 @@ import card42.host.common.codec.DerWriter;
 import card42.host.common.codec.TlvWriter;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.lds.CardAccess;
-import card42.host.emrtd.lds.ChipAuthenticationInfo;
-import card42.host.emrtd.lds.ChipAuthenticationPublicKeyInfo;
+import card42.host.emrtd.lds.security.ChipAuthenticationInfo;
+import card42.host.emrtd.lds.security.ChipAuthenticationPublicKeyInfo;
 import card42.host.emrtd.lds.Dg;
 import card42.host.emrtd.lds.LdsSecurityObject;
-import card42.host.emrtd.lds.PaceInfo;
-import card42.host.emrtd.lds.SecurityInfo;
+import card42.host.emrtd.lds.security.PaceInfo;
+import card42.host.emrtd.lds.security.SecurityInfo;
 import card42.host.emrtd.lds.Sod;
-import card42.host.emrtd.lds.UnknownSecurityInfo;
+import card42.host.emrtd.lds.security.UnknownSecurityInfo;
 import card42.host.emrtd.pa.CscaKeyStore;
 import card42.host.emrtd.pa.PassiveAuthentication;
 import card42.host.emrtd.perso.SodBuilder;

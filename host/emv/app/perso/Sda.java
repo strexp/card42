@@ -1,4 +1,4 @@
-package card42.host.emv.oda;
+package card42.host.emv.app.perso;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
@@ -8,18 +8,21 @@ import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Arrays;
 
-import card42.host.common.codec.TlvWriter;
 import card42.host.common.codec.Tags;
-import card42.host.common.util.Digests;
+import card42.host.common.codec.TlvWriter;
 import card42.host.common.util.Bytes;
+import card42.host.common.util.Digests;
+import card42.host.emv.lib.RsaRecovery;
 
 /**
  * Offline SDA certificate-chain generator for the simulator personalization
- * (EMV v4.4 Book 2 §5).
+ * (EMV v4.4 Book 2 §5).  It is the issuer/personalization side; the matching
+ * verification primitives live in {@link RsaRecovery} and
+ * {@code card42.host.emv.oda.SdaVerifier}.
  *
- * It signs with the CA and Issuer key pairs of the supplied {@link SdaKeys}
- * profile and produces the EMV data objects of Static Data Authentication from
- * the record 1 value that the card will return:
+ * <p>It signs with the CA and Issuer key pairs of the supplied
+ * {@link SdaKeys} profile and produces the EMV data objects of Static Data
+ * Authentication from the record 1 value that the card will return:
  *
  * <pre>
  *   8F   CA Public Key Index (1 byte, fixed 01)
@@ -102,7 +105,7 @@ public final class Sda {
      * templates and the private keys as modulus/exponent pairs (EMV CPS v2.0 Annex A).
      */
     public static Result personalize(byte[] record1Value, SdaKeys keys) {
-        byte[] daInput = templateValue(record1Value);
+        byte[] daInput = RsaRecovery.templateValue(record1Value);
         byte[] pan = Tags.find(record1Value, 0x5A);
         byte[] expiry = Tags.find(record1Value, 0x5F24);
         if (pan == null || pan.length < 4) {
@@ -112,7 +115,7 @@ public final class Sda {
             throw new IllegalArgumentException("@sda: record 1 has no expiry (5F24)");
         }
 
-        byte[] issuerModulus = toFixed(keys.issuerModulus, keys.issuerModulusBytes);
+        byte[] issuerModulus = RsaRecovery.toFixed(keys.issuerModulus, keys.issuerModulusBytes);
         byte[] cert = issuerCertificate(issuerModulus, pan, expiry, keys);
         byte[] remainder = Arrays.copyOfRange(issuerModulus,
                 keys.caModulusBytes - 36, keys.issuerModulusBytes);
@@ -122,7 +125,7 @@ public final class Sda {
         KeyPair ddaPair = generateRsaKeyPair(keys.iccModulusBytes);
         RSAPublicKey ddaPublic = (RSAPublicKey) ddaPair.getPublic();
         RSAPrivateCrtKey ddaPrivate = (RSAPrivateCrtKey) ddaPair.getPrivate();
-        byte[] ddaModulus = toFixed(ddaPublic.getModulus(), keys.iccModulusBytes);
+        byte[] ddaModulus = RsaRecovery.toFixed(ddaPublic.getModulus(), keys.iccModulusBytes);
         byte[] ddaCert = iccCertificate(ddaModulus, keys.iccModulusBytes,
                 keys.iccModulusBytes - 42, pan, expiry, 0x04, daInput, keys);
         byte[] ddaRemainder = Arrays.copyOfRange(ddaModulus,
@@ -132,7 +135,7 @@ public final class Sda {
         KeyPair pinPair = generateRsaKeyPair(keys.pinModulusBytes);
         RSAPublicKey pinPublic = (RSAPublicKey) pinPair.getPublic();
         RSAPrivateCrtKey pinPrivate = (RSAPrivateCrtKey) pinPair.getPrivate();
-        byte[] pinModulus = toFixed(pinPublic.getModulus(), keys.pinModulusBytes);
+        byte[] pinModulus = RsaRecovery.toFixed(pinPublic.getModulus(), keys.pinModulusBytes);
         byte[] pinCert = iccCertificate(pinModulus, keys.pinModulusBytes, keys.pinLeftmost(),
                 pan, expiry, 0x04, null, keys);
 
@@ -174,8 +177,10 @@ public final class Sda {
         checkRecord(record5);
 
         return new Result(record2, record3, record4, record5,
-                ddaModulus, toFixed(ddaPrivate.getPrivateExponent(), keys.iccModulusBytes),
-                pinModulus, toFixed(pinPrivate.getPrivateExponent(), keys.pinModulusBytes));
+                ddaModulus, RsaRecovery.toFixed(ddaPrivate.getPrivateExponent(),
+                        keys.iccModulusBytes),
+                pinModulus, RsaRecovery.toFixed(pinPrivate.getPrivateExponent(),
+                        keys.pinModulusBytes));
     }
 
     /**
@@ -228,7 +233,7 @@ public final class Sda {
     private static byte[] iccCertificate(byte[] modulus, int modulusLen, int leftmost,
                                          byte[] pan, byte[] expiry, int certFormat,
                                          byte[] staticData, SdaKeys keys) {
-        byte[] exponent = toFixed(BigInteger.valueOf(65537), 3);
+        byte[] exponent = RsaRecovery.toFixed(BigInteger.valueOf(65537), 3);
         byte[] cert = new byte[keys.issuerModulusBytes];
         cert[0] = 0x6A;                                  // recovered data header
         cert[1] = (byte) certFormat;                     // 04 (ICC and PIN)
@@ -314,8 +319,6 @@ public final class Sda {
         return rsaPrivate(rec, keys.issuerModulus, keys.issuerPrivateExponent);
     }
 
-    // --- shared recovery helpers (also used by the simulator verifiers) --------
-
     /**
      * Builds and issuer-signs an SSAD over daInput.  Exposed for the 9F4A
      * (SDA Tag List) tests, which need an SSAD whose hash input includes the
@@ -325,44 +328,9 @@ public final class Sda {
         return signedStaticApplicationData(daInput, keys);
     }
 
-    /**
-     * Raw RSA public-key recovery: returns signature^exponent mod modulus as a
-     * fixed modulus-length byte string (EMV v4.4 Book 2 Annex A2.1).
-     */
-    public static byte[] recover(byte[] signature, BigInteger modulus, BigInteger exponent) {
-        return toFixed(new BigInteger(1, signature).modPow(exponent, modulus), modulusLength(modulus));
-    }
-
-    /** The value of a complete 70 template, without the wrapper. */
-    public static byte[] templateValue(byte[] record) {
-        if (record.length < 2 || (record[0] & 0xFF) != 0x70) {
-            throw new IllegalArgumentException("Not a 70 record template");
-        }
-        int first = record[1] & 0xFF;
-        int lengthField = (first & 0x80) == 0 ? 1 : 1 + (first & 0x7F);
-        return Arrays.copyOfRange(record, 1 + lengthField, record.length);
-    }
-
-    // --- small helpers -------------------------------------------------------
-
     private static byte[] rsaPrivate(byte[] block, BigInteger modulus, BigInteger privateExponent) {
-        return toFixed(new BigInteger(1, block).modPow(privateExponent, modulus), modulusLength(modulus));
-    }
-
-    private static int modulusLength(BigInteger modulus) {
-        return (modulus.bitLength() + 7) / 8;
-    }
-
-    /** Big-endian byte string of exactly length bytes, left-padded with zero. */
-    private static byte[] toFixed(BigInteger value, int length) {
-        byte[] raw = value.toByteArray();
-        int start = (raw.length > 1 && raw[0] == 0) ? 1 : 0;
-        int size = raw.length - start;
-        if (size > length) {
-            throw new IllegalArgumentException("Value does not fit in " + length + " bytes");
-        }
-        byte[] out = new byte[length];
-        System.arraycopy(raw, start, out, length - size, size);
-        return out;
+        return RsaRecovery.toFixed(
+                new BigInteger(1, block).modPow(privateExponent, modulus),
+                RsaRecovery.modulusLength(modulus));
     }
 }

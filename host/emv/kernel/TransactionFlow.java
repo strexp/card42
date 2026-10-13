@@ -5,8 +5,8 @@ import java.util.Random;
 
 import javax.smartcardio.ResponseAPDU;
 
-import card42.host.common.codec.Responses;
-import card42.host.common.codec.EmvTags;
+import card42.host.emv.lib.Responses;
+import card42.host.emv.lib.EmvTags;
 import card42.host.emv.lib.TagPolicy;
 import card42.host.common.codec.Tags;
 import card42.host.emv.kernel.script.IssuerScript;
@@ -332,7 +332,7 @@ final class TransactionFlow {
         }
         result.requestedFirstAc(requestedFirstAc);
         reporter.info("  kernel TVR     : " + Hex.format(result.tvr())
-                + " -> request " + cidName(requestedFirstAc));
+                + " -> request " + ArcCodes.name(requestedFirstAc));
         return requestedFirstAc;
     }
 
@@ -381,7 +381,7 @@ final class TransactionFlow {
                 firstCdaFailed = true;
             }
         }
-        reporter.info("  kernel first AC: " + cidName(result.firstCid())
+        reporter.info("  kernel first AC: " + ArcCodes.name(result.firstCid())
                 + (result.cdaPerformed() ? " (CDA)" : ""));
         return firstCdaFailed;
     }
@@ -485,7 +485,7 @@ final class TransactionFlow {
                 secondCdaFailed = true;
             }
         }
-        reporter.info("  kernel second AC: " + cidName(result.secondCid()));
+        reporter.info("  kernel second AC: " + ArcCodes.name(result.secondCid()));
 
         // A CDA failure in conjunction with a GENERATE AC, an issuer decline,
         // or a second AC that is an AAC means the terminal does not approve the
@@ -634,20 +634,7 @@ final class TransactionFlow {
         // an ending record before the starting record, or more ODA records
         // than the entry covers terminates the transaction.
         byte[] afl = result.afl();
-        if (afl == null || afl.length == 0 || (afl.length % 4) != 0) {
-            throw new IllegalStateException("AFL syntax: empty or truncated AFL");
-        }
-        for (int e = 0; e + 3 < afl.length; e += 4) {
-            int sfi = (afl[e] & 0xFF) >> 3;
-            int first = afl[e + 1] & 0xFF;
-            int last = afl[e + 2] & 0xFF;
-            int odaRecords = afl[e + 3] & 0xFF;
-            if (sfi == 0 || sfi == 31 || first == 0 || last < first
-                    || odaRecords > (last - first + 1)) {
-                throw new IllegalStateException("AFL syntax: SFI " + sfi
-                        + " records " + first + ".." + last + " ODA " + odaRecords);
-            }
-        }
+        AflSyntax.validate(afl);
         for (int e = 0; e + 3 < afl.length; e += 4) {
             int sfi = (afl[e] & 0xFF) >> 3;
             int first = afl[e + 1] & 0xFF;
@@ -744,7 +731,7 @@ final class TransactionFlow {
      */
     private boolean issuerApproved(TransactionRequest data, TransactionResult.Mutable result,
             byte[] arc) {
-        int code = arcCode(arc);
+        int code = ArcCodes.code(arc);
         if (code == 0) {
             return true;
         }
@@ -765,20 +752,7 @@ final class TransactionFlow {
         return false;
     }
 
-    /** The two-digit ISO 8583 response code of an ARC, or -1 when not numeric. */
-    private static int arcCode(byte[] arc) {
-        if (arc == null || arc.length < 2) {
-            return -1;
-        }
-        int hi = arc[0] & 0xFF;
-        int lo = arc[1] & 0xFF;
-        if (hi < '0' || hi > '9' || lo < '0' || lo > '9') {
-            return -1;
-        }
-        return (hi - '0') * 10 + (lo - '0');
-    }
 
-    /** Records the CID advice bit and reason on the result (EMV v4.4 Book 3 Table 15). */
     private static void noteAdvice(TransactionResult.Mutable result, byte cid) {
         if (Responses.adviceRequired(cid)) {
             result.adviceRequired(true);
@@ -788,12 +762,4 @@ final class TransactionFlow {
         }
     }
 
-    private static String cidName(byte cid) {
-        switch (cid & 0xC0) {
-        case 0x00: return "AAC";
-        case 0x40: return "TC";
-        case 0x80: return "ARQC";
-        default: return String.format("%02X", cid & 0xFF);
-        }
-    }
 }

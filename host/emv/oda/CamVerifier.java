@@ -3,6 +3,7 @@ package card42.host.emv.oda;
 import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 
+import card42.host.emv.lib.RsaRecovery;
 import card42.host.common.util.Bytes;
 import card42.host.common.util.Digests;
 import card42.host.common.codec.Tags;
@@ -70,7 +71,7 @@ public final class CamVerifier {
         if (iccKey == null) {
             return new Result(false, "DDA: ICC public key unavailable", null);
         }
-        byte[] rec = Sda.recover(sdad, iccKey.modulus, iccKey.exponent);
+        byte[] rec = RsaRecovery.recover(sdad, iccKey.modulus, iccKey.exponent);
         if (rec.length != sdad.length) {
             return new Result(false, "DDA SDAD length", null);
         }
@@ -120,7 +121,7 @@ public final class CamVerifier {
             return new Result(false, "CDA response CID", null);
         }
 
-        byte[] rec = Sda.recover(sdad, iccKey.modulus, iccKey.exponent);
+        byte[] rec = RsaRecovery.recover(sdad, iccKey.modulus, iccKey.exponent);
         if (rec.length != sdad.length) {
             return new Result(false, "CDA SDAD length", null);
         }

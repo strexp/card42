@@ -1,8 +1,10 @@
-package card42.host.common.codec;
+package card42.host.emv.lib;
 
 import java.util.Arrays;
 
 import javax.smartcardio.ResponseAPDU;
+
+import card42.host.common.codec.Tags;
 
 /**
  * Parsers for the card's GPO and GENERATE AC responses (docs/specs/common/toolchain.md §6).

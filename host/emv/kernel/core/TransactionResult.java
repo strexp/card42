@@ -5,12 +5,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import card42.host.emv.lib.IssuerKey;
+import card42.host.emv.lib.Responses;
 import card42.host.emv.lib.TagPolicy;
-import card42.host.common.codec.Responses;
 
 /**
  * Everything a terminal kernel observed during one transaction (EMV v4.4
- * Book 3/4).
+ * Book 3/4), as a read-only contract.
  *
  * <p>This is the media-neutral result shared by the contact and the contactless
  * kernel: the application selection differs (PSE/ADF vs PPSE/Entry Point) and
@@ -18,11 +18,11 @@ import card42.host.common.codec.Responses;
  * data, the ODA outcome, the cryptograms and the online decision are the same.
  * Both kernels return this type directly.
  *
- * <p>The fields are read-only to callers; the kernel writes them through the
- * package-internal {@link Mutable} subclass.  A caller that needs a media-neutral
- * decision uses {@link #decision()}.
+ * <p>This is an interface, so a caller depends on the read contract only; the
+ * kernel writes through the package-internal {@link Mutable}, which implements
+ * it.  A caller that needs a media-neutral decision uses {@link #decision()}.
  */
-public class TransactionResult {
+public interface TransactionResult {
 
     /**
      * The media-neutral transaction decision.  It unifies the terminal decision
@@ -30,7 +30,7 @@ public class TransactionResult {
      * Outcome of EMV Contactless Book A v2.12 Table 6-1, so a caller can branch
      * without knowing which kernel ran.
      */
-    public enum Decision {
+    enum Decision {
         /** The transaction is approved (offline or after an online approval). */
         APPROVE,
         /** The transaction is declined. */
@@ -41,149 +41,79 @@ public class TransactionResult {
         END_APPLICATION
     }
 
-    protected String aidHex;
-    protected byte[] fci;
-    protected int aip;
-    protected byte[] afl;
-    protected byte[] pdolData;
-    protected byte[] record1;
-    protected byte[] cdol1Data;
-    protected byte[] cdol2Data;
-    protected final Map<Integer, byte[]> records = new LinkedHashMap<Integer, byte[]>();
-
-    protected byte[] tvr;
-    protected byte[] tsi;
-    protected byte[] cvmResults;
-
-    protected byte[] onlinePinBlock;
-    protected byte[] signature;
-
-    protected boolean sdaPerformed;
-    protected boolean sdaFailed;
-    protected boolean ddaPerformed;
-    protected boolean ddaFailed;
-    protected boolean cdaPerformed;
-    protected boolean cdaFailed;
-    protected boolean cdaSelected;
-    protected boolean odaAttempted;
-
-    protected IssuerKey issuerKey;
-    protected IssuerKey iccKey;
-    protected byte[] dataAuthenticationCode;
-    protected byte[] iccDynamicNumber;
-
-    protected byte requestedFirstAc;
-    protected byte firstCid;
-    protected byte secondCid;
-    protected Responses.AcResponse firstAc;
-    protected Responses.AcResponse secondAc;
-    protected byte[] firstResponse;
-    protected byte[] secondResponse;
-
-    protected boolean wentOnline;
-    protected boolean issuerAuthPerformed;
-    protected byte[] issuerAuthData;
-    protected byte[] arc;
-    protected boolean declined;
-
-    protected boolean adviceRequired;
-    protected boolean serviceNotAllowed;
-    protected boolean cardCaptureRequested;
-    protected boolean referralRequested;
-    protected boolean attendantForcedAcceptance;
-    protected boolean reversalRequired;
-
-    protected byte[] issuerScriptResults;
-    protected boolean issuerScriptFailedBeforeFinalAc;
-    protected boolean issuerScriptFailedAfterFinalAc;
-
-    protected Outcome outcome;
-
     // --- Accessors -----------------------------------------------------------
 
-    public String aidHex() { return aidHex; }
-    public byte[] fci() { return fci; }
-    public int aip() { return aip; }
-    public byte[] afl() { return afl; }
-    public byte[] pdolData() { return pdolData; }
-    public byte[] record1() { return record1; }
-    public byte[] cdol1Data() { return cdol1Data; }
-    public byte[] cdol2Data() { return cdol2Data; }
+    String aidHex();
+    byte[] fci();
+    int aip();
+    byte[] afl();
+    byte[] pdolData();
+    byte[] record1();
+    byte[] cdol1Data();
+    byte[] cdol2Data();
 
-    public byte[] tvr() { return tvr; }
-    public byte[] tsi() { return tsi; }
-    public byte[] cvmResults() { return cvmResults; }
+    byte[] tvr();
+    byte[] tsi();
+    byte[] cvmResults();
 
-    public byte[] onlinePinBlock() { return onlinePinBlock; }
-    public byte[] signature() { return signature; }
+    byte[] onlinePinBlock();
+    byte[] signature();
 
-    public boolean sdaPerformed() { return sdaPerformed; }
-    public boolean sdaFailed() { return sdaFailed; }
-    public boolean ddaPerformed() { return ddaPerformed; }
-    public boolean ddaFailed() { return ddaFailed; }
-    public boolean cdaPerformed() { return cdaPerformed; }
-    public boolean cdaFailed() { return cdaFailed; }
-    public boolean cdaSelected() { return cdaSelected; }
-    public boolean odaAttempted() { return odaAttempted; }
+    boolean sdaPerformed();
+    boolean sdaFailed();
+    boolean ddaPerformed();
+    boolean ddaFailed();
+    boolean cdaPerformed();
+    boolean cdaFailed();
+    boolean cdaSelected();
+    boolean odaAttempted();
 
-    public IssuerKey issuerKey() { return issuerKey; }
-    public IssuerKey iccKey() { return iccKey; }
-    public byte[] dataAuthenticationCode() { return dataAuthenticationCode; }
-    public byte[] iccDynamicNumber() { return iccDynamicNumber; }
+    IssuerKey issuerKey();
+    IssuerKey iccKey();
+    byte[] dataAuthenticationCode();
+    byte[] iccDynamicNumber();
 
-    public byte requestedFirstAc() { return requestedFirstAc; }
-    public byte firstCid() { return firstCid; }
-    public byte secondCid() { return secondCid; }
-    public Responses.AcResponse firstAc() { return firstAc; }
-    public Responses.AcResponse secondAc() { return secondAc; }
-    public byte[] firstResponse() { return firstResponse; }
-    public byte[] secondResponse() { return secondResponse; }
+    byte requestedFirstAc();
+    byte firstCid();
+    byte secondCid();
+    Responses.AcResponse firstAc();
+    Responses.AcResponse secondAc();
+    byte[] firstResponse();
+    byte[] secondResponse();
 
-    public boolean wentOnline() { return wentOnline; }
-    public boolean issuerAuthPerformed() { return issuerAuthPerformed; }
-    public byte[] issuerAuthData() { return issuerAuthData; }
+    boolean wentOnline();
+    boolean issuerAuthPerformed();
+    byte[] issuerAuthData();
     /** Authorisation Response Code ('8A', two bytes), or null. */
-    public byte[] arc() { return arc; }
-    public boolean declined() { return declined; }
+    byte[] arc();
+    boolean declined();
 
-    public boolean adviceRequired() { return adviceRequired; }
-    public boolean serviceNotAllowed() { return serviceNotAllowed; }
-    public boolean cardCaptureRequested() { return cardCaptureRequested; }
-    public boolean referralRequested() { return referralRequested; }
-    public boolean attendantForcedAcceptance() { return attendantForcedAcceptance; }
-    public boolean reversalRequired() { return reversalRequired; }
+    boolean adviceRequired();
+    boolean serviceNotAllowed();
+    boolean cardCaptureRequested();
+    boolean referralRequested();
+    boolean attendantForcedAcceptance();
+    boolean reversalRequired();
 
-    public byte[] issuerScriptResults() { return issuerScriptResults; }
-    public boolean issuerScriptFailedBeforeFinalAc() { return issuerScriptFailedBeforeFinalAc; }
-    public boolean issuerScriptFailedAfterFinalAc() { return issuerScriptFailedAfterFinalAc; }
+    byte[] issuerScriptResults();
+    boolean issuerScriptFailedBeforeFinalAc();
+    boolean issuerScriptFailedAfterFinalAc();
 
     /** The kernel Outcome (EMV Contactless Book A v2.12 Table 6-2), or null for the contact kernel. */
-    public Outcome outcome() { return outcome; }
+    Outcome outcome();
 
     /** The read-only records keyed by {@code (sfi << 8) | record}. */
-    public Map<Integer, byte[]> records() {
-        return Collections.unmodifiableMap(records);
-    }
+    Map<Integer, byte[]> records();
 
     /** The record at (sfi, record), or null. */
-    public byte[] record(int sfi, int record) {
-        return records.get((sfi << 8) | record);
-    }
+    byte[] record(int sfi, int record);
 
     /**
      * The first ICC-sourced value of a tag across all read records, or null.
      * Terminal- and issuer-sourced data objects sent by the card are ignored,
      * and Table 34 format errors are treated as absent (EMV v4.4 Book 3 §7.5).
      */
-    public byte[] firstValue(int tag) {
-        for (byte[] record : records.values()) {
-            byte[] value = TagPolicy.findIcc(record, tag);
-            if (value != null) {
-                return value;
-            }
-        }
-        return null;
-    }
+    byte[] firstValue(int tag);
 
     /**
      * The media-neutral decision of the transaction.  The contactless Outcome
@@ -191,35 +121,72 @@ public class TransactionResult {
      * otherwise the terminal decision of EMV v4.4 Book 4 §6.3.2 is derived from
      * {@link #serviceNotAllowed()} and {@link #declined()}.
      */
-    public Decision decision() {
-        if (outcome != null) {
-            switch (outcome.finalOutcome) {
-            case Outcome.APPROVE:
-                return Decision.APPROVE;
-            case Outcome.DECLINE:
-                return Decision.DECLINE;
-            case Outcome.ONLINE_REQUEST:
-            case Outcome.REQUEST_ONLINE_PIN:
-                return Decision.ONLINE;
-            case Outcome.END_APPLICATION:
-            case Outcome.TRY_ANOTHER_INTERFACE:
-                return Decision.END_APPLICATION;
-            default:
-                break; // Select Next / Try Again restart; use the terminal decision
-            }
-        }
-        if (serviceNotAllowed) {
-            return Decision.END_APPLICATION;
-        }
-        return declined ? Decision.DECLINE : Decision.APPROVE;
-    }
+    Decision decision();
 
     /**
-     * The mutable view the kernel writes through.  It is public only so the
-     * kernel (a different package) can populate it; callers hold the read-only
-     * {@link TransactionResult} returned by {@code TerminalKernel.run}.
+     * The mutable implementation the kernel writes through.  It composes the
+     * read contract (implements {@link TransactionResult}) rather than extending
+     * a concrete result class, so a caller never sees a writable subtype.
      */
-    public static final class Mutable extends TransactionResult {
+    final class Mutable implements TransactionResult {
+
+        private String aidHex;
+        private byte[] fci;
+        private int aip;
+        private byte[] afl;
+        private byte[] pdolData;
+        private byte[] record1;
+        private byte[] cdol1Data;
+        private byte[] cdol2Data;
+        private final Map<Integer, byte[]> records = new LinkedHashMap<Integer, byte[]>();
+
+        private byte[] tvr;
+        private byte[] tsi;
+        private byte[] cvmResults;
+
+        private byte[] onlinePinBlock;
+        private byte[] signature;
+
+        private boolean sdaPerformed;
+        private boolean sdaFailed;
+        private boolean ddaPerformed;
+        private boolean ddaFailed;
+        private boolean cdaPerformed;
+        private boolean cdaFailed;
+        private boolean cdaSelected;
+        private boolean odaAttempted;
+
+        private IssuerKey issuerKey;
+        private IssuerKey iccKey;
+        private byte[] dataAuthenticationCode;
+        private byte[] iccDynamicNumber;
+
+        private byte requestedFirstAc;
+        private byte firstCid;
+        private byte secondCid;
+        private Responses.AcResponse firstAc;
+        private Responses.AcResponse secondAc;
+        private byte[] firstResponse;
+        private byte[] secondResponse;
+
+        private boolean wentOnline;
+        private boolean issuerAuthPerformed;
+        private byte[] issuerAuthData;
+        private byte[] arc;
+        private boolean declined;
+
+        private boolean adviceRequired;
+        private boolean serviceNotAllowed;
+        private boolean cardCaptureRequested;
+        private boolean referralRequested;
+        private boolean attendantForcedAcceptance;
+        private boolean reversalRequired;
+
+        private byte[] issuerScriptResults;
+        private boolean issuerScriptFailedBeforeFinalAc;
+        private boolean issuerScriptFailedAfterFinalAc;
+
+        private Outcome outcome;
 
         public Mutable aidHex(String v) { this.aidHex = v; return this; }
         public Mutable fci(byte[] v) { this.fci = v; return this; }
@@ -282,6 +249,106 @@ public class TransactionResult {
         public Mutable putRecord(int key, byte[] value) {
             this.records.put(key, value);
             return this;
+        }
+
+        // --- Read contract ---------------------------------------------------
+
+        @Override public String aidHex() { return aidHex; }
+        @Override public byte[] fci() { return fci; }
+        @Override public int aip() { return aip; }
+        @Override public byte[] afl() { return afl; }
+        @Override public byte[] pdolData() { return pdolData; }
+        @Override public byte[] record1() { return record1; }
+        @Override public byte[] cdol1Data() { return cdol1Data; }
+        @Override public byte[] cdol2Data() { return cdol2Data; }
+
+        @Override public byte[] tvr() { return tvr; }
+        @Override public byte[] tsi() { return tsi; }
+        @Override public byte[] cvmResults() { return cvmResults; }
+
+        @Override public byte[] onlinePinBlock() { return onlinePinBlock; }
+        @Override public byte[] signature() { return signature; }
+
+        @Override public boolean sdaPerformed() { return sdaPerformed; }
+        @Override public boolean sdaFailed() { return sdaFailed; }
+        @Override public boolean ddaPerformed() { return ddaPerformed; }
+        @Override public boolean ddaFailed() { return ddaFailed; }
+        @Override public boolean cdaPerformed() { return cdaPerformed; }
+        @Override public boolean cdaFailed() { return cdaFailed; }
+        @Override public boolean cdaSelected() { return cdaSelected; }
+        @Override public boolean odaAttempted() { return odaAttempted; }
+
+        @Override public IssuerKey issuerKey() { return issuerKey; }
+        @Override public IssuerKey iccKey() { return iccKey; }
+        @Override public byte[] dataAuthenticationCode() { return dataAuthenticationCode; }
+        @Override public byte[] iccDynamicNumber() { return iccDynamicNumber; }
+
+        @Override public byte requestedFirstAc() { return requestedFirstAc; }
+        @Override public byte firstCid() { return firstCid; }
+        @Override public byte secondCid() { return secondCid; }
+        @Override public Responses.AcResponse firstAc() { return firstAc; }
+        @Override public Responses.AcResponse secondAc() { return secondAc; }
+        @Override public byte[] firstResponse() { return firstResponse; }
+        @Override public byte[] secondResponse() { return secondResponse; }
+
+        @Override public boolean wentOnline() { return wentOnline; }
+        @Override public boolean issuerAuthPerformed() { return issuerAuthPerformed; }
+        @Override public byte[] issuerAuthData() { return issuerAuthData; }
+        @Override public byte[] arc() { return arc; }
+        @Override public boolean declined() { return declined; }
+
+        @Override public boolean adviceRequired() { return adviceRequired; }
+        @Override public boolean serviceNotAllowed() { return serviceNotAllowed; }
+        @Override public boolean cardCaptureRequested() { return cardCaptureRequested; }
+        @Override public boolean referralRequested() { return referralRequested; }
+        @Override public boolean attendantForcedAcceptance() { return attendantForcedAcceptance; }
+        @Override public boolean reversalRequired() { return reversalRequired; }
+
+        @Override public byte[] issuerScriptResults() { return issuerScriptResults; }
+        @Override public boolean issuerScriptFailedBeforeFinalAc() { return issuerScriptFailedBeforeFinalAc; }
+        @Override public boolean issuerScriptFailedAfterFinalAc() { return issuerScriptFailedAfterFinalAc; }
+
+        @Override public Outcome outcome() { return outcome; }
+
+        @Override public Map<Integer, byte[]> records() {
+            return Collections.unmodifiableMap(records);
+        }
+
+        @Override public byte[] record(int sfi, int record) {
+            return records.get((sfi << 8) | record);
+        }
+
+        @Override public byte[] firstValue(int tag) {
+            for (byte[] record : records.values()) {
+                byte[] value = TagPolicy.findIcc(record, tag);
+                if (value != null) {
+                    return value;
+                }
+            }
+            return null;
+        }
+
+        @Override public Decision decision() {
+            if (outcome != null) {
+                switch (outcome.finalOutcome) {
+                case Outcome.APPROVE:
+                    return Decision.APPROVE;
+                case Outcome.DECLINE:
+                    return Decision.DECLINE;
+                case Outcome.ONLINE_REQUEST:
+                case Outcome.REQUEST_ONLINE_PIN:
+                    return Decision.ONLINE;
+                case Outcome.END_APPLICATION:
+                case Outcome.TRY_ANOTHER_INTERFACE:
+                    return Decision.END_APPLICATION;
+                default:
+                    break; // Select Next / Try Again restart; use the terminal decision
+                }
+            }
+            if (serviceNotAllowed) {
+                return Decision.END_APPLICATION;
+            }
+            return declined ? Decision.DECLINE : Decision.APPROVE;
         }
     }
 }

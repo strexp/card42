@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.security;
 
 import card42.host.common.util.Hex;
 

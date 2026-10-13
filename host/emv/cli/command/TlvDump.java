@@ -1,7 +1,9 @@
-package card42.host.common.codec;
+package card42.host.emv.cli.command;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import card42.host.common.codec.TlvCursor;
 
 /**
  * Generic BER-TLV pretty-printer for the host CLI (EMV v4.4 Book 3 Annex B).

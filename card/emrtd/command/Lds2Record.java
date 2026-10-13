@@ -106,7 +106,7 @@ public final class Lds2Record {
         applet.requirePace();
         if ((p1 & 0xFF) == 0x01) {
             short[] ref = REF;
-            if (!find(data, off, len, EmrtdTags.DO_FILE_REFERENCE, ref)) {
+            if (!Tlv.find(data, off, len, EmrtdTags.DO_FILE_REFERENCE, ref)) {
                 ISOException.throwIt(ISO7816.SW_WRONG_DATA);
             }
             short fid;
@@ -171,11 +171,11 @@ public final class Lds2Record {
             ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
         }
         short[] handling = HANDLING;
-        if (!find(data, off, len, EmrtdTags.DO_RECORD_HANDLING, handling)) {
+        if (!Tlv.find(data, off, len, EmrtdTags.DO_RECORD_HANDLING, handling)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
         short[] ref = REF;
-        if (!find(data, handling[0], handling[1], EmrtdTags.DO_FILE_REFERENCE, ref)) {
+        if (!Tlv.find(data, handling[0], handling[1], EmrtdTags.DO_FILE_REFERENCE, ref)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
         Lds2RecordFile file = ref[1] == 1
@@ -188,20 +188,20 @@ public final class Lds2Record {
         applet.lds2.selectRecord(file);
 
         short[] searchString = SEARCH_STRING;
-        if (!find(data, handling[0], handling[1], (short) 0x81, searchString)) {
+        if (!Tlv.find(data, handling[0], handling[1], (short) 0x81, searchString)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
         short windowOffset = 0;
         short windowLength = 0;
         short[] window = WINDOW;
-        if (find(data, handling[0], handling[1], (short) 0xB0, window)) {
+        if (Tlv.find(data, handling[0], handling[1], (short) 0xB0, window)) {
             short[] first = FIRST;
-            if (find(data, window[0], window[1], (short) 0x02, first)) {
+            if (Tlv.find(data, window[0], window[1], (short) 0x02, first)) {
                 windowOffset = Util.getShort(data, first[0]);
                 // The next '02' after the offset value is the byte count.
                 short nextOff = (short) (first[0] + first[1]);
                 short[] second = SECOND;
-                if (find(data, nextOff, (short) (window[0] + window[1] - nextOff),
+                if (Tlv.find(data, nextOff, (short) (window[0] + window[1] - nextOff),
                         (short) 0x02, second)) {
                     windowLength = Util.getShort(data, second[0]);
                 }
@@ -212,7 +212,7 @@ public final class Lds2Record {
         // (Doc 9303-10 §3.7.3 Table 17).
         boolean stopFirst = false;
         short[] termination = TERMINATION;
-        if (find(data, handling[0], handling[1], (short) 0x80, termination)
+        if (Tlv.find(data, handling[0], handling[1], (short) 0x80, termination)
                 && termination[1] > 0 && data[termination[0]] == 0x30) {
             stopFirst = true;
         }
@@ -256,7 +256,7 @@ public final class Lds2Record {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
         short[] offsetDo = OFFSET_DO;
-        if (!find(data, off, len, EmrtdTags.DO_OFFSET, offsetDo)) {
+        if (!Tlv.find(data, off, len, EmrtdTags.DO_OFFSET, offsetDo)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
         short offset = 0;
@@ -270,14 +270,14 @@ public final class Lds2Record {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
         short[] valueDo = VALUE_DO;
-        if (!find(data, off, len, EmrtdTags.DO_DISCRETIONARY, valueDo)) {
+        if (!Tlv.find(data, off, len, EmrtdTags.DO_DISCRETIONARY, valueDo)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
         // The optional File Size DO'C0' (Doc 9303-10 §3.8.1 Note 1) reserves the
         // EF's final size up front so its page table is allocated once; without
         // it the store simply grows as the writes arrive.
         short[] sizeDo = SIZE_DO;
-        if (find(data, off, len, EmrtdTags.DO_FILE_SIZE, sizeDo)) {
+        if (Tlv.find(data, off, len, EmrtdTags.DO_FILE_SIZE, sizeDo)) {
             if (sizeDo[1] == 1) {
                 file.ensureCapacity((short) (data[sizeDo[0]] & 0xFF));
             } else if (sizeDo[1] >= 2) {
@@ -322,37 +322,5 @@ public final class Lds2Record {
             out[(short) (off + 1 + i)] = (byte) (u >> (8 * (size - 1 - i)));
         }
         return (short) (off + 1 + size);
-    }
-
-    /**
-     * Recursively finds the first TLV with the given tag in [off, off+len) and
-     * writes {value offset, value length} to result.  Returns false when absent.
-     */
-    static boolean find(byte[] buf, short off, short len, short tag, short[] result) {
-        short p = off;
-        short end = (short) (off + len);
-        while (p < end) {
-            short lenOff = Tlv.lengthOffset(buf, p);
-            if (Tlv.lengthFieldLength(buf, lenOff) == 0) {
-                return false;
-            }
-            short total = Tlv.totalLength(buf, p);
-            if (total <= 0 || (short) (p + total) > end) {
-                return false;
-            }
-            short t = Tlv.getTag(buf, p);
-            short valueOff = Tlv.valueOffset(buf, p);
-            short valueLen = Tlv.getLength(buf, lenOff);
-            if (t == tag) {
-                result[0] = valueOff;
-                result[1] = valueLen;
-                return true;
-            }
-            if (Tlv.isConstructed(t) && find(buf, valueOff, valueLen, tag, result)) {
-                return true;
-            }
-            p = (short) (p + total);
-        }
-        return false;
     }
 }

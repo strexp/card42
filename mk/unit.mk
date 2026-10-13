@@ -39,7 +39,7 @@ UNIT_CARD_SRC := \
   $(CARD_EMV_DIR)/applet/InstallParameters.java \
   $(CARD_EMV_DIR)/builder/AcResponseBuilder.java $(CARD_EMV_DIR)/builder/DirectoryBuilder.java \
   $(CARD_EMV_DIR)/builder/FciBuilder.java $(CARD_EMV_DIR)/builder/RecordBuilder.java \
-  $(CARD_EMV_DIR)/command/Arpc.java \
+  $(CARD_EMV_DIR)/crypto/Arpc.java \
   $(CARD_EMV_DIR)/constants/Defaults.java $(CARD_EMV_DIR)/constants/EMVCodes.java \
   $(CARD_EMV_DIR)/constants/EMVCommands.java $(CARD_EMV_DIR)/constants/EMVRoles.java \
   $(CARD_EMV_DIR)/constants/EMVStatus.java \
@@ -77,6 +77,7 @@ UNIT_CARD_SRC := \
   $(CARD_EMRTD_DIR)/perso/DgiStream.java $(CARD_EMRTD_DIR)/perso/Lds2Perso.java \
   $(CARD_EMRTD_DIR)/perso/LdsPerso.java \
   $(CARD_EMRTD_DIR)/ta/TaContext.java \
+  $(CARD_EMRTD_DIR)/ta/TaKeys.java $(CARD_EMRTD_DIR)/ta/TaTrustStore.java \
   $(CARD_EMRTD_DIR)/tlv/EmrtdTags.java
 
 UNIT_HOST_SRC := $(HOST_COMMON_SRC) $(HOST_EMV_SRC) $(HOST_EMRTD_SRC)

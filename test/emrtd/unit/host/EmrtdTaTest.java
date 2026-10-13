@@ -1,5 +1,7 @@
 package card42.test;
 
+import card42.host.emrtd.lds.security.*;
+
 import java.math.BigInteger;
 import java.security.AlgorithmParameters;
 import java.security.KeyFactory;
@@ -18,8 +20,8 @@ import card42.host.common.codec.DerWriter;
 import card42.host.common.crypto.Ecdsa;
 import card42.host.common.crypto.P256;
 import card42.host.common.crypto.RsaPss;
-import card42.host.emrtd.lds.SecurityInfo;
-import card42.host.emrtd.lds.TerminalAuthenticationInfo;
+import card42.host.emrtd.lds.security.SecurityInfo;
+import card42.host.emrtd.lds.security.TerminalAuthenticationInfo;
 import card42.host.emrtd.ta.Chat;
 import card42.host.emrtd.ta.CvCertificate;
 import card42.host.emrtd.ta.CvCertificateBuilder;

@@ -7,10 +7,10 @@ import java.util.List;
 import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.codec.Json;
-import card42.host.common.codec.Responses;
+import card42.host.emv.lib.Responses;
 import card42.host.emv.lib.TagPolicy;
 import card42.host.common.codec.Tags;
-import card42.host.common.codec.TlvDump;
+import card42.host.emv.cli.command.TlvDump;
 import card42.host.emv.kernel.core.TransactionResult;
 import card42.host.emv.kernel.data.TerminalConfig;
 import card42.host.emv.kernel.data.TransactionRequest;

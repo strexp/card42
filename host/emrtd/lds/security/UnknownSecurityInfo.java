@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.security;
 
 /**
  * A SecurityInfo whose protocol OID the reader does not recognise.  It is

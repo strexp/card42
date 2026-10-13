@@ -2,7 +2,8 @@ package card42.common;
 
 import javacard.framework.Util;
 
-/* Minimal BER-TLV reader/writer for the subset used by card42.
+/* Minimal BER-TLV reader/writer for the subset used by card42
+ * (EMV v4.4 Book 3 Annex B / ISO/IEC 8825-1).
  *
  * Supported encoding:
  *   - tags of 1 or 2 bytes (a first byte whose low 5 bits are 0x1F is 2 bytes),
@@ -97,6 +98,45 @@ public final class Tlv {
     public static short totalLength(byte[] buf, short off) {
         short lenOff = lengthOffset(buf, off);
         return (short) (tagLength(buf, off) + lengthFieldLength(buf, lenOff) + getLength(buf, lenOff));
+    }
+
+    /**
+     * Recursively finds the first TLV with the given tag in
+     * {@code buf[off, off+len)} and writes {@code {value offset, value length}}
+     * to {@code result}.  Returns false when the tag is absent.
+     *
+     * <p>The BER-TLV tag/length encoding it walks is EMV v4.4 Book 3 Annex B
+     * (ISO/IEC 8825-1); the recursive descent follows constructed templates.
+     * Allocation-free (the caller supplies the two-short result), so it is
+     * shared by the eMRTD command handlers, PACE / Chip Authentication and the
+     * Terminal Authentication context without a per-command object.
+     */
+    public static boolean find(byte[] buf, short off, short len, short tag, short[] result) {
+        short p = off;
+        short end = (short) (off + len);
+        while (p < end) {
+            short lenOff = lengthOffset(buf, p);
+            if (lengthFieldLength(buf, lenOff) == 0) {
+                return false;
+            }
+            short total = totalLength(buf, p);
+            if (total <= 0 || (short) (p + total) > end) {
+                return false;
+            }
+            short t = getTag(buf, p);
+            short valueOff = valueOffset(buf, p);
+            short valueLen = getLength(buf, lenOff);
+            if (t == tag) {
+                result[0] = valueOff;
+                result[1] = valueLen;
+                return true;
+            }
+            if (isConstructed(t) && find(buf, valueOff, valueLen, tag, result)) {
+                return true;
+            }
+            p = (short) (p + total);
+        }
+        return false;
     }
 
     /**

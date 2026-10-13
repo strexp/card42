@@ -1,5 +1,7 @@
 package card42.test;
 
+import card42.host.emrtd.lds.security.*;
+
 import java.io.ByteArrayOutputStream;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -27,10 +29,10 @@ import card42.host.emrtd.cli.Main;
 import card42.host.emrtd.lds.AlgorithmIds;
 import card42.host.emrtd.lds.CardAccess;
 import card42.host.emrtd.lds.CardSecurity;
-import card42.host.emrtd.lds.ChipAuthenticationInfo;
+import card42.host.emrtd.lds.security.ChipAuthenticationInfo;
 import card42.host.emrtd.lds.Dg15;
 import card42.host.emrtd.access.LdsReader;
-import card42.host.emrtd.lds.SecurityInfo;
+import card42.host.emrtd.lds.security.SecurityInfo;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**

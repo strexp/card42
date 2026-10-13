@@ -322,7 +322,7 @@ final class EmrtdTaCardTest {
         importCert(applet, link);
         TaContext ta = taOf(applet);
         Asserts.bytes(new byte[] { 2, 5, 0, 1, 0, 1 },
-                (byte[]) field(TaContext.class, "currentDate").get(ta),
+                (byte[]) storeField("currentDate").get(ta),
                 "the CVCA Link Effective Date advances the current date");
 
         // The linked CVCA (B) now verifies its own certificates.
@@ -462,10 +462,10 @@ final class EmrtdTaCardTest {
 
     /** Clears the package-shared trust points and the session state. */
     private static void resetTaState(EmrtdApplet applet) throws Exception {
-        byte[] kinds = (byte[]) field(TaContext.class, "trustKind").get(null);
+        byte[] kinds = (byte[]) storeField("trustKind").get(null);
         kinds[0] = 0;
         kinds[1] = 0;
-        field(TaContext.class, "currentDateValid").setBoolean(null, false);
+        storeField("currentDateValid").setBoolean(null, false);
         taOf(applet).clearSession();
     }
 
@@ -601,7 +601,7 @@ final class EmrtdTaCardTest {
         Mse.process(applet, (byte) 0x81, (byte) 0xB6, dst, (short) 0, (short) dst.length);
         PsoVerifyCertificate.process(applet, pso(valid), (short) 0, (short) pso(valid).length);
         Asserts.bytes(new byte[] { 2, 5, 0, 1, 0, 1 },
-                (byte[]) field(TaContext.class, "currentDate").get(ta),
+                (byte[]) storeField("currentDate").get(ta),
                 "current date advanced to the DV Effective Date 250101");
 
         CvCertificate expired = CvCertificateBuilder.build(0, cvcaRef, dvRef,
@@ -724,6 +724,11 @@ final class EmrtdTaCardTest {
         Field field = type.getDeclaredField(name);
         field.setAccessible(true);
         return field;
+    }
+
+    /** A field of the package-private TaTrustStore (not referenceable at compile time). */
+    private static Field storeField(String name) throws Exception {
+        return field(Class.forName("card42.emrtd.TaTrustStore"), name);
     }
 
     private static byte[] mseSetDst(CvCertificate certificate) {

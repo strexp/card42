@@ -9,7 +9,7 @@ import java.util.Arrays;
  * <p>It handles one- and two-byte tags and short/long-form definite lengths.
  * Malformed input is reported through {@link Status} rather than an exception,
  * so both the strict searches in {@link Tags} and the tolerant pretty-printer
- * in {@link TlvDump} share one parser instead of each re-implementing the
+ * in the EMV CLI share one parser instead of each re-implementing the
  * tag/length walk.
  */
 public final class TlvCursor {

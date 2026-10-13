@@ -130,6 +130,9 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         short do8eVal = -1;
         short do8eLen = 0;
 
+        // The command data field is a BER-TLV sequence {DO87|DO85}? DO97? DO8E
+        // (ICAO Doc 9303-11 §9.8.4, ISO/IEC 7816-4 §5.6.3); a malformed
+        // envelope is rejected with 6982.
         short p = dataOff;
         short end = (short) (dataOff + dataLen);
         while (p < end) {
@@ -172,6 +175,7 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
             }
             p = (short) (p + total);
         }
+        // DO8E (the 8-byte MAC) is mandatory (ICAO Doc 9303-11 §9.8.4).
         if (do8eVal < 0 || do8eLen != 8) {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
@@ -267,7 +271,7 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         return (short) (n - outOff);
     }
 
-    /** Increments the 64-bit big-endian SSC (Doc 9303-11 §9.8.1). */
+    /** Increments the 64-bit big-endian SSC (Doc 9303-11 §9.8.2). */
     protected static void increment(byte[] ssc) {
         for (short i = 7; i >= 0; i--) {
             ssc[i]++;
@@ -343,7 +347,8 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         return (short) (dstOff + len);
     }
 
-    /** Strips the 0x80 00.. M2 padding written by the peer, in place. */
+    /** Strips the 0x80 00.. M2 padding written by the peer, in place
+     * (ISO/IEC 7816-4 §5.6.3; ICAO Doc 9303-11 §9.8.4). */
     private static short unpadInPlace(byte[] buf, short off, short len) {
         short i = (short) (off + len);
         while (i > off && buf[(short) (i - 1)] == 0) {

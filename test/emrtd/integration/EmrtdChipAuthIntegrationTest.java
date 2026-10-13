@@ -1,5 +1,7 @@
 package card42.test;
 
+import card42.host.emrtd.lds.security.*;
+
 import javax.smartcardio.Card;
 import javax.smartcardio.CardTerminal;
 import javax.smartcardio.ResponseAPDU;
@@ -10,8 +12,8 @@ import card42.host.emrtd.access.ChipAuth;
 import card42.host.emrtd.access.Pace;
 import card42.host.emrtd.lds.CardAccess;
 import card42.host.emrtd.lds.CardSecurity;
-import card42.host.emrtd.lds.ChipAuthenticationInfo;
-import card42.host.emrtd.lds.ChipAuthenticationPublicKeyInfo;
+import card42.host.emrtd.lds.security.ChipAuthenticationInfo;
+import card42.host.emrtd.lds.security.ChipAuthenticationPublicKeyInfo;
 import card42.host.emrtd.lds.LdsFileUtil;
 import card42.host.emrtd.access.LdsReader;
 import card42.host.emrtd.perso.EmrtdPersoExporter;

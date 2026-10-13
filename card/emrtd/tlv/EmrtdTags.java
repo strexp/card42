@@ -118,7 +118,7 @@ public final class EmrtdTags {
     public static final short DGI_TA_TRUST_POINT_2 = (short) 0xFF09;
     /**
      * Terminal Authentication current date (project DGI FF08): 6 octets of
-     * unpacked BCD YYMMDD (BSI TR-03110-3 §2.6).
+     * unpacked BCD YYMMDD (BSI TR-03110-3 §2.5.1).
      */
     public static final short DGI_TA_CURRENT_DATE = (short) 0xFF08;
 

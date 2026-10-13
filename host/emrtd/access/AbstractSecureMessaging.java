@@ -140,6 +140,8 @@ abstract class AbstractSecureMessaging implements SecureMessaging {
             }
             p += lenLen + len;
         }
+        // The response envelope {DO87?} DO99 DO8E carries a mandatory MAC
+        // (ICAO Doc 9303-11 §9.8.4).
         if (cc == null) {
             throw new IllegalStateException("response has no DO8E");
         }
@@ -180,6 +182,7 @@ abstract class AbstractSecureMessaging implements SecureMessaging {
             i--;
         }
         if (i < 0 || data[i] != (byte) 0x80) {
+            // ISO/IEC 7816-4 §5.6.3 M2 padding.
             throw new IllegalStateException("bad M2 padding");
         }
         return Arrays.copyOf(data, i);

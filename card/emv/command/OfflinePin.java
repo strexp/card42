@@ -167,7 +167,7 @@ public class OfflinePin {
 
         // The recovered block is the shared work scratch: no other large scratch
         // user is active during a VERIFY (docs/specs/common/risks.md).
-        byte[] recovered = protocolState.getWorkScratch((short) 256);
+        byte[] recovered = protocolState.getWorkScratch();
         short blockLength = pinCrypto.recover(data, dataOff, dataLen,
                 recovered, (short) 0);
         if (blockLength < 17) {

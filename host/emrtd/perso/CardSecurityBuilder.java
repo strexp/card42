@@ -1,11 +1,12 @@
 package card42.host.emrtd.perso;
 
+
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 
 import card42.host.common.codec.Der;
 import card42.host.common.codec.DerWriter;
-import card42.host.emrtd.lds.SecurityInfo;
+import card42.host.emrtd.lds.security.SecurityInfo;
 
 /**
  * Builds EF.CardSecurity: a CMS SignedData whose eContent is a DER SET OF

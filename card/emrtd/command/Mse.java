@@ -1,5 +1,7 @@
 package card42.emrtd;
 
+import card42.common.Tlv;
+
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
@@ -59,7 +61,7 @@ public final class Mse {
             ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
         }
         short[] result = FIND;
-        if (!Lds2Record.find(data, off, len, EmrtdTags.DO_CA_PUBLIC_KEY, result)) {
+        if (!Tlv.find(data, off, len, EmrtdTags.DO_CA_PUBLIC_KEY, result)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
         applet.chipAuth.deriveSessionKeys(data, result[0], result[1],

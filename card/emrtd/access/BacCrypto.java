@@ -112,7 +112,7 @@ public final class BacCrypto {
         }
     }
 
-    /** The initial SSC: the 4 rightmost bytes of RND.ICC || RND.IFD (Doc 9303-11 §9.8.1). */
+    /** The initial SSC: the 4 rightmost bytes of RND.ICC || RND.IFD (Doc 9303-11 §9.8.2). */
     public static void initialSsc(byte[] rndIcc, short iccOff, byte[] rndIfd, short ifdOff,
                                   byte[] ssc, short sscOff) {
         Util.arrayCopyNonAtomic(rndIcc, (short) (iccOff + 4), ssc, sscOff, (short) 4);

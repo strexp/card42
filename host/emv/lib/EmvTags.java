@@ -1,4 +1,4 @@
-package card42.host.common.codec;
+package card42.host.emv.lib;
 
 /**
  * The EMV v4.4 Book 3 §5.2 BER-TLV tag constants used by the host stack, the

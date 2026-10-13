@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.security;
 
 /**
  * Active Authentication protocol information (ICAO Doc 9303-11 §9.2.4): version

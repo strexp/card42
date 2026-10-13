@@ -1,5 +1,6 @@
 package card42.host.emrtd.access;
 
+
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
 import java.security.MessageDigest;
@@ -12,7 +13,7 @@ import javax.smartcardio.ResponseAPDU;
 import card42.host.common.codec.DerWriter;
 import card42.host.common.crypto.P256;
 import card42.host.common.util.Sw;
-import card42.host.emrtd.lds.ChipAuthenticationInfo;
+import card42.host.emrtd.lds.security.ChipAuthenticationInfo;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**

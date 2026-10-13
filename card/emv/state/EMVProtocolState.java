@@ -511,11 +511,10 @@ public class EMVProtocolState {
 	 * ARPC / secure-messaging MAC input.  They are never active at the same
 	 * time (a single command uses one of them), so the package-shared
 	 * {@link EmvScratch#work} buffer serves every instance and the transient
-	 * budget holds a single allocation (docs/specs/common/risks.md).  The
-	 * {@code minLength} argument is kept for callers that size their own work
-	 * against the returned length.
+	 * budget holds a single allocation (docs/specs/common/risks.md).  A caller
+	 * that needs a bound must check the returned length itself.
 	 */
-	public byte[] getWorkScratch(short minLength) {
+	public byte[] getWorkScratch() {
 		return EmvScratch.work;
 	}
 

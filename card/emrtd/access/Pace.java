@@ -146,7 +146,8 @@ public final class Pace implements PaceSeedSink {
         }
     }
 
-    /** Stores the 20-byte PACE key seed SHA-1(MRZ_info) (perso DGI FF04). */
+    /** Stores the 20-byte PACE key seed SHA-1(MRZ_info) (perso DGI FF04;
+     * ICAO Doc 9303-11 §4.4.1). */
     public void setSeed(byte[] src, short off, short len) {
         if (len != (short) 20) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
@@ -159,7 +160,8 @@ public final class Pace implements PaceSeedSink {
         return seedSet;
     }
 
-    /** Stores the PACE password encoding f(CAN): the raw CAN octets (DGI FF06). */
+    /** Stores the PACE password encoding f(CAN): the raw CAN octets (DGI FF06;
+     * ICAO Doc 9303-11 §4.4.1). */
     public void setCanSeed(byte[] src, short off, short len) {
         if (len <= 0 || len > canSeed.length) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
@@ -179,10 +181,11 @@ public final class Pace implements PaceSeedSink {
         carRequested = false;
     }
 
-    /** MSE:Set AT: data = DO'80'(PACE OID) || DO'83'(password reference) || DO'84'. */
+    /** MSE:Set AT: data = DO'80'(PACE OID) || DO'83'(password reference) || DO'84'
+     * (ICAO Doc 9303-11 §4.4.4.1; BSI TR-03110-3 A.2). */
     public void mseSetAt(byte[] data, short off, short len) {
         short[] r = findResult;
-        if (!Lds2Record.find(data, off, len, EmrtdTags.DO_PACE_NONCE, r)
+        if (!Tlv.find(data, off, len, EmrtdTags.DO_PACE_NONCE, r)
                 || r[1] != (short) 10
                 || !equal(data, r[0], OID_PREFIX, (short) 9)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
@@ -194,6 +197,7 @@ public final class Pace implements PaceSeedSink {
             aes = true;
         } else {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA); // only 3DES / AES-128
+            // (id-PACE-ECDH-GM-3DES/AES-128, BSI TR-03110-3 Annex A)
         }
         Util.arrayCopyNonAtomic(data, r[0], oid, (short) 0, (short) 10);
 
@@ -204,7 +208,7 @@ public final class Pace implements PaceSeedSink {
         byte[] active = seed;
         short activeLen = (short) 20;
         boolean activeSet = seedSet;
-        if (Lds2Record.find(data, off, len, EmrtdTags.DO_PACE_PASSWORD_REF, r)) {
+        if (Tlv.find(data, off, len, EmrtdTags.DO_PACE_PASSWORD_REF, r)) {
             if (r[1] != (short) 1) {
                 ISOException.throwIt(ISO7816.SW_WRONG_DATA);
             }
@@ -219,6 +223,7 @@ public final class Pace implements PaceSeedSink {
                 activeSet = canSeedSet;
             } else {
                 ISOException.throwIt(ISO7816.SW_WRONG_DATA); // only MRZ (01) / CAN (02)
+            // (DO'83' password reference, BSI TR-03110-3 A.2.3)
             }
         }
         if (!activeSet) {
@@ -226,7 +231,7 @@ public final class Pace implements PaceSeedSink {
         }
         // DO'7F4C': the terminal requests the CVCA CARs to be returned in the
         // PACE authentication response (ICAO Doc 9303-11 §4.4.4.1/§4.4.5).
-        carRequested = Lds2Record.find(data, off, len, EmrtdTags.TAG_TA_CHAT, r);
+        carRequested = Tlv.find(data, off, len, EmrtdTags.TAG_TA_CHAT, r);
         derive(kpi, (short) 0, active, (short) 0, activeLen, (byte) 3);
         stage = STAGE_AT;
     }
@@ -271,10 +276,10 @@ public final class Pace implements PaceSeedSink {
         return wrap(EmrtdTags.DO_PACE_NONCE, scratch, (short) 0, nonceLen, out);
     }
 
-    /** Step 2: mapping keys; G' = [s]G + H. */
+    /** Step 2: mapping keys; G' = [s]G + H (ICAO Doc 9303-11 §4.4.3.3). */
     private short step2(byte[] data, short off, short len, byte[] out) {
         short[] r = findResult;
-        if (!Lds2Record.find(data, off, len, EmrtdTags.DO_PACE_MAP_PCD, r)) {
+        if (!Tlv.find(data, off, len, EmrtdTags.DO_PACE_MAP_PCD, r)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
         if (mappingPair == null) {
@@ -314,10 +319,10 @@ public final class Pace implements PaceSeedSink {
         return wrap(EmrtdTags.DO_PACE_MAP_PICC, scratch, (short) 0, pl, out);
     }
 
-    /** Step 3: ephemeral keys on G'; derive the session keys. */
+    /** Step 3: ephemeral keys on G'; derive the session keys (ICAO Doc 9303-11 §4.4.3.2). */
     private short step3(EmrtdApplet applet, byte[] data, short off, short len, byte[] out) {
         short[] r = findResult;
-        if (!Lds2Record.find(data, off, len, EmrtdTags.DO_PACE_EPH_PCD, r)) {
+        if (!Tlv.find(data, off, len, EmrtdTags.DO_PACE_EPH_PCD, r)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
         Util.arrayCopyNonAtomic(data, r[0], peer, (short) 0, r[1]);
@@ -336,14 +341,15 @@ public final class Pace implements PaceSeedSink {
         return wrap(EmrtdTags.DO_PACE_EPH_PICC, ephPicc, (short) 0, pl, out);
     }
 
-    /** Step 4: verify T_PCD and answer T_PICC (under the new SM). */
+    /** Step 4: verify T_PCD and answer T_PICC (under the new SM; ICAO Doc 9303-11 §4.4.3.4). */
     private short step4(EmrtdApplet applet, byte[] data, short off, short len, byte[] out) {
         short[] r = findResult;
-        if (!Lds2Record.find(data, off, len, EmrtdTags.DO_PACE_TOKEN_PCD, r)) {
+        if (!Tlv.find(data, off, len, EmrtdTags.DO_PACE_TOKEN_PCD, r)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
         short n = tokenInput(ephPicc);
         tokenMac(applet.ksMac, n);
+        // T_PCD = MAC(K_mac, ...); a mismatch fails PACE (ICAO Doc 9303-11 §4.4.3.4).
         if (r[1] != (short) 8
                 || !ConstantTime.equals(tokenMac, (short) 0, data, r[0], (short) 8)) {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);

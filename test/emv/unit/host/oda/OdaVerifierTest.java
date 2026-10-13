@@ -17,7 +17,7 @@ import card42.host.emv.oda.CaKey;
 import card42.host.emv.oda.CamVerifier;
 import card42.host.emv.oda.SdaVerifier;
 import card42.host.emv.lib.IssuerKey;
-import card42.host.emv.oda.Sda;
+import card42.host.emv.app.perso.Sda;
 import card42.host.common.codec.Tags;
 import card42.host.common.codec.TlvWriter;
 import card42.host.emv.lib.Terminal;

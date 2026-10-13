@@ -1,22 +1,14 @@
 package card42.host.emv.cli.command;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 import javax.smartcardio.ResponseAPDU;
 
-import card42.host.common.codec.Responses;
-import card42.host.emv.lib.TagPolicy;
 import card42.host.common.codec.Tags;
 import card42.host.emv.crypto.AcCrypto;
 import card42.host.emv.crypto.ScriptSession;
-import card42.host.emv.kernel.core.TransactionResult;
-import card42.host.emv.kernel.data.TerminalConfig;
 import card42.host.emv.kernel.data.TransactionRequest;
-import card42.host.emv.kernel.data.TerminalDol;
 import card42.host.emv.lib.Terminal;
 import card42.host.common.transport.TerminalSession;
 import card42.host.common.cli.Args;
@@ -46,21 +38,6 @@ import card42.host.common.util.Sw;
  * connection error.
  */
 public final class CardCommand {
-
-    private static final String DEFAULT_AID = "43415244420101";
-
-    private static final String[] BASE_VALUE = { "host", "wait", "aid" };
-    private static final String[] BASE_FLAG = { "trace" };
-    private static final String[] POST_VALUE = { "host", "wait", "aid", "mac-key", "enc-key" };
-    private static final String[] BLOCK_VALUE = { "host", "wait", "aid", "mac-key", "enc-key" };
-    private static final String[] BLOCK_FLAG = { "trace", "yes" };
-    private static final String[] GET_VALUE = { "host", "wait", "aid", "tag" };
-    private static final String[] PIN_CHANGE_VALUE = {
-        "host", "wait", "aid", "mac-key", "enc-key", "old", "new",
-    };
-    private static final String[] PIN_UNBLOCK_VALUE = {
-        "host", "wait", "aid", "mac-key", "enc-key", "puk", "new",
-    };
 
     private CardCommand() {
     }
@@ -96,14 +73,14 @@ public final class CardCommand {
      */
     private static int postIssuance(String[] argv, int ins, String name, boolean cardBlock)
             throws Exception {
-        Args args = new Args(argv, cardBlock ? BLOCK_VALUE : POST_VALUE,
-                cardBlock ? BLOCK_FLAG : BASE_FLAG);
+        Args args = new Args(argv, cardBlock ? CardSession.BLOCK_VALUE : CardSession.POST_VALUE,
+                cardBlock ? CardSession.BLOCK_FLAG : CardSession.BASE_FLAG);
         if (args.help()) {
             usage(name.equals("CARD BLOCK") ? "block" : name.equals("APPLICATION BLOCK")
                     ? "block-app" : "unblock-app", System.out);
             return 0;
         }
-        if (cardBlock && !confirmed(args)) {
+        if (cardBlock && !CardSession.confirmed(args)) {
             System.err.println("card block: aborted (pass -yes to confirm)");
             return 2;
         }
@@ -113,9 +90,9 @@ public final class CardCommand {
                 args.get("host", "pcsc:0"),
                 Integer.parseInt(args.get("wait", "10")), args.has("trace"), System.err)) {
             Terminal terminal = new Terminal(terminalSession.terminal);
-            ScriptSession session = establishSession(terminal, aid(args), macKey, encKey);
+            ScriptSession session = CardSession.establishSession(terminal, CardSession.aid(args), macKey, encKey);
             ResponseAPDU r = terminal.transmit(session.command(ins, 0x00, 0x00).getBytes());
-            print(name, r);
+            CardSession.print(name, r);
             return r.getSW() == 0x9000 ? 0 : 1;
         }
     }
@@ -127,7 +104,7 @@ public final class CardCommand {
      * ENC session key (EMV v4.4 Book 2 §9.2).
      */
     private static int pinChange(String[] argv) throws Exception {
-        Args args = new Args(argv, PIN_CHANGE_VALUE, BASE_FLAG);
+        Args args = new Args(argv, CardSession.PIN_CHANGE_VALUE, CardSession.BASE_FLAG);
         if (args.help()) {
             usage("pin-change", System.out);
             return 0;
@@ -143,21 +120,21 @@ public final class CardCommand {
                 args.get("host", "pcsc:0"),
                 Integer.parseInt(args.get("wait", "10")), args.has("trace"), System.err)) {
             Terminal terminal = new Terminal(terminalSession.terminal);
-            String aid = aid(args);
+            String aid = CardSession.aid(args);
             ResponseAPDU sel = terminal.select(aid);
             if (sel.getSW() != 0x9000 && sel.getSW() != 0x6283) {
-                print("PIN CHANGE SELECT", sel);
+                CardSession.print("PIN CHANGE SELECT", sel);
                 return 1;
             }
             ResponseAPDU verify = terminal.verifyOfflinePin(oldPin);
             if (verify.getSW() != 0x9000) {
-                print("PIN CHANGE old PIN", verify);
+                CardSession.print("PIN CHANGE old PIN", verify);
                 return 1;
             }
-            ScriptSession session = establishSession(terminal, aid, macKey, encKey);
+            ScriptSession session = CardSession.establishSession(terminal, aid, macKey, encKey);
             ResponseAPDU r = terminal.transmit(session.command(0x24, 0x00, 0x01, null,
                     AcCrypto.iso9564Format2(newPin)).getBytes());
-            print("PIN CHANGE", r);
+            CardSession.print("PIN CHANGE", r);
             return r.getSW() == 0x9000 ? 0 : 1;
         }
     }
@@ -169,7 +146,7 @@ public final class CardCommand {
      * sent instead (the reference card refuses it).
      */
     private static int pinUnblock(String[] argv) throws Exception {
-        Args args = new Args(argv, PIN_UNBLOCK_VALUE, BASE_FLAG);
+        Args args = new Args(argv, CardSession.PIN_UNBLOCK_VALUE, CardSession.BASE_FLAG);
         if (args.help()) {
             usage("pin-unblock", System.out);
             return 0;
@@ -188,12 +165,12 @@ public final class CardCommand {
                 args.get("host", "pcsc:0"),
                 Integer.parseInt(args.get("wait", "10")), args.has("trace"), System.err)) {
             Terminal terminal = new Terminal(terminalSession.terminal);
-            ScriptSession session = establishSession(terminal, aid(args), macKey, encKey);
+            ScriptSession session = CardSession.establishSession(terminal, CardSession.aid(args), macKey, encKey);
             ResponseAPDU r = change
                     ? terminal.transmit(session.command(0x24, 0x00, 0x01, null,
                             AcCrypto.iso9564Format2(args.get("new", ""))).getBytes())
                     : terminal.transmit(session.command(0x24, 0x00, 0x00).getBytes());
-            print(change ? "PIN CHANGE/UNBLOCK (change)" : "PIN CHANGE/UNBLOCK (unblock)", r);
+            CardSession.print(change ? "PIN CHANGE/UNBLOCK (change)" : "PIN CHANGE/UNBLOCK (unblock)", r);
             return r.getSW() == 0x9000 ? 0 : 1;
         }
     }
@@ -202,7 +179,7 @@ public final class CardCommand {
 
     /** {@code card get-data -tag=<9Fxx>}: GET DATA and print the TLV value. */
     private static int getData(String[] argv) throws Exception {
-        Args args = new Args(argv, GET_VALUE, BASE_FLAG);
+        Args args = new Args(argv, CardSession.GET_VALUE, CardSession.BASE_FLAG);
         if (args.help()) {
             usage("get-data", System.out);
             return 0;
@@ -216,7 +193,7 @@ public final class CardCommand {
 
     /** {@code card atc} / {@code card last-online-atc}. */
     private static int atc(String[] argv, int p2, String name) throws Exception {
-        Args args = new Args(argv, BASE_VALUE, BASE_FLAG);
+        Args args = new Args(argv, CardSession.BASE_VALUE, CardSession.BASE_FLAG);
         if (args.help()) {
             usage(name.equals("ATC") ? "atc" : "last-online-atc", System.out);
             return 0;
@@ -229,13 +206,13 @@ public final class CardCommand {
                 args.get("host", "pcsc:0"),
                 Integer.parseInt(args.get("wait", "10")), args.has("trace"), System.err)) {
             Terminal terminal = new Terminal(terminalSession.terminal);
-            ResponseAPDU sel = terminal.select(aid(args));
+            ResponseAPDU sel = terminal.select(CardSession.aid(args));
             if (sel.getSW() != 0x9000) {
-                print(name + " SELECT", sel);
+                CardSession.print(name + " SELECT", sel);
                 return 1;
             }
             ResponseAPDU r = terminal.getData(p1, p2);
-            print(name, r);
+            CardSession.print(name, r);
             if (r.getSW() == 0x9000) {
                 byte[] value = Tags.find(r.getData(), (p1 << 8) | p2);
                 if (value != null && value.length == 2) {
@@ -257,69 +234,11 @@ public final class CardCommand {
      * the GPO is skipped for it (the card still serves GENERATE AC and the
      * post-issuance commands).
      */
-    private static ScriptSession establishSession(Terminal terminal, String aid,
-            byte[] macKey, byte[] encKey) throws Exception {
-        ResponseAPDU sel = terminal.select(aid);
-        if (sel.getSW() == 0x9000) {
-            TransactionRequest data = new TransactionRequest(TerminalConfig.forContact().build());
-            TransactionResult.Mutable result = new TransactionResult.Mutable();
-            data.applicationIdentifier = Hex.parse(aid);
-            byte[] pdol = TagPolicy.findIcc(sel.getData(), 0x9F38);
-            byte[] pdolData = TerminalDol.buildDolData(data, result,
-                    pdol == null ? new byte[0] : pdol);
-            ResponseAPDU gpo = terminal.gpo(pdolData);
-            if (gpo.getSW() != 0x9000) {
-                throw new IllegalStateException("GPO -> " + Sw.format(gpo.getSW()));
-            }
-        } else if (sel.getSW() != 0x6283) {
-            throw new IllegalStateException("SELECT " + aid + " -> " + Sw.format(sel.getSW()));
-        }
-        ResponseAPDU record = terminal.readRecord(1, 1);
-        if (record.getSW() != 0x9000) {
-            throw new IllegalStateException("READ RECORD 1 -> " + Sw.format(record.getSW()));
-        }
-        byte[] cdol1 = Tags.find(record.getData(), 0x8C);
-        int length = cdol1 == null ? 0 : AcCrypto.dolDataLength(cdol1);
-        ResponseAPDU first = terminal.generateAc((byte) 0x80, length);
-        if (first.getSW() != 0x9000) {
-            throw new IllegalStateException("first GENERATE AC -> " + Sw.format(first.getSW()));
-        }
-        byte[] arqc = Responses.parseAc(first).ac;
-        if (arqc == null || arqc.length != 8) {
-            throw new IllegalStateException("first AC is not an 8-byte cryptogram");
-        }
-        ScriptSession session = new ScriptSession(macKey, encKey);
-        session.start(arqc);
-        return session;
-    }
-
-    private static String aid(Args args) {
-        return args.get("aid", DEFAULT_AID);
-    }
-
+    
+    
     /** Interactive confirmation for the irreversible CARD BLOCK. */
-    private static boolean confirmed(Args args) {
-        if (args.has("yes")) {
-            return true;
-        }
-        System.out.print("CARD BLOCK is irreversible; type 'yes' to continue: ");
-        System.out.flush();
-        try {
-            BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(System.in, StandardCharsets.UTF_8));
-            String line = reader.readLine();
-            return line != null && line.trim().equalsIgnoreCase("yes");
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private static void print(String name, ResponseAPDU r) {
-        String data = r.getData() == null || r.getData().length == 0
-                ? "" : " " + Hex.format(r.getData());
-        System.out.println(name + ": SW=" + Sw.format(r.getSW()) + data);
-    }
-
+    
+    
     private static boolean isHelp(String arg) {
         return arg.equals("-h") || arg.equals("--help") || arg.equals("help");
     }
@@ -341,12 +260,12 @@ public final class CardCommand {
         switch (sub) {
         case "block-app":
             out.println("usage: Main card block-app -mac-key=<hex> [options]");
-            out.println("  -aid=<hex>      application to block (default " + DEFAULT_AID + ")");
+            out.println("  -aid=<hex>      application to block (default " + CardSession.DEFAULT_AID + ")");
             out.println("  -host= -wait= -trace");
             break;
         case "unblock-app":
             out.println("usage: Main card unblock-app -mac-key=<hex> [options]");
-            out.println("  -aid=<hex>      application to unblock (default " + DEFAULT_AID + ")");
+            out.println("  -aid=<hex>      application to unblock (default " + CardSession.DEFAULT_AID + ")");
             out.println("  -host= -wait= -trace");
             break;
         case "block":

@@ -23,7 +23,7 @@ import card42.host.emv.lib.Terminal;
 import card42.host.common.cli.Args;
 import card42.host.common.util.Hex;
 import card42.host.common.util.Reporter;
-import card42.host.common.codec.Responses;
+import card42.host.emv.lib.Responses;
 import card42.host.common.codec.Tags;
 
 /**

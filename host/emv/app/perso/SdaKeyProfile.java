@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.util.Map;
 
-import card42.host.emv.oda.SdaKeys;
 import card42.host.common.util.KeyValueFile;
 
 /**

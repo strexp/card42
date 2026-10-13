@@ -15,7 +15,7 @@ import card42.host.emv.kernel.core.KernelListener;
 import card42.host.emv.kernel.core.PinProvider;
 import card42.host.emv.kernel.core.TransactionResult;
 import card42.host.common.util.Bcd;
-import card42.host.emv.kernel.data.ReferralHandler;
+import card42.host.emv.kernel.core.ReferralHandler;
 import card42.host.emv.kernel.data.TerminalConfig;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.kernel.data.Tsi;

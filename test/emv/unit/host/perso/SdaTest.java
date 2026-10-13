@@ -6,7 +6,8 @@ import java.util.Arrays;
 import card42.host.common.util.Bytes;
 import card42.host.common.util.Digests;
 import card42.host.common.util.Hex;
-import card42.host.emv.oda.Sda;
+import card42.host.emv.lib.RsaRecovery;
+import card42.host.emv.app.perso.Sda;
 import card42.host.common.codec.Tags;
 import card42.host.common.codec.TlvWriter;
 
@@ -30,7 +31,7 @@ final class SdaTest {
 
         // --- templateValue --------------------------------------------------
         byte[] shortRec = { 0x70, 0x03, 0x5A, 0x01, 0x00 };
-        Asserts.bytes(new byte[] { 0x5A, 0x01, 0x00 }, Sda.templateValue(shortRec),
+        Asserts.bytes(new byte[] { 0x5A, 0x01, 0x00 }, RsaRecovery.templateValue(shortRec),
                 "templateValue short form");
         byte[] longRec = new byte[3 + 200];
         longRec[0] = 0x70;
@@ -39,7 +40,7 @@ final class SdaTest {
         for (int i = 0; i < 200; i++) {
             longRec[3 + i] = (byte) i;
         }
-        byte[] longValue = Sda.templateValue(longRec);
+        byte[] longValue = RsaRecovery.templateValue(longRec);
         Asserts.eq(200, longValue.length, "templateValue long form length");
         Asserts.eq(0, longValue[0] & 0xFF, "templateValue long form first byte");
 
@@ -82,7 +83,7 @@ final class SdaTest {
         Asserts.eq(TestKeys.NIC - (TestKeys.NI - 42), iccRemainder.length, "ICC remainder length");
 
         // --- issuer certificate (recovered with the CA key) -----------------
-        byte[] recCert = Sda.recover(cert, TestKeys.CA_MODULUS, TestKeys.CA_EXPONENT);
+        byte[] recCert = RsaRecovery.recover(cert, TestKeys.CA_MODULUS, TestKeys.CA_EXPONENT);
         Asserts.check(recCert[0] == 0x6A && recCert[1] == 0x02
                 && recCert[recCert.length - 1] == (byte) 0xBC,
                 "issuer certificate structure");
@@ -97,18 +98,18 @@ final class SdaTest {
         byte[] issuerModulus = Bytes.concat(
                 Arrays.copyOfRange(recCert, 15, 15 + keyDigits), remainder);
         BigInteger issuerExponent = new BigInteger(1, exponent);
-        byte[] recSsad = Sda.recover(ssad, new BigInteger(1, issuerModulus), issuerExponent);
+        byte[] recSsad = RsaRecovery.recover(ssad, new BigInteger(1, issuerModulus), issuerExponent);
         Asserts.check(recSsad[0] == 0x6A && recSsad[1] == 0x03
                 && recSsad[recSsad.length - 1] == (byte) 0xBC, "SSAD structure");
         byte[] ssadHashInput = Bytes.concat(
                 Arrays.copyOfRange(recSsad, 1, recSsad.length - 21),
-                Sda.templateValue(record1));
+                RsaRecovery.templateValue(record1));
         Asserts.check(Arrays.equals(Digests.sha1(ssadHashInput),
                         Arrays.copyOfRange(recSsad, recSsad.length - 21, recSsad.length - 1)),
                 "SSAD hash over the static data");
 
         // --- PIN certificate (recovered with the issuer key) ----------------
-        byte[] recPin = Sda.recover(pinCert, new BigInteger(1, issuerModulus), issuerExponent);
+        byte[] recPin = RsaRecovery.recover(pinCert, new BigInteger(1, issuerModulus), issuerExponent);
         Asserts.check(recPin[0] == 0x6A && recPin[1] == 0x04
                 && recPin[recPin.length - 1] == (byte) 0xBC, "PIN certificate structure");
         byte[] pinHashInput = Bytes.concat(
@@ -126,13 +127,13 @@ final class SdaTest {
 
         // --- ICC DDA/CDA certificate (recovered with the issuer key) --------
         int leftmost = TestKeys.NI - 42;
-        byte[] recIcc = Sda.recover(iccCert, new BigInteger(1, issuerModulus), issuerExponent);
+        byte[] recIcc = RsaRecovery.recover(iccCert, new BigInteger(1, issuerModulus), issuerExponent);
         Asserts.check(recIcc[0] == 0x6A && recIcc[1] == 0x04
                 && recIcc[recIcc.length - 1] == (byte) 0xBC, "ICC certificate structure");
         byte[] iccHashInput = Bytes.concat(
                 Arrays.copyOfRange(recIcc, 1, 21 + leftmost),
                 iccRemainder, iccExponent,
-                Sda.templateValue(record1));
+                RsaRecovery.templateValue(record1));
         Asserts.check(Arrays.equals(Digests.sha1(iccHashInput),
                         Arrays.copyOfRange(recIcc, 21 + leftmost, 21 + leftmost + 20)),
                 "ICC certificate hash");
@@ -181,10 +182,10 @@ final class SdaTest {
         // EMV v4.4 Book 3 section 10.3: when the SDA Tag List contains 82, the AIP is
         // appended to the static data input before the SSAD hash is checked.
         byte[] aip = { 0x58, 0x00 };
-        byte[] daInput = Sda.templateValue(record1);
+        byte[] daInput = RsaRecovery.templateValue(record1);
         byte[] daWithAip = Bytes.concat(daInput, aip);
         byte[] ssadWithAip = Sda.ssad(daWithAip, TestKeys.sdaKeys());
-        byte[] recWithAip = Sda.recover(ssadWithAip,
+        byte[] recWithAip = RsaRecovery.recover(ssadWithAip,
                 new BigInteger(1, issuerModulus), issuerExponent);
         byte[] storedHash = Arrays.copyOfRange(recWithAip, recWithAip.length - 21,
                 recWithAip.length - 1);

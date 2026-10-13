@@ -44,6 +44,8 @@ public final class Dg15 {
         this.ecPointW = ecPointW;
     }
 
+    /** Parses DG15: tag 6F containing a SubjectPublicKeyInfo (ICAO Doc 9303-10
+     * §4.7.15; the AA public key, Doc 9303-11 §6.1.5). */
     public static Dg15 parse(byte[] dg15) {
         byte[] subjectPublicKeyInfo = Tags.find(dg15, 0x6F);
         if (subjectPublicKeyInfo == null) {
@@ -62,6 +64,8 @@ public final class Dg15 {
             // id-ecPublicKey: the BIT STRING holds 0x00 || 04 || X(32) || Y(32).
             Der.Tlv bitString = fields.get(1);
             byte[] value = Der.value(subjectPublicKeyInfo, bitString);
+            // RFC 5480 / SEC1: 0x00 || 0x04 || X(32) || Y(32) for an
+            // uncompressed P-256 point (ICAO Doc 9303-11 §6.1.5).
             if (value.length != 66 || value[0] != 0x00 || value[1] != 0x04) {
                 throw new IllegalArgumentException("DG15 EC point is not an uncompressed P-256 key");
             }

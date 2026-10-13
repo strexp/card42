@@ -304,7 +304,7 @@ public final class TransactionReport {
         return performed ? "ok" : "not performed";
     }
 
-    private static String acText(byte cid, card42.host.common.codec.Responses.AcResponse ac) {
+    private static String acText(byte cid, card42.host.emv.lib.Responses.AcResponse ac) {
         if (ac == null) {
             return null;
         }
@@ -312,7 +312,7 @@ public final class TransactionReport {
                 + " AC=" + hex(ac.ac) + " IAD=" + hex(ac.iad);
     }
 
-    private static String acJson(byte cid, card42.host.common.codec.Responses.AcResponse ac) {
+    private static String acJson(byte cid, card42.host.emv.lib.Responses.AcResponse ac) {
         return "{\"cid\":" + Json.quote(String.format("%02X", cid & 0xFF))
                 + ",\"name\":" + Json.quote(cidName(cid))
                 + ",\"atc\":" + ac.atc

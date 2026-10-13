@@ -9,7 +9,7 @@ import card42.host.emv.lib.Amounts;
 import card42.host.common.cli.Args;
 import card42.host.common.codec.Json;
 import card42.host.emv.report.TransactionReport;
-import card42.host.common.codec.TlvDump;
+import card42.host.emv.cli.command.TlvDump;
 import card42.host.emv.crypto.AcCrypto;
 import card42.host.emv.kernel.script.IssuerScript;
 import card42.host.emv.app.issuer.IssuerHost;

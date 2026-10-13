@@ -1,5 +1,7 @@
 package card42.emrtd;
 
+import card42.common.Tlv;
+
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.security.CryptoException;
@@ -97,7 +99,7 @@ public final class ChipAuth {
      */
     static boolean isChipAuthenticationData(byte[] data, short off, short len) {
         short[] r = FIND;
-        if (!Lds2Record.find(data, off, len, EmrtdTags.DO_PACE_NONCE, r)
+        if (!Tlv.find(data, off, len, EmrtdTags.DO_PACE_NONCE, r)
                 || r[1] != (short) 10) {
             return false;
         }
@@ -125,6 +127,7 @@ public final class ChipAuth {
             aes = true;
         } else {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA); // only 3DES / AES-128
+            // (id-CA-ECDH-3DES/AES-128, BSI TR-03110-3 Annex A)
         }
         gaPending = true;
     }
@@ -138,7 +141,7 @@ public final class ChipAuth {
                                     byte[] encOut, short encOff,
                                     byte[] macOut, short macOff) {
         short[] r = FIND;
-        if (!Lds2Record.find(data, off, len, EmrtdTags.DO_PACE_NONCE, r)) {
+        if (!Tlv.find(data, off, len, EmrtdTags.DO_PACE_NONCE, r)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
         gaPending = false;

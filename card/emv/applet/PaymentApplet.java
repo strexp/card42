@@ -45,7 +45,6 @@ public class PaymentApplet extends EMVAppletBase {
 
     private final OfflinePin offlinePin;
     private final DynamicAuth dynamicAuth;
-    private final IssuerAuth issuerAuth;
     private final AcProcessor acProcessor;
     private final PostIssuance postIssuance;
     private final PaymentPerso perso;
@@ -79,7 +78,7 @@ public class PaymentApplet extends EMVAppletBase {
 
         offlinePin = new OfflinePin(pin, pinCrypto, protocolState);
         dynamicAuth = new DynamicAuth(staticData, protocolState, ddaCrypto, randomData);
-        issuerAuth = new IssuerAuth(this, staticData, protocolState, offlineRisk, pin,
+        IssuerAuth issuerAuth = new IssuerAuth(this, staticData, protocolState, offlineRisk, pin,
                 new Arpc(theCrypto, protocolState));
         acProcessor = new AcProcessor(protocolState, staticData, theCrypto, ddaCrypto,
                 offlineRisk, transactionLog, secureMessaging, pin, dynamicAuth, issuerAuth);
@@ -265,8 +264,7 @@ public class PaymentApplet extends EMVAppletBase {
             break;
 
         case INS_EXTERNAL_AUTHENTICATE: // 0x82
-            issuerAuth.externalAuthenticate(apdu, apduBuffer,
-                    acProcessor.getFirstCdol(), acProcessor.getFirstCdolLength());
+            acProcessor.externalAuthenticate(apdu, apduBuffer);
             break;
 
         // post-issuance commands, protected by EMV secure messaging
@@ -540,7 +538,7 @@ public class PaymentApplet extends EMVAppletBase {
      * Applies one DGI of the personalization sequence (EMV CPS v2.0 numbering).
      * Called inside a transaction; the applet is not necessarily selected.
      */
-    protected void applyPersoDgi(short dgi, byte[] buf, short off, short len) {
+    public void applyPersoDgi(short dgi, byte[] buf, short off, short len) {
         perso.applyDgi(dgi, buf, off, len);
     }
 
@@ -549,12 +547,12 @@ public class PaymentApplet extends EMVAppletBase {
      * signalled by P1.b8 of the last STORE DATA block; the optional '7FFF'
      * DGI does not affect the decision (EMV CPS v2.0 §3.3).
      */
-    protected boolean persoCheckComplete() {
+    public boolean persoCheckComplete() {
         return perso.isComplete();
     }
 
     /** Clears the payment personalization completion markers (see PersoHandler). */
-    protected void resetPersoState() {
+    public void resetPersoState() {
         perso.resetState();
     }
 }

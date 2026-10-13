@@ -64,12 +64,14 @@ public final class Dg1 {
             this.sex = slice(line2, 20, 21);
             this.dateOfExpiry = slice(line2, 21, 27);
         } else {
+            // The MRZ is TD1 (3x30), TD2 (2x36) or TD3 (2x44)
+            // (ICAO Doc 9303-10 §4.7.1, Doc 9303-4).
             throw new IllegalArgumentException(
                     "DG1 MRZ length " + len + " is not TD1/TD2/TD3");
         }
     }
 
-    /** Parses a DG1 (tag 61 containing 5F1F). */
+    /** Parses a DG1: tag 61 containing 5F1F (ICAO Doc 9303-10 §4.7.1). */
     public static Dg1 parse(byte[] dg1) {
         byte[] value = Tags.find(dg1, 0x5F1F);
         if (value == null) {

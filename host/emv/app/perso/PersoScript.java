@@ -13,8 +13,6 @@ import java.util.Map;
 
 import card42.host.common.codec.TlvWriter;
 import card42.host.emv.crypto.EmvKeys;
-import card42.host.emv.oda.Sda;
-import card42.host.emv.oda.SdaKeys;
 import card42.host.common.util.Hex;
 
 /**

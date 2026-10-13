@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.security;
 
 /**
  * Chip Authentication protocol information (BSI TR-03110-3, ICAO Doc 9303-11

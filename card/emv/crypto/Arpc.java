@@ -49,7 +49,7 @@ public class Arpc {
             return false;
         }
         // The ARPC message uses the shared work scratch (docs/specs/common/risks.md).
-        byte[] scratch = protocolState.getWorkScratch((short) 40);
+        byte[] scratch = protocolState.getWorkScratch();
         try {
             // Y := ARQC xor (ARC || 00 x6).
             Util.arrayCopyNonAtomic(protocolState.getArqc(), (short) 0,
@@ -88,7 +88,7 @@ public class Arpc {
         if (len < (short) 8) {
             return false;
         }
-        byte[] scratch = protocolState.getWorkScratch((short) 40);
+        byte[] scratch = protocolState.getWorkScratch();
         try {
             // CCD CSU byte 1 b8 "Proprietary Authentication Data Included"
             // decides whether proprietary bytes take part in the ARPC (EMV v4.4

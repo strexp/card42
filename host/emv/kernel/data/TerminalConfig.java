@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 
 import card42.host.common.util.Hex;
+import card42.host.emv.kernel.core.ReferralHandler;
 
 /**
  * Terminal-resident configuration of a terminal kernel (EMV v4.4 Book 4

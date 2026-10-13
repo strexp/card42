@@ -83,18 +83,15 @@ public class AcProcessor {
     }
 
     /**
-     * The first-AC CDOL1 copy, exposed to {@code IssuerAuth} so a Method 2
-     * EXTERNAL AUTHENTICATE can apply its CSU 'Update Counters' against the
-     * transaction amount (EMV v4.4 Book 3 Annex C §C10).  Null before the
-     * first AC.
+     * EXTERNAL AUTHENTICATE with the first-AC CDOL1 this processor owns
+     * (EMV v4.4 Book 3 §10.10, processed before the final GENERATE AC): a
+     * Method 2 issuer authentication applies its CSU 'Update Counters' against
+     * the transaction amount (EMV v4.4 Book 2 §8.2, Book 3 Annex C §C10).  Kept
+     * here so the applet does not have to reach into the processor for the
+     * buffer.
      */
-    byte[] getFirstCdol() {
-        return firstCdol;
-    }
-
-    /** Length of {@link #getFirstCdol()}. */
-    short getFirstCdolLength() {
-        return firstCdolLength;
+    void externalAuthenticate(APDU apdu, byte[] apduBuffer) {
+        issuerAuth.externalAuthenticate(apdu, apduBuffer, firstCdol, firstCdolLength);
     }
 
     public void generateFirstAC(APDU apdu, byte[] apduBuffer, byte[] response) {

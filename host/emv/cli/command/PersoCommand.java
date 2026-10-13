@@ -3,7 +3,7 @@ package card42.host.emv.cli.command;
 import card42.host.emv.app.perso.PersoExporter;
 import card42.host.emv.app.perso.PersoScript;
 import card42.host.emv.app.perso.SdaKeyProfile;
-import card42.host.emv.oda.SdaKeys;
+import card42.host.emv.app.perso.SdaKeys;
 import card42.host.common.cli.Args;
 
 /**

@@ -126,6 +126,7 @@ public class IssuerAuth {
             protocolState.setLastOnlineATC(protocolState.getATC());
             apdu.setOutgoingAndSend((short) 0, (short) 0); // 9000
         } else {
+            // Issuer authentication failed: 6300 (EMV v4.4 Book 2 §8.2).
             protocolState.issuerAuthFailed();
             ISOException.throwIt(EMVStatus.SW_ISSUER_AUTHENTICATION_FAILED); // 6300
         }

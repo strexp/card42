@@ -57,17 +57,19 @@ card/common/   card42.common 库：Tlv/TlvReader、RetailMac/AesCmac/MacAlgorith
 card/emv/      card42.emv：
   applet/      EMVAppletBase / InstallParameters / PaymentApplet / DirectoryApplet
   command/     支付命令处理器：OfflinePin / DynamicAuth / AcProcessor / IssuerAuth /
-               PostIssuance / Arpc（ARPC 校验）/ CvrBuilder（CVR/IAD 组装）/
-               TransactionFinalizer（交易收尾：累计器/日志/CVR 结转位）
+               PostIssuance
   constants/   EMVCommands / EMVStatus / EMVRoles / EMVCodes / EMVAids / Defaults
   data/        EMVStaticData(门面) / PaymentData / SdaCertificateData（ODA 证书数据）/
-               DirectoryRecords / RecordStore / Iad / TransactionLog（交易日志）
+               DirectoryRecords / RecordStore / Iad / TransactionLog（交易日志）/
+               TransactionFinalizer（交易收尾：累计器/日志/CVR 结转位）
   state/       EMVProtocolState / OfflinePinState
   risk/        CardRiskManagement / OfflineRisk
   crypto/      EMVCrypto / SessionKey / CryptoProfile / SecureMessaging / DdaCrypto /
-               PinCrypto / RsaKey
-  builder/     FciBuilder / RecordBuilder / DirectoryBuilder / AcResponseBuilder
-  perso/       PersoHandler / PersoRules（DGI/记录结构校验）/ PersoErrors / PaymentPerso
+               PinCrypto / RsaKey / Arpc（ARPC 校验）
+  builder/     FciBuilder / RecordBuilder / DirectoryBuilder / AcResponseBuilder /
+               CvrBuilder（CVR/IAD 组装）
+  perso/       PersoHandler / PersoTarget（PersoHandler 的窄接口）/ PersoRules
+               （DGI/记录结构校验）/ PersoErrors / PaymentPerso
   tlv/         Dgi / DgiReader / DolReader / TlvTags
 card/emrtd/    card42.emrtd：applet/（EmrtdApplet / EmrtdInstallParameters）、
                lds/（LdsFile / LdsFileSystem / LdsCatalog；LDS2：
@@ -78,6 +80,9 @@ card/emrtd/    card42.emrtd：applet/（EmrtdApplet / EmrtdInstallParameters）�
                BacCrypto / SecureMessaging / AbstractSecureMessaging /
                Iso7816Sm / Iso7816SmAes / ChipAuth / Pace / PaceSeedSink）、
                crypto/（AaCrypto / P256 / Sha1Kdf）、
+               ta/（TaContext（MSE/PSO/EXTERNAL AUTHENTICATE 协议与证书解析）/
+               TaKeys（ECDSA/RSA-PSS 校验引擎）/
+               TaTrustStore（CVCA 信任点、Effective Date 与授权））、
                mem/（EmrtdScratch / SmScratch / MacEngines / KdfEngines）、
                tlv/（EmrtdTags）
 ```
@@ -122,17 +127,20 @@ card/emrtd/    card42.emrtd：applet/（EmrtdApplet / EmrtdInstallParameters）�
 ```
 host/common/    card42.host.common（无 EMV 依赖）：
   transport/    Terminal（通用 transmit/select）/ Terminals / TerminalSession / TracingChannel
-  codec/        Tags / TlvWriter / TlvDump / Json / Responses / Der / DerWriter
+  codec/        Tags / TlvWriter / Json / Der / DerWriter
+                （EMV 专用的 EmvTags / Responses 在 emv.lib，CLI 的 TlvDump 在 emv.cli）
   crypto/       AesCmac / Iso9797（ISO 9797-1 Alg3 + 3DES 原语）/ P256（自包含 P-256）
   util/         Hex / Bytes / Digests / Bcd / Reporter / KeyValueFile
   report/       Display（UI/凭条 SPI，no-op 默认）
   cli/          CliSupport（退出码/usage 约定）/ Args（命令行选项解析）
 host/emv/       card42.host.emv：
   lib/          Apdus / TagPolicy（Book 3 §7.5 策略）/ Amounts / Terminal（EMV 便捷扩展）/
-                IssuerKey（恢复出的 RSA 公钥）
+                IssuerKey（恢复出的 RSA 公钥）/ EmvTags（Book 3 tag 常量）/
+                Responses（GPO/GENERATE AC 响应解析）/ RsaRecovery（RSA 公钥恢复原语）
   oda/          SdaVerifier / CamVerifier（SDA/DDA/CDA 验证）/ CaKey / CaKeyStore /
-                CaKeyProfile（CA 公钥环）/ Sda / SdaKeys（离线 SDA 生成器与密钥档案）
-  kernel/       TerminalKernel / ContactKernel / ContactlessKernel 共享 TransactionFlow
+                CaKeyProfile（CA 公钥环）（离线 SDA 生成器 Sda/SdaKeys 见 app/perso）
+  kernel/       TerminalKernel / ContactKernel / ContactlessKernel 共享 TransactionFlow /
+                AflSyntax（AFL 语法校验）/ ArcCodes（CID/ARC 解码）
     core/       TransactionResult（只读，内核经 Mutable 写）/ Outcome / Decision / Selection /
                 OdaVerifier（ODA 抽象，注入 TransactionFlow）/ CvmPerformer（CVM 抽象，
                 注入 TransactionFlow）/ Issuer / Authorization /
@@ -151,26 +159,29 @@ host/emv/       card42.host.emv：
   crypto/       EmvKeys / AcCrypto / SmCrypto / ScriptSession / PersoMac
   report/       TransactionReport / Receipt / ReceiptRenderer / ReceiptPrinter
   app/issuer/   IssuerHost / IssuerCrypto / ClosedLoopIssuer / AuthFileIssuer / SubprocessIssuer
-  app/perso/    PersoScript / SdaKeyProfile / PersoExporter
+  app/perso/    PersoScript / SdaKeyProfile / PersoExporter / Sda / SdaKeys
+                （离线 SDA 生成器与密钥档案）
   cli/          Main（`card42.host.emv.cli.Main`）
     command/    PersoCommand / TerminalPayCommand / TerminalInspectCommand /
                 TerminalApduCommand / TerminalEntryPointCommand / IssuerCommand / CardCommand
 host/emrtd/     card42.host.emrtd：transport/EmrtdTerminal；lds/（LdsFileUtil /
                 Dg1 / Dg2 / Dg15 / Dg / Com / Sod / CmsSignedData / LdsSecurityObject /
-                AlgorithmIds / SecurityInfo / UnknownSecurityInfo / PaceInfo /
-                ChipAuthenticationInfo /
-                ChipAuthenticationPublicKeyInfo / ActiveAuthenticationInfo / CardAccess /
-                CardSecurity）；access/（LdsReader（LDS 读文件 I/O）/ MrzKeySeed / Bac /
-                Iso7816Sm / Iso7816SmAes /
+                AlgorithmIds / CardAccess / CardSecurity）；lds/security/（SecurityInfo /
+                UnknownSecurityInfo / PaceInfo / ChipAuthenticationInfo /
+                ChipAuthenticationPublicKeyInfo / ActiveAuthenticationInfo /
+                TerminalAuthenticationInfo）；access/（LdsReader（LDS 读文件 I/O）/
+                MrzKeySeed / Bac / Iso7816Sm / Iso7816SmAes /
                 SecureMessaging / ChipAuth / Pace）；pa/（CscaKeyStore / DscVerifier /
                 PassiveAuthentication）；aa/ActiveAuthentication；perso/（EmrtdPersoExporter /
-                SodBuilder / Dg2Builder / CardSecurityBuilder / LdsScript）；
+                SampleData（样例 DG/密钥数据）/ SodBuilder / Dg2Builder /
+                CardSecurityBuilder / LdsScript）；
                 report/PassportReport；cli/（Main / EmrtdCommand）
 test/           测试（package card42.test，目录为功能分组而非包）
   common/       fixtures/TestKeys（示例 CA/SDA 密钥 + SdaKeys 档案 + CaKeyStore）；
                 stubs/（javacard.framework / javacard.security / javacardx.crypto 极小桩）
   emv/unit/     UnitTests + support/Asserts；card/（{tlv,data,state,risk,perso,crypto}）、
-                host/（{codec,crypto,perso,clearing,cli,util,oda,transport,kernel}）
+                host/（{codec,crypto,perso,clearing,cli,util,oda,transport,kernel,
+                lib}）+ AllocationCensusTest（卡侧分配普查守卫）
   emv/integration/ card/（EmvFlow / Boundary / AesFlow / Directory / Log / Velocity /
                 IssuerScript / CardBlock / OnlineClosedLoop）；host/kernel/{contact,contactless}、
                 host/cli/TerminalCliTest；support/（Checks / TestTerminals）
@@ -204,6 +215,21 @@ GET RESPONSE（SunPCSC 会沿用触发命令的 CLA，严格卡以 `6E00` 拒绝
 - `emrtd.lib → common`；`emrtd.cli → {common, emrtd.lib}`；
 - **库模块不得依赖任何 CLI 模块**（业务模块之间亦互不依赖），从而库 jar 可脱离 CLI jar
   直接供第三方应用使用。
+
+### 2.0 卡侧重构的堆中性约束
+
+卡侧堆（持久 EEPROM 与 CLEAR_ON_DESELECT 瞬态）稀缺，因此**职责拆分必须堆中性**
+（docs/specs/common/risks.md §2）：
+
+- 允许：把类拆成**无状态的 `static` 帮助类**（如 `TaKeys` / `TaTrustStore`、
+  `card42.common.Tlv.find`）；把方法搬进**已经分配过**的协作者；改字段可见性；
+  用**已存在对象**实现的窄接口（如 `PersoTarget`）；以已存在对象/数组作参数。
+- 禁止：新增对象实例、新增数组（含延迟分配）、给已有对象新增字段（字段只可**等量搬移**）、
+  把每个实例的状态拆成多个对象、卡侧的表驱动处理器/工厂/上下文对象——它们都会新增堆。
+- 每实例状态仍集中在**单个**对象；跨实例共享的引擎/信任点等仍为 package-shared `static`。
+- 守卫：`test/emv/unit/host/AllocationCensusTest` 对 `card/` 的 `new` 与瞬态缓冲分配设
+  **上限**（只可减少）；`NvmBaselineTest` 再校验运行时的持久写入与共享瞬态足迹。
+  任何使分配上限上升的改动必须显式更新上限并说明理由。
 
 ### 2.1 内核对外 API
 

@@ -1,5 +1,6 @@
 package card42.host.emrtd.report;
 
+
 import java.util.List;
 
 import card42.host.common.codec.Json;
@@ -9,7 +10,7 @@ import card42.host.emrtd.lds.Com;
 import card42.host.emrtd.lds.Dg1;
 import card42.host.emrtd.lds.Dg15;
 import card42.host.emrtd.lds.Dg2;
-import card42.host.emrtd.lds.SecurityInfo;
+import card42.host.emrtd.lds.security.SecurityInfo;
 
 /**
  * Text / JSON rendering of a read eMRTD (H1.5).  It deliberately depends only

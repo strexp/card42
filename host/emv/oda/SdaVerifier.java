@@ -6,6 +6,7 @@ import java.util.Arrays;
 
 import javax.smartcardio.ResponseAPDU;
 
+import card42.host.emv.lib.RsaRecovery;
 import card42.host.emv.lib.IssuerKey;
 import card42.host.emv.lib.Terminal;
 import card42.host.common.util.Bytes;
@@ -188,17 +189,18 @@ public final class SdaVerifier {
         // Issuer public key certificate: recover with the CA public key and
         // check the structure, hash, PAN, expiry and algorithm indicator
         // (EMV v4.4 Book 2 §5.3 steps 3-11, Table 6).
-        byte[] recCert = Sda.recover(cert, ca.modulus, ca.exponent);
+        byte[] recCert = RsaRecovery.recover(cert, ca.modulus, ca.exponent);
         boolean certStructure = recCert[0] == 0x6A && recCert[1] == 0x02
                 && recCert[recCert.length - 1] == (byte) 0xBC;
         // Issuer Public Key Algorithm Indicator (offset 12): RSA ('01') only.
         boolean algorithm = recCert[12] == 0x01;
         // Issuer Identifier (offset 2) matches the leftmost PAN digits, with
         // hexadecimal 'F' padding treated as a wildcard (step 8).
-        boolean panMatch = pan == null || issuerIdentifierMatchesPan(recCert, pan);
+        boolean panMatch = pan == null
+                || CertificateChecks.issuerIdentifierMatchesPan(recCert, pan);
         // Certificate Expiration Date (offset 6, MMYY) not before the
         // transaction date (step 9).
-        boolean expiry = certificateNotExpired(recCert, 6, transactionDate);
+        boolean expiry = CertificateChecks.certificateNotExpired(recCert, 6, transactionDate);
         byte[] certHashInput = remainder == null
                 ? Bytes.concat(Arrays.copyOfRange(recCert, 1, recCert.length - 21), exponent)
                 : Bytes.concat(Arrays.copyOfRange(recCert, 1, recCert.length - 21),
@@ -231,7 +233,7 @@ public final class SdaVerifier {
         // Only when SDA is the selected ODA method (requireSsad).
         byte[] dataAuthenticationCode = null;
         if (requireSsad) {
-            byte[] recSsad = Sda.recover(ssad,
+            byte[] recSsad = RsaRecovery.recover(ssad,
                     new BigInteger(1, issuerModulus), new BigInteger(1, exponent));
             boolean ssadStructure = recSsad[0] == 0x6A && recSsad[1] == 0x03
                     && recSsad[recSsad.length - 1] == (byte) 0xBC;
@@ -266,11 +268,7 @@ public final class SdaVerifier {
      * expiry checked against {@code transactionDate} (tag '9A', YYMMDD). */
     public static Result recoverPinKey(Terminal terminal, IssuerKey issuer,
             byte[] transactionDate) throws Exception {
-        // The PIN certificate hash omits the static data to be authenticated
-        // (EMV v4.4 Book 2 Table 23 note 31).
-        return recoverIssuerSignedKey(terminal, issuer, 4,
-                0x9F2D, 0x9F2F, 0x9F2E, "PIN", "ICC PIN", "9F2D/9F2F/9F2E", false,
-                transactionDate);
+        return IccKeyRecovery.recoverPinKey(terminal, issuer, transactionDate);
     }
 
     /**
@@ -287,185 +285,13 @@ public final class SdaVerifier {
      * expiry checked against {@code transactionDate} (tag '9A', YYMMDD). */
     public static Result recoverIccKey(Terminal terminal, IssuerKey issuer,
             byte[] transactionDate) throws Exception {
-        // The ICC DDA/CDA certificate hash includes the static data to be
-        // authenticated (EMV v4.4 Book 2 §6.4 step 5 / Table 14).
-        return recoverIssuerSignedKey(terminal, issuer, 5,
-                0x9F46, 0x9F48, 0x9F47, "ICC", "ICC", "9F46/9F48/9F47", true,
-                transactionDate);
+        return IccKeyRecovery.recoverIccKey(terminal, issuer, transactionDate);
     }
 
-    /**
-     * Reads one ICC public key certificate record, recovers it with the issuer
-     * public key and verifies its structure (format '04') and hash (EMV v4.4
-     * Book 2 Tables 13/23).  The two ICC certificates differ only in the record
-     * and tags, whether the static data to be authenticated is part of the hash
-     * input, and the diagnostic wording, so one routine serves both.
-     *
-     * @param includeStaticData true for the DDA/CDA certificate, false for the
-     *                          PIN encipherment certificate
-     */
-    private static Result recoverIssuerSignedKey(Terminal terminal, IssuerKey issuer,
-            int record, int certTag, int remainderTag, int exponentTag,
-            String recordLabel, String name, String tagList, boolean includeStaticData,
-            byte[] transactionDate) throws Exception {
-        ResponseAPDU rec = terminal.readRecord(record, 1);
-        if (rec.getSW() != 0x9000) {
-            return new Result(false,
-                    "READ RECORD " + recordLabel + " certificate -> " + Sw.format(rec.getSW()), null);
-        }
-        byte[] cert = Tags.find(rec.getData(), certTag);
-        byte[] remainder = Tags.find(rec.getData(), remainderTag);
-        byte[] exponent = Tags.find(rec.getData(), exponentTag);
-        // The ICC Public Key Remainder is present only when the ICC modulus is
-        // longer than NI-42 (EMV v4.4 Book 2 Table 14).
-        if (cert == null || exponent == null) {
-            return new Result(false, name + " certificate data present (" + tagList + ")",
-                    null, null, true);
-        }
-        // The ICC Public Key Certificate length must equal the Issuer Public Key
-        // Modulus length (EMV v4.4 Book 2 §6.4 step 1).
-        if (cert.length != issuer.modulusBytes) {
-            return new Result(false, name + " public key certificate length", null);
-        }
 
-        // Recover the certificate with the issuer public key (EMV v4.4 Book 2
-        // Tables 13/23).  The leftmost 21 bytes hold the header and the
-        // certificate expiration/ serial data; the hash follows the key
-        // modulus.
-        int leftmost = issuer.modulusBytes - 42;
-        byte[] recCert = Sda.recover(cert, issuer.modulus, issuer.exponent);
-        boolean structure = recCert[0] == 0x6A && recCert[1] == 0x04
-                && recCert[recCert.length - 1] == (byte) 0xBC;
-        // ICC Public Key Algorithm Indicator (offset 18): RSA ('01') only.
-        boolean algorithm = recCert[18] == 0x01;
-        // Application PAN (offset 2) matches the card PAN, with 'F' padding
-        // (EMV v4.4 Book 2 §6.4 step 8).
-        boolean panMatch = issuer.pan == null || applicationPanMatches(recCert, issuer.pan);
-        // Certificate Expiration Date (offset 12, MMYY).
-        boolean expiry = certificateNotExpired(recCert, 12, transactionDate);
-        byte[] base = Arrays.copyOfRange(recCert, 1, 21 + leftmost);
-        byte[] certHashInput = remainder == null
-                ? (includeStaticData
-                        ? Bytes.concat(base, exponent,
-                                issuer.staticData == null ? new byte[0] : issuer.staticData)
-                        : Bytes.concat(base, exponent))
-                : (includeStaticData
-                        ? Bytes.concat(base, remainder, exponent,
-                                issuer.staticData == null ? new byte[0] : issuer.staticData)
-                        : Bytes.concat(base, remainder, exponent));
-        boolean hash = Arrays.equals(Digests.sha1(certHashInput),
-                Arrays.copyOfRange(recCert, 21 + leftmost, 21 + leftmost + 20));
-        if (!(structure && algorithm && panMatch && expiry && hash)) {
-            return new Result(false, name + " public key certificate", null);
-        }
-        // ICC modulus = leftmost digits (offset 21) followed by the remainder
-        // only when NIC > NI-42; a shorter key is stored padded with 'BB' and
-        // its length is the ICC Public Key Length byte at offset 19.
-        int iccModulusLength = recCert[19] & 0xFF;
-        byte[] modulus;
-        if (iccModulusLength > leftmost) {
-            if (remainder == null) {
-                return new Result(false, name + " public key remainder", null, null, true);
-            }
-            modulus = Bytes.concat(
-                    Arrays.copyOfRange(recCert, 21, 21 + leftmost), remainder);
-        } else {
-            modulus = Arrays.copyOfRange(recCert, 21, 21 + iccModulusLength);
-        }
-        return new Result(true, null, new IssuerKey(new BigInteger(1, modulus),
-                new BigInteger(1, exponent), issuer.staticData, modulus.length, issuer.pan));
-    }
 
-    /**
-     * True when the certificate's Issuer Identifier (4 bytes at offset 2) equals
-     * the leftmost PAN digits; the hexadecimal 'F' padding nibbles are wildcards
-     * (EMV v4.4 Book 2 §5.3/§6.3 step 8).
-     */
-    private static boolean issuerIdentifierMatchesPan(byte[] recCert, byte[] pan) {
-        for (int i = 0; i < 8; i++) {
-            int id = nibbleAt(recCert, 2, i);
-            if (id == 0xF) {
-                continue; // padding
-            }
-            if (nibbleAt(pan, 0, i) != id) {
-                return false;
-            }
-        }
-        return true;
-    }
 
-    /**
-     * True when the certificate's Application PAN (10 bytes at offset 2) equals
-     * the card PAN; the 'F' padding nibbles are wildcards (EMV v4.4 Book 2
-     * §6.4 step 8).
-     */
-    private static boolean applicationPanMatches(byte[] recCert, byte[] pan) {
-        for (int i = 0; i < 20; i++) {
-            int certPan = nibbleAt(recCert, 2, i);
-            if (certPan == 0xF) {
-                continue; // padding
-            }
-            if (nibbleAt(pan, 0, i) != certPan) {
-                return false;
-            }
-        }
-        return true;
-    }
 
-    /**
-     * True when the certificate expiration date (MMYY at {@code offset}) is not
-     * before the transaction date (tag '9A', YYMMDD); a null date skips the
-     * check (EMV v4.4 Book 2 §5.3/§6.3 step 9).
-     *
-     * <p>The 2-digit years are expanded per EMV v4.4 Book 4 §6.7.1/§6.7.3
-     * (data authentication dates before, including and after 2000): YY 00-49 is
-     * 20YY and YY 50-99 is 19YY.  Both dates are BCD-encoded, so each byte is
-     * decoded before comparison; a raw byte comparison would mis-order dates
-     * across the century boundary.
-     */
-    private static boolean certificateNotExpired(byte[] recCert, int offset,
-            byte[] transactionDate) {
-        if (transactionDate == null || transactionDate.length < 2) {
-            return true;
-        }
-        int expiryMonth = bcd(recCert[offset]);
-        int expiryYear = fourDigitYear(bcd(recCert[offset + 1]));
-        int txYear = fourDigitYear(bcd(transactionDate[0]));
-        int txMonth = bcd(transactionDate[1]);
-        if (txYear != expiryYear) {
-            return txYear < expiryYear;
-        }
-        return txMonth <= expiryMonth;
-    }
 
-    /** Decodes one BCD byte (two decimal digits), or 0xFF for a non-decimal nibble. */
-    private static int bcd(byte value) {
-        int hi = (value >> 4) & 0x0F;
-        int lo = value & 0x0F;
-        if (hi > 9 || lo > 9) {
-            return 0xFF;
-        }
-        return hi * 10 + lo;
-    }
 
-    /**
-     * Expands a 2-digit year to four digits (EMV v4.4 Book 4 §6.7.3): 00-49 is
-     * 20YY, 50-99 is 19YY.
-     */
-    private static int fourDigitYear(int yy) {
-        if (yy == 0xFF) {
-            return 0xFF; // non-BCD: keep it out of any valid comparison range
-        }
-        return yy < 50 ? 2000 + yy : 1900 + yy;
-    }
-
-    /** The nibble at the given nibble index within a 4-byte field at byteOffset. */
-    private static int nibbleAt(byte[] b, int byteOffset, int nibble) {
-        int idx = byteOffset + (nibble >> 1);
-        if (idx >= b.length) {
-            return 0xF;
-        }
-        int v = b[idx] & 0xFF;
-        return (nibble & 1) == 0 ? (v >> 4) & 0x0F : v & 0x0F;
-    }
 }

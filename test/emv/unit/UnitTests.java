@@ -56,6 +56,7 @@ public final class UnitTests {
         System.out.println();
         System.out.println("== host ==");
         LayeringTest.run();
+        AllocationCensusTest.run();
         TagsTest.run();
         TagPolicyTest.run();
         ResponsesTest.run();

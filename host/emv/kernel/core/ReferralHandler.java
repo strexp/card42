@@ -1,4 +1,4 @@
-package card42.host.emv.kernel.data;
+package card42.host.emv.kernel.core;
 
 /**
  * Handles an issuer-initiated voice referral on an attended terminal

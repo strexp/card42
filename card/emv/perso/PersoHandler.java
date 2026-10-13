@@ -29,7 +29,7 @@ public class PersoHandler {
     /** Maximum size of one instance's complete DGI sequence (docs/specs/emv/personalization.md §1). */
     private static final short BUFFER_SIZE = (short) 2048;
 
-    private final EMVAppletBase applet;
+    private final PersoTarget applet;
 
     /**
      * Package-shared reassembly buffer for the DGI sequence.  A payment
@@ -52,7 +52,7 @@ public class PersoHandler {
      * (EMV CPS v2.0 §4.3.4.6). */
     private short expectedBlock;
 
-    public PersoHandler(EMVAppletBase applet) {
+    public PersoHandler(PersoTarget applet) {
         this.applet = applet;
         alloc();
         reset();
@@ -111,7 +111,7 @@ public class PersoHandler {
      */
     private short handleBlock(short p1, short p2, byte[] src, short off, short len,
                               byte[] outBuf, short outOff) {
-        if (applet.protocolState.getLifecycle() != EMVRoles.PERSONALISATION) {
+        if (applet.lifecycle() != EMVRoles.PERSONALISATION) {
             // Already personalized: STORE DATA is refused (docs/specs/common/architecture.md §3).
             ISOException.throwIt(SW_CONDITIONS_NOT_SATISFIED);
         }

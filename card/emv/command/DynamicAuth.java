@@ -61,7 +61,7 @@ public class DynamicAuth {
      * (docs/specs/common/cryptography.md §6, §9).
      */
     private void ensureAuthMessage(short needed) {
-        byte[] scratch = protocolState.getWorkScratch(needed);
+        byte[] scratch = protocolState.getWorkScratch();
         // The scratch is a single shared buffer, so this is the same reference
         // on every DDA/CDA: assign it only when it actually changes, otherwise
         // each command costs a same-value persistent write, and a same-value

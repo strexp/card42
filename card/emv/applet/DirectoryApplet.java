@@ -319,7 +319,7 @@ public class DirectoryApplet extends EMVAppletBase {
 
 	// --- Personalization (EMV CPS v2.0 Annex A) ---------
 
-	protected void applyPersoDgi(short dgi, byte[] buf, short off, short len) {
+	public void applyPersoDgi(short dgi, byte[] buf, short off, short len) {
 		switch (dgi) {
 		case TlvTags.DGI_FCI_RESPONSE:
 			// EMV CPS v2.0 Annex A DGI '9102' SELECT response A5 template: the PSE requires the
@@ -358,12 +358,12 @@ public class DirectoryApplet extends EMVAppletBase {
 	}
 
 	/** True once the EMV CPS v2.0 Annex A DGI '9102' FCI was seen. */
-	protected boolean persoCheckComplete() {
+	public boolean persoCheckComplete() {
 		return sawFci;
 	}
 
 	/** Clears the directory personalization markers (see PersoHandler). */
-	protected void resetPersoState() {
+	public void resetPersoState() {
 		sawFci = false;
 		fciOverrideLength = 0;
 		records.reset();

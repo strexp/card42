@@ -1,6 +1,6 @@
 package card42.test;
 
-import card42.host.common.codec.Responses;
+import card42.host.emv.lib.Responses;
 
 /**
  * Pure-JVM tests for the Cryptogram Information Data helpers

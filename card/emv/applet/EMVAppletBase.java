@@ -34,7 +34,7 @@ import org.globalplatform.Personalization;
  * @author card42
  */
 
-public abstract class EMVAppletBase extends AppletBase implements Personalization {
+public abstract class EMVAppletBase extends AppletBase implements Personalization, PersoTarget {
 
 	protected final EMVProtocolState protocolState;
 
@@ -183,7 +183,7 @@ public abstract class EMVAppletBase extends AppletBase implements Personalizatio
 	}
 
 	/** Resolves the role once, on the first SELECT or personalization block. */
-	void initIfNeeded() {
+	public void initIfNeeded() {
 		if (initialized) {
 			return;
 		}
@@ -283,21 +283,26 @@ public abstract class EMVAppletBase extends AppletBase implements Personalizatio
 	 * Applies one DGI from a personalization sequence (EMV CPS v2.0 Annex A).
 	 * Called inside a transaction while the applet is not necessarily selected.
 	 */
-	protected abstract void applyPersoDgi(short dgi, byte[] buf, short off, short len);
+	public abstract void applyPersoDgi(short dgi, byte[] buf, short off, short len);
 
 	/**
 	 * True if every DGI required by this applet was received.  Called after the
 	 * last block; returning false aborts the personalization with 6A80
 	 * (EMV CPS v2.0 §3.3).
 	 */
-	protected abstract boolean persoCheckComplete();
+	public abstract boolean persoCheckComplete();
 
 	/**
 	 * Marks the instance as personalized: switches the lifecycle to READY.
 	 * Called by PersoHandler inside the Security Domain's transaction.
 	 */
-	protected void persoComplete() {
+	public void persoComplete() {
 		protocolState.setLifecycle(EMVRoles.READY);
+	}
+
+	/** The lifecycle state (PersoTarget): personalization only runs in PERSONALISATION. */
+	public byte lifecycle() {
+		return protocolState.getLifecycle();
 	}
 
 	/**
@@ -307,7 +312,7 @@ public abstract class EMVAppletBase extends AppletBase implements Personalizatio
 	 * complete (GP {@code Personalization.processData} leaves atomicity to the
 	 * application).  The default is a no-op.
 	 */
-	protected void resetPersoState() {
+	public void resetPersoState() {
 	}
 
 	/** True once a CARD BLOCK disabled the whole card (EMV v4.4 Book 3 §10.10). */

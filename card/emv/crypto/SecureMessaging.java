@@ -385,8 +385,7 @@ public class SecureMessaging {
         // as the other work-scratch users (offline-PIN recovery, DDA/CDA
         // message, ARPC), so it shares the one transient buffer
         // (docs/specs/common/risks.md, docs/specs/common/cryptography.md §9).
-        byte[] scratch = protocolState.getWorkScratch(
-                profile.isAes() ? SCRATCH_SIZE_AES : SCRATCH_SIZE);
+        byte[] scratch = protocolState.getWorkScratch();
         short macInputLength = format1MacInput(apdu, dataOff, dataLen,
                 scriptIcv, blockSize, blockSize, scratch, (short) 0);
 

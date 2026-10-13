@@ -4,7 +4,7 @@ import java.math.BigInteger;
 
 import card42.host.emv.oda.CaKey;
 import card42.host.emv.oda.CaKeyStore;
-import card42.host.emv.oda.SdaKeys;
+import card42.host.emv.app.perso.SdaKeys;
 
 /**
  * Test fixtures for the demo RSA key material used by the sample personalization
