@@ -85,8 +85,11 @@
 
 ## 待办
 
-- [ ] **E5.8 EAC 1.11（可选，低优先）**：EAC 1.11 变体，仅在有真卡需求时做
-  （`card/emrtd/access/*`）。
+- [ ] **E5.8 EAC 1.11 / 附加生物识别加密（可实现，低优先）**：EAC v1 本体
+  （PACE + CA v1 + TA v1）已落地，本项仅指 legacy “EAC 1.11” profile 及**附加生物识别加密**
+  （Doc 9303-11 §7.2）。用现有 ECDH/CA 密钥派生加密密钥即可，属**可实现未做**（非平台限制）。
+  仅在有真卡需求时做（`card/emrtd/access/*`）。支持度矩阵见
+  [`docs/specs/emrtd/algorithm-support.md`](docs/specs/emrtd/algorithm-support.md)。
 - [ ] **T5.1 PACE 官方 BSI 测试向量**：BSI TR-03110 Test-Vector 文档未提供；现以 BSI KDF
   定义独立计算的 KAT + 第三方独立主机库互操作验证。
   （`test/emrtd/unit/host/EmrtdHostTest.java` 的 `paceKdf` 注释已改为“按定义计算、非 BSI
@@ -128,7 +131,8 @@
   **真卡复测已通过（2026-10-12，J3R180 / ACR1581 PICC）**：全部 7 个 eMRTD suite（含
   `EmrtdTerminalAuthIntegrationTest` 的 PACE→CA→TA 与扩展长度 PSO）全绿。**教训**：TA 的 ECDSA
   验签引擎须在**安装期**构建，不得在 SD 个性化事务内（DGI `FF07`）构建——J3R180 会 `6F00`。
-  RsaPss/双信任点/DG3-DG4 门控由单测覆盖；示例个性化仍用 ECDSA。仅 EAC 1.11 待办。
+  RsaPss/双信任点/DG3-DG4 门控由单测覆盖；示例个性化仍用 ECDSA。仅附加生物识别加密
+  （Doc 9303-11 §7.2，旧称 EAC 1.11）待办。
 - [!] **Chip Authentication AES profile（`id-CA-*-AES-CBC-CMAC-*`，延后）**：卡侧与主机
   `ChipAuth` 均仅 ECDH+3DES（服务器宣告 `id-CA-ECDH-3DES-CBC-CBC`）；AES CA 需算法/密钥引用
   绑定（`MSE:Set KAT` 的 keyId）与 AES-CMAC KDF/SM 切换。影响：拒绝 3DES 的终端无法完成 CA，
@@ -136,9 +140,16 @@
 
 ## 延后 / 范围外
 
-- [!] **AES-192/256 PACE**：卡侧 `AesCmac` 仅 AES-128；当前支持 3DES 与 AES-128。
-- [!] **PACE DH generic mapping**：主机仅实现 ECDH 通用映射；DH-GM OID 被显式拒绝
-  （`Pace.authenticate`），当前无 DH 卡需求。
+- [!] **AES-192/256 PACE / CA / SM（平台不可能，已排除）**：jcsl 的 AES 仅 128-bit
+  （`LENGTH_AES_256`/`ALG_AES_BLOCK_256_*` 抛 `NO_SUCH_ALGORITHM`），卡侧 `AesCmac` 亦按
+  16 B 密钥写死，CI 门禁无法验证，故不再计划（J3R180 是否支持 AES-256 未做探针实测）。
+  当前 PACE/CA/SM 支持 3DES 与 AES-128。判据见
+  [`docs/specs/emrtd/algorithm-support.md`](docs/specs/emrtd/algorithm-support.md) §3。
+- [!] **PACE DH generic mapping（平台不可能，已排除）**：卡侧通用映射需算 `G' = G^s · H`
+  （MODP 模乘），Java Card classic 无公开大整数/模乘原语，也无 `ALG_DH_PACE_GM`，故无法实现
+  （主机虽可用 `BigInteger` 写，但无卡可测）。注意 **DH 版 Chip Authentication 是可做的**
+  （`KeyAgreement.ALG_DH_PLAIN` 够用），与 DH-GM 不同。判据见
+  [`docs/specs/emrtd/algorithm-support.md`](docs/specs/emrtd/algorithm-support.md) §3。
 - [!] **PACE 非标准化域参数（`PACEDomainParameterInfo`）**：主机仅支持标准化 P-256
   （`SecurityInfo.parse` 对未知 PACE OID 静默丢弃，Doc 9303-11 §9.2.2）；影响有限。
 - **范围外**：国别 profile、生物 CVM、LDS2 之外的附加应用；代码内自签证书（`SodBuilder`
