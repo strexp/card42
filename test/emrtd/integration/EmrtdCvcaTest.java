@@ -21,10 +21,11 @@ import card42.host.emrtd.transport.EmrtdTerminal;
  *
  * <p>After PACE with the MRZ the LDS1 application exposes EF.CVCA (FID 011C,
  * SFI 1C) as a fixed 36-octet file of {@code 42 <len> <CAR>} data objects, most
- * recent first, padded with 0x00.  When the terminal requests the CARs during
- * PACE (DO'7F4C'), the card returns the same most recent reference as DO'87'
- * in the PACE authentication response.  EF.CVCA read access is PACE, so a
- * plaintext read before PACE is refused.
+ * recent first, padded with 0x00 when short.  The demo personalizes two CVCA
+ * trust points (ECDSA and RSA-PSS), so the file holds two references.  When the
+ * terminal requests the CARs during PACE (DO'7F4C'), the card returns the most
+ * recent reference as DO'87' in the PACE authentication response.  EF.CVCA read
+ * access is PACE, so a plaintext read before PACE is refused.
  */
 public final class EmrtdCvcaTest {
 
@@ -76,17 +77,19 @@ public final class EmrtdCvcaTest {
         Checks.check("PACE returned a CVCA CAR", cars.size() >= 1);
         Checks.bytes(DEMO_CAR, cars.get(0), "PACE DO'87' is the demo CVCA CAR");
 
-        // EF.CVCA is a fixed 36-octet file: 42 10 <CAR> padded with 0x00.
+        // EF.CVCA is a fixed 36-octet file: the demo carries two trust points
+        // (ECDSA and RSA-PSS), so it holds two 42 10 <CAR> data objects with no
+        // padding (a single trust point would be padded with 0x00).
         byte[] cvca = LdsReader.read(terminal, LdsFileUtil.FID_CVCA);
         Checks.check("EF.CVCA is 36 octets", cvca.length == 36);
         Checks.check("EF.CVCA first CAR is 42 10", (cvca[0] & 0xFF) == 0x42
                 && (cvca[1] & 0xFF) == 16);
         Checks.bytes(DEMO_CAR, java.util.Arrays.copyOfRange(cvca, 2, 18),
-                "EF.CVCA carries the demo CVCA CAR");
-        boolean padded = true;
-        for (int i = 18; i < 36; i++) {
-            padded &= cvca[i] == 0;
-        }
-        Checks.check("EF.CVCA is padded with 0x00", padded);
+                "EF.CVCA carries the demo EC CVCA CAR");
+        Checks.check("EF.CVCA second CAR is 42 10", (cvca[18] & 0xFF) == 0x42
+                && (cvca[19] & 0xFF) == 16);
+        Checks.bytes("UTCVCA0000000002".getBytes(StandardCharsets.US_ASCII),
+                java.util.Arrays.copyOfRange(cvca, 20, 36),
+                "EF.CVCA carries the demo RSA CVCA CAR");
     }
 }

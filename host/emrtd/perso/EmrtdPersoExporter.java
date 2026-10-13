@@ -24,18 +24,26 @@ import card42.host.emrtd.ta.TaChain;
 /**
  * Builds the GP STORE DATA DGI sequence that personalizes a card42-emrtd LDS1
  * instance (H5.2/H5.4).  The DGI number is the target FID; the project DGIs
- * carry the key material: {@code FF01} = BAC K_seed, {@code FF02} = the AA
+ * carry the key material: {@code FF01} = BAC K_seed, {@code FF02} = the RSA AA
  * private key (modulus length || modulus || exponent length || exponent),
  * {@code FF03} = the Chip Authentication P-256 scalar, {@code FF04} =
- * SHA-1(MRZ_information) and {@code FF06} = raw CAN PACE password encodings,
- * and {@code FF05} = the master-file EF.CardSecurity.  The card's
- * {@code EmrtdApplet.applyPerso} consumes exactly this sequence.
+ * SHA-1(MRZ_information), {@code FF06} = raw CAN PACE password encodings,
+ * {@code FF0A} = the AA algorithm, {@code FF0B}/{@code FF0C} = RSA CVCA trust
+ * points, {@code FF0D} = the ECDSA AA scalar, and {@code FF05} = the
+ * master-file EF.CardSecurity.
+ *
+ * <p>The demo data is comprehensive: DG1, DG2 and DG3–DG16 (DG6 reserved),
+ * the LDS2 Travel/Visa/Additional Biometrics applications with several records,
+ * Chip Authentication (ECDH 3DES + AES-128), PACE (3DES + AES-128) and Terminal
+ * Authentication with <em>both</em> an ECDSA and an RSA-PSS CVCA trust point, so
+ * every mutually-compatible algorithm is present at once (docs/specs/emrtd/
+ * algorithm-support.md).  Only the AA signature algorithm is mutually exclusive
+ * and selected by the sample suffix ({@code -aa=sha1|sha256|ecdsa}).
  *
  * <p>{@code main} emits {@code <AID> <hex>} lines for GPPro
  * {@code --personalize}.  With {@code -script=<path>} it personalizes the
- * documents of an {@link LdsScript} (A2); without it, it uses the built-in
- * ICAO Doc 9303-11 sample passport and a freshly generated RSA-2048 AA key.
- * {@code -emit} prints the built-in sample in script form.
+ * documents of an {@link LdsScript} (A2); with {@code -emit} it prints the
+ * built-in sample in script form.
  */
 public final class EmrtdPersoExporter {
 
@@ -51,99 +59,71 @@ public final class EmrtdPersoExporter {
     private static final String DEFAULT_DSC = "perso/emrtd/dsc.crt";
     private static final String DEFAULT_DSC_KEY = "perso/emrtd/dsc.key";
 
-    /** DGI FF0A value: RSA ISO/IEC 9796-2 Scheme 1 + SHA-1 (trailer option 1). */
-    private static final byte AA_ALGORITHM_SHA1 = (byte) 0x01;
-    /** DGI FF0A value: RSA ISO/IEC 9796-2 Scheme 1 + SHA-256 (trailer option 2). */
-    private static final byte AA_ALGORITHM_SHA256 = (byte) 0x02;
-    /** The demo AA signature algorithm (wired to DGI FF0A; ICAO Doc 9303-11 §6.1.2.2). */
-    private static final String DEMO_AA_ALGORITHM = "sha256";
-
+    /** LDS1 project DGI: AA signature algorithm (1 = SHA-1, 2 = SHA-256, 3 = ECDSA). */
+    private static final int DGI_AA_ALGORITHM = 0xFF0A;
     /** LDS1 project DGI: Chip Authentication static P-256 private scalar. */
     private static final int DGI_CA_KEY = 0xFF03;
     /** LDS1 project DGI: master-file EF.CardSecurity CMS SignedData. */
     private static final int DGI_CARD_SECURITY = 0xFF05;
     /** LDS1 project DGI: PACE password encoding f(CAN) = raw CAN (ref 0x02). */
     private static final int DGI_PACE_CAN_SEED = 0xFF06;
-    /** LDS1 project DGI: AA signature algorithm (1 = SHA-1, 2 = SHA-256). */
-    private static final int DGI_AA_ALGORITHM = 0xFF0A;
-    /** Terminal Authentication CVCA trust point (W || refLen || CAR || auth). */
+    /** Terminal Authentication EC CVCA trust point (W || refLen || CAR || auth). */
     private static final int DGI_TA_TRUST_POINT = 0xFF07;
+    /** Terminal Authentication RSA CVCA trust point (mod/exp + refLen + CAR + auth). */
+    private static final int DGI_TA_TRUST_POINT_RSA = 0xFF0B;
     /** Terminal Authentication current date (6 octets, unpacked BCD YYMMDD). */
     private static final int DGI_TA_CURRENT_DATE = 0xFF08;
+    /** DGI FF0D: ECDSA AA private scalar (P-256). */
+    private static final int DGI_AA_EC_KEY = 0xFF0D;
+
     /** Demo pre-personalization date, earlier than the demo certificates' Effective Date. */
     private static final String TA_CURRENT_DATE = "240101";
+
+    /** DGI FF0A value: RSA ISO/IEC 9796-2 Scheme 1 + SHA-1 (trailer option 1). */
+    private static final byte AA_ALGORITHM_SHA1 = (byte) 0x01;
+    /** DGI FF0A value: RSA ISO/IEC 9796-2 Scheme 1 + SHA-256 (trailer option 2). */
+    private static final byte AA_ALGORITHM_SHA256 = (byte) 0x02;
+    /** DGI FF0A value: ECDSA-SHA-256 (P-256, plain r||s). */
+    private static final byte AA_ALGORITHM_ECDSA = (byte) 0x03;
+    /** The default sample AA algorithm. */
+    public static final String DEFAULT_AA = "sha256";
 
     private EmrtdPersoExporter() {
     }
 
-    /**
-     * The complete DGI sequence for the demo passport and AA key.  The SOD is
-     * built from the SHA-256 hashes of DG1, DG2, DG11, DG12, DG14 and DG15 and
-     * signed by the DSC.
-     */
-    public static byte[] dgiSequence(KeyPair aaKey, X509Certificate dscCertificate,
-                                     PrivateKey dscKey, File portrait) throws Exception {
-        BigInteger modulus = ((java.security.interfaces.RSAPublicKey) aaKey.getPublic()).getModulus();
-        BigInteger privateExponent = ((RSAPrivateKey) aaKey.getPrivate()).getPrivateExponent();
+    /** An algorithm combination for the sample data. */
+    public static final class Variant {
+        /** {@code sha1}, {@code sha256} or {@code ecdsa}. */
+        public final String aa;
+        /**
+         * {@code ec}, {@code rsa} or {@code both}.  Since the card holds two CVCA
+         * trust-point slots, {@code both} seeds an ECDSA and an RSA-PSS trust
+         * point at once and every sample uses it.
+         */
+        public final String ta;
 
-        byte[] dg1 = dg1();
-        byte[] dg2 = dg2(portrait);
-        byte[] dg11 = dg11();
-        byte[] dg12 = dg12();
-        byte[] dg15 = dg15(modulus);
+        public Variant(String aa, String ta) {
+            this.aa = aa;
+            this.ta = ta;
+        }
 
-        // Chip Authentication: the static P-256 scalar (DGI FF03) and the
-        // matching master-file EF.CardSecurity (DGI FF05).  EF.CardSecurity
-        // contains the EF.CardAccess SecurityInfos plus the CA public key
-        // (Doc 9303-10 §3.11.4); EF.DG14 carries the same SecurityInfos
-        // (Doc 9303-10 §4.7.14).
-        KeyPair caKeyPair = generateP256Key();
-        byte[] caScalar = unsigned(((ECPrivateKey) caKeyPair.getPrivate()).getS());
-        byte[] cardAccess = cardAccessInfos();
-        byte[] securityInfos = CardSecurityBuilder.securityInfos(
-                caKeyPair.getPublic().getEncoded(), 1, cardAccess);
-        byte[] dg14 = dg14(securityInfos);
-        byte[] cardSecurity = CardSecurityBuilder.build(securityInfos, dscKey, dscCertificate);
-
-        Map<Integer, byte[]> hashes = new LinkedHashMap<Integer, byte[]>();
-        hashes.put(1, sha256(dg1));
-        hashes.put(2, sha256(dg2));
-        hashes.put(11, sha256(dg11));
-        hashes.put(12, sha256(dg12));
-        hashes.put(14, sha256(dg14));
-        hashes.put(15, sha256(dg15));
-        byte[] sod = SodBuilder.build(hashes, dscKey, dscCertificate);
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        writeDgi(out, 0xFF01,
-                MrzKeySeed.seed(DOCUMENT_NUMBER, DATE_OF_BIRTH, DATE_OF_EXPIRY));
-        writeDgi(out, 0xFF04, paceSeed(DOCUMENT_NUMBER, DATE_OF_BIRTH, DATE_OF_EXPIRY));
-        writeDgi(out, DGI_PACE_CAN_SEED, canSeed(CARD_ACCESS_NUMBER));
-        writeDgi(out, LdsFileUtil.FID_DG1, dg1);
-        writeDgi(out, LdsFileUtil.FID_DG2, dg2);
-        writeDgi(out, LdsFileUtil.FID_DG11, dg11);
-        writeDgi(out, LdsFileUtil.FID_DG12, dg12);
-        writeDgi(out, LdsFileUtil.FID_DG14, dg14);
-        writeDgi(out, LdsFileUtil.FID_DG15, dg15);
-        // EF.CardAccess in the master file (Doc 9303-10 §3.11.3): the LDS1
-        // instance advertises PACE and Chip Authentication.
-        writeDgi(out, LdsFileUtil.FID_CARD_ACCESS, cardAccess);
-        writeDgi(out, DGI_CA_KEY, caScalar);
-        writeDgi(out, DGI_CARD_SECURITY, cardSecurity);
-        // EF.COM is generated by the card's LdsCatalog data-group index.
-        writeDgi(out, LdsFileUtil.FID_SOD, sod);
-        writeDgi(out, DGI_TA_TRUST_POINT, trustPointValue(demoTrustPoint()));
-        writeDgi(out, DGI_TA_CURRENT_DATE, taCurrentDate(null));
-        writeDgi(out, 0xFF02, aaPrivateKey(modulus, privateExponent));
-        writeDgi(out, DGI_AA_ALGORITHM, new byte[] { AA_ALGORITHM_SHA256 });
-        return out.toByteArray();
+        /** The sample suffix, e.g. {@code sha256} (default) or {@code sha1}. */
+        public String suffix() {
+            return aa;
+        }
     }
 
+    /** The default variant (AA = RSA ISO/IEC 9796-2 + SHA-256). */
+    public static final Variant DEFAULT_VARIANT = new Variant(DEFAULT_AA, "both");
+
+    // --- Public entry points -------------------------------------------------
+
     /**
-     * The DGI sequence for one script entry (A2).  The BAC seed comes from
+     * The complete DGI sequence for one script entry.  The BAC seed comes from
      * {@code @doc/@dob/@doe}, every {@code @dg} becomes its EF, {@code @sod} is
-     * used verbatim (or built from the DG hashes when absent), and {@code @aa}
-     * carries the AA private key.
+     * used verbatim (or built from the DG hashes when absent), {@code @aa} (RSA)
+     * or {@code @aa-ec} (ECDSA) carries the AA private key, and {@code @cvca} /
+     * {@code @cvca-rsa} the TA trust points.
      */
     public static byte[] dgiSequence(LdsScript.Entry entry, X509Certificate dscCertificate,
                                      PrivateKey dscKey) throws Exception {
@@ -166,10 +146,10 @@ public final class EmrtdPersoExporter {
         for (Map.Entry<Integer, byte[]> dg : entry.dataGroups.entrySet()) {
             writeDgi(out, LdsFileUtil.dgFid(dg.getKey()), dg.getValue());
         }
-        // EF.CardAccess in the master file (Doc 9303-10 §3.11.3): PACE and,
-        // when the entry carries CA material, Chip Authentication.
+        // EF.CardAccess in the master file (Doc 9303-10 §3.11.3): PACE, Chip
+        // Authentication and, for the ECDSA AA variant, ActiveAuthenticationInfo.
         writeDgi(out, LdsFileUtil.FID_CARD_ACCESS,
-                entry.cardAccess != null ? entry.cardAccess : cardAccessInfos());
+                entry.cardAccess != null ? entry.cardAccess : cardAccessInfos(entry.aaAlgorithm));
         // Chip Authentication static scalar (FF03) and the master-file
         // EF.CardSecurity (FF05) that publishes the matching public key.
         if (entry.caKey != null) {
@@ -187,9 +167,13 @@ public final class EmrtdPersoExporter {
             }
             writeDgi(out, LdsFileUtil.FID_SOD, SodBuilder.build(hashes, dscKey, dscCertificate));
         }
+        // Active Authentication key material + algorithm (mutually exclusive).
+        writeDgi(out, DGI_AA_ALGORITHM, new byte[] { aaAlgorithmByte(entry.aaAlgorithm) });
         if (entry.aaKey != null) {
             writeDgi(out, 0xFF02, entry.aaKey);
-            writeDgi(out, DGI_AA_ALGORITHM, new byte[] { aaAlgorithmByte(entry.aaAlgorithm) });
+        }
+        if (entry.aaEcKey != null) {
+            writeDgi(out, DGI_AA_EC_KEY, entry.aaEcKey);
         }
         writeTrustPoints(out, entry);
         return out.toByteArray();
@@ -206,16 +190,13 @@ public final class EmrtdPersoExporter {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         if (entry.documentNumber != null && entry.dateOfBirth != null
                 && entry.dateOfExpiry != null) {
-            // DGI FF04 = PACE key seed SHA-1(MRZ_information) (card LdsPerso).
             writeDgi(out, 0xFF04,
                     paceSeed(entry.documentNumber, entry.dateOfBirth, entry.dateOfExpiry));
         }
         if (entry.can != null) {
-            // DGI FF06 = PACE password encoding f(CAN) = raw CAN (ref 0x02).
             writeDgi(out, 0xFF06, canSeed(entry.can));
         }
         if (entry.caKey != null) {
-            // DGI FF03 = Chip Authentication static P-256 private scalar.
             writeDgi(out, 0xFF03, entry.caKey);
         }
         if (entry.cardAccess != null) {
@@ -235,118 +216,147 @@ public final class EmrtdPersoExporter {
         return out.toByteArray();
     }
 
-    /** The built-in ICAO sample as an {@link LdsScript} text. */
-    public static String script(KeyPair aaKey, X509Certificate dscCertificate,
-                                PrivateKey dscKey, File portrait) throws Exception {
-        BigInteger modulus = ((java.security.interfaces.RSAPublicKey) aaKey.getPublic()).getModulus();
-        BigInteger privateExponent = ((RSAPrivateKey) aaKey.getPrivate()).getPrivateExponent();
+    /**
+     * The built-in ICAO sample as an {@link LdsScript} text for the given AA
+     * variant.  Every simultaneously-compatible algorithm is present: PACE and
+     * Chip Authentication advertise 3DES and AES-128, and Terminal
+     * Authentication gets an ECDSA and an RSA-PSS CVCA trust point.
+     */
+    public static String script(String aa, File portrait) throws Exception {
+        return script(aa, DEFAULT_DSC, DEFAULT_DSC_KEY, portrait);
+    }
 
-        byte[] dg1 = dg1();
-        byte[] dg2 = dg2(portrait);
-        byte[] dg11 = dg11();
-        byte[] dg12 = dg12();
-        byte[] dg15 = dg15(modulus);
+    public static String script(String aa, String dscPath, String dscKeyPath, File portrait)
+            throws Exception {
+        X509Certificate dscCertificate = loadCertificate(dscPath);
+        PrivateKey dscKey = loadPrivateKey(dscKeyPath);
+
+        Map<Integer, byte[]> dgs = dataGroups(portrait);
+        // AA material: RSA (SHA-1/256) or ECDSA.
+        byte[] aaKey = null;
+        byte[] aaEcKey = null;
+        if ("ecdsa".equalsIgnoreCase(aa)) {
+            KeyPair ecAa = generateP256Key();
+            aaEcKey = unsigned(((ECPrivateKey) ecAa.getPrivate()).getS());
+            dgs.put(15, dg15Ec(ecAa.getPublic().getEncoded()));
+        } else {
+            KeyPair rsaAa = generateAaKey();
+            BigInteger modulus = ((java.security.interfaces.RSAPublicKey) rsaAa.getPublic())
+                    .getModulus();
+            BigInteger privateExponent = ((RSAPrivateKey) rsaAa.getPrivate()).getPrivateExponent();
+            aaKey = aaPrivateKey(modulus, privateExponent);
+            dgs.put(15, dg15Rsa(modulus));
+        }
 
         // One Chip Authentication key pair and its SecurityInfos are shared by
-        // EF.DG14, the LDS1 EF.CardSecurity and the LDS2 Travel application:
-        // EF.CardAccess and EF.CardSecurity live in the master file (Doc 9303-10
-        // §3.11.3/§3.11.4), so a card hosts a single EF.CardSecurity.
+        // EF.DG14, EF.CardSecurity and the LDS2 Travel application.
         KeyPair caKeyPair = generateP256Key();
         byte[] caScalar = unsigned(((ECPrivateKey) caKeyPair.getPrivate()).getS());
-        byte[] cardAccessInfos = cardAccessInfos();
+        byte[] cardAccess = cardAccessInfos(aa);
         byte[] securityInfos = CardSecurityBuilder.securityInfos(
-                caKeyPair.getPublic().getEncoded(), 1, cardAccessInfos);
-        byte[] dg14 = dg14(securityInfos);
-        byte[] caCardSecurity = CardSecurityBuilder.build(securityInfos, dscKey, dscCertificate);
+                caKeyPair.getPublic().getEncoded(), 1, cardAccess);
+        dgs.put(14, dg14(securityInfos));
+        byte[] cardSecurity = CardSecurityBuilder.build(securityInfos, dscKey, dscCertificate);
 
         Map<Integer, byte[]> hashes = new LinkedHashMap<Integer, byte[]>();
-        hashes.put(1, sha256(dg1));
-        hashes.put(2, sha256(dg2));
-        hashes.put(11, sha256(dg11));
-        hashes.put(12, sha256(dg12));
-        hashes.put(14, sha256(dg14));
-        hashes.put(15, sha256(dg15));
+        for (Map.Entry<Integer, byte[]> dg : dgs.entrySet()) {
+            hashes.put(dg.getKey(), sha256(dg.getValue()));
+        }
         byte[] sod = SodBuilder.build(hashes, dscKey, dscCertificate);
 
         StringBuilder sb = new StringBuilder();
         sb.append("# card42 eMRTD personalization script - demo set (ICAO Doc 9303-11 sample).\n");
         sb.append("#\n");
-        sb.append("# One section per LDS1 instance (EmrtdPersoExporter):\n");
+        sb.append("# One section per instance (EmrtdPersoExporter).  The demo data is\n");
+        sb.append("# comprehensive (DG1..DG16 except the reserved DG6) and every algorithm\n");
+        sb.append("# that can be present at once is: PACE and Chip Authentication advertise\n");
+        sb.append("# 3DES + AES-128; Terminal Authentication carries an ECDSA and an RSA-PSS\n");
+        sb.append("# CVCA trust point.  Only AA is mutually exclusive and chosen by suffix\n");
+        sb.append("# (@aa-alg), e.g. sample-").append(aa).append(".perso.\n");
         sb.append("#\n");
-        sb.append("#   @instance <AID-hex>          start a section (default ")
-                .append(LdsScript.DEFAULT_AID).append(")\n");
-        sb.append("#   @doc <MRZ document number>   BAC document number\n");
-        sb.append("#   @dob <YYMMDD>                BAC date of birth\n");
-        sb.append("#   @doe <YYMMDD>                BAC date of expiry\n");
-        sb.append("#   @can <6 digits>              Card Access Number for PACE (password ref 0x02)\n");
-        sb.append("#   @dg <n> <hex>                EF.DG<n> content (DG1 mandatory)\n");
-        sb.append("#   @sod <hex>                   EF.SOD content (built from the DG hashes when absent)\n");
-        sb.append("#   @aa <hex>                    AA private key (modLen || modulus || expLen || exponent)\n");
-        sb.append("#   @aa-alg sha1|sha256          AA signature algorithm (default sha1; DGI FF0A)\n");
+        sb.append("#   @instance <AID-hex>          start a section\n");
+        sb.append("#   @doc/@dob/@doe               BAC MRZ fields\n");
+        sb.append("#   @can <6 digits>              Card Access Number for PACE (ref 0x02)\n");
+        sb.append("#   @dg <n> <hex>                EF.DG<n> content\n");
+        sb.append("#   @sod <hex>                   EF.SOD content\n");
+        sb.append("#   @aa <hex>                    RSA AA private key (modLen||mod||expLen||exp)\n");
+        sb.append("#   @aa-ec <hex>                 ECDSA AA private scalar (P-256)\n");
+        sb.append("#   @aa-alg sha1|sha256|ecdsa    AA signature algorithm\n");
         sb.append("#   @ca <hex>                    CA static P-256 private scalar (DGI FF03)\n");
-        sb.append("#   @cardsecurity <hex>          master-file EF.CardSecurity CMS SignedData (DGI FF05)\n");
+        sb.append("#   @cardsecurity <hex>          master-file EF.CardSecurity (DGI FF05)\n");
+        sb.append("#   @ta-date <YYMMDD>            ICC current date (DGI FF08)\n");
+        sb.append("#   @cvca <W> <CAR> <date> <auth> [secondary]        EC CVCA trust point\n");
+        sb.append("#   @cvca-rsa <n> <e> <CAR> <date> <auth> [secondary] RSA CVCA trust point\n");
+        sb.append("#   @lds2 <role> / @record <fid> <hex> / @transparent <fid> <hex>\n");
         sb.append("#\n");
         sb.append("# The EF.SOD is signed by the DSC fixture (perso/emrtd/dsc.crt + dsc.key);\n");
-        sb.append("# the AA key pair is a throwaway demo key.  These keys are printed on purpose\n");
-        sb.append("# and MUST NEVER be used on a real card.\n");
-        sb.append("#\n");
-        sb.append("# Regenerate with `EmrtdPersoExporter -emit`.\n");
+        sb.append("# the AA/CA keys are throwaway demo keys.  NEVER use them on a real card.\n");
+        sb.append("# Regenerate with `EmrtdPersoExporter -emit [-aa=<sha1|sha256|ecdsa>]`.\n");
         sb.append("@instance ").append(LdsScript.DEFAULT_AID).append('\n');
         sb.append("@doc ").append(DOCUMENT_NUMBER).append('\n');
         sb.append("@dob ").append(DATE_OF_BIRTH).append('\n');
         sb.append("@doe ").append(DATE_OF_EXPIRY).append('\n');
         sb.append("@can ").append(CARD_ACCESS_NUMBER).append('\n');
-        sb.append("@dg 1 ").append(Hex.format(dg1)).append('\n');
-        sb.append("@dg 2 ").append(Hex.format(dg2)).append('\n');
-        sb.append("@dg 11 ").append(Hex.format(dg11)).append('\n');
-        sb.append("@dg 12 ").append(Hex.format(dg12)).append('\n');
-        sb.append("@dg 14 ").append(Hex.format(dg14)).append('\n');
-        sb.append("@dg 15 ").append(Hex.format(dg15)).append('\n');
+        for (Map.Entry<Integer, byte[]> dg : dgs.entrySet()) {
+            sb.append("@dg ").append(dg.getKey()).append(' ')
+                    .append(Hex.format(dg.getValue())).append('\n');
+        }
         sb.append("@sod ").append(Hex.format(sod)).append('\n');
-        sb.append("@aa ").append(Hex.format(aaPrivateKey(modulus, privateExponent))).append('\n');
-        sb.append("@aa-alg ").append(DEMO_AA_ALGORITHM).append('\n');
+        if (aaEcKey != null) {
+            sb.append("@aa-ec ").append(Hex.format(aaEcKey)).append('\n');
+        } else {
+            sb.append("@aa ").append(Hex.format(aaKey)).append('\n');
+        }
+        sb.append("@aa-alg ").append(aa).append('\n');
 
-        // Terminal Authentication (ICAO Doc 9303-11 §7.1.4.3): the ICC current
-        // date and the CVCA trust point; the export injects DGI FF08/FF07.
-        LdsScript.TrustPoint tp = demoTrustPoint();
+        // Terminal Authentication: an ECDSA and an RSA-PSS CVCA trust point.
+        LdsScript.TrustPoint ecTp = demoTrustPoint();
         sb.append("@ta-date ").append(TA_CURRENT_DATE).append('\n');
-        sb.append("@cvca ").append(Hex.format(tp.publicKey)).append(' ')
-                .append(tp.car).append(' ').append(tp.effective).append(' ')
-                .append(Hex.format(tp.authorization)).append('\n');
+        sb.append("@cvca ").append(Hex.format(ecTp.publicKey)).append(' ')
+                .append(ecTp.car).append(' ').append(ecTp.effective).append(' ')
+                .append(Hex.format(ecTp.authorization)).append('\n');
+        LdsScript.TrustPoint rsaTp = demoRsaTrustPoint();
+        sb.append("@cvca-rsa ").append(Hex.format(rsaTp.modulus)).append(' ')
+                .append(Hex.format(rsaTp.exponent)).append(' ').append(rsaTp.car).append(' ')
+                .append(rsaTp.effective).append(' ').append(Hex.format(rsaTp.authorization))
+                .append('\n');
 
-        // One Chip Authentication key pair and one EF.CardSecurity are shared
-        // by the LDS1 DF and the LDS2 Travel application: EF.CardAccess and
-        // EF.CardSecurity live in the master file (Doc 9303-10 §3.11.3/§3.11.4),
-        // so a card hosts a single EF.CardSecurity.  The private scalar is
-        // personalized as DGI FF03 and the public key published in
-        // EF.CardSecurity (DGI FF05 for LDS1, FID 011D for LDS2) and EF.DG14.
-        sb.append("@cardaccess ").append(Hex.format(cardAccessInfos)).append('\n');
+        sb.append("@cardaccess ").append(Hex.format(cardAccess)).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
-        sb.append("@cardsecurity ").append(Hex.format(caCardSecurity)).append('\n');
+        sb.append("@cardsecurity ").append(Hex.format(cardSecurity)).append('\n');
 
-        // --- LDS2 Travel Records instance -----------------------------------
-        sb.append("\n# LDS2 Travel Records instance: EF.CardAccess advertises PACE\n");
-        sb.append("# (ECDH generic mapping) and Chip Authentication (ECDH 3DES + AES-128);\n");
-        sb.append("# @ca is the CA static P-256 private scalar (DGI FF03), @cardsecurity\n");
-        sb.append("# publishes the matching public key, @record appends a record.\n");
+        appendLds2Sections(sb, cardAccess, caScalar, cardSecurity, dscCertificate);
+        return sb.toString();
+    }
+
+    // --- LDS2 demo sections --------------------------------------------------
+
+    private static void appendLds2Sections(StringBuilder sb, byte[] cardAccess, byte[] caScalar,
+                                           byte[] cardSecurity, X509Certificate dscCertificate)
+            throws Exception {
+        String certHex = Hex.format(dscCertificate.getEncoded());
+
+        sb.append("\n# LDS2 Travel Records: EntryRecords 0101, ExitRecords 0102,\n");
+        sb.append("# EF.Certificates 011A; EF.CardAccess advertises PACE + CA (3DES/AES).\n");
         sb.append("@instance ").append(LdsFileUtil.AID_TRAVEL).append('\n');
         sb.append("@lds2 travel\n");
         sb.append("@doc ").append(DOCUMENT_NUMBER).append('\n');
         sb.append("@dob ").append(DATE_OF_BIRTH).append('\n');
         sb.append("@doe ").append(DATE_OF_EXPIRY).append('\n');
-        sb.append("@cardaccess ").append(Hex.format(cardAccessInfos)).append('\n');
-        sb.append("@cardsecurity ").append(Hex.format(caCardSecurity)).append('\n');
+        sb.append("@cardaccess ").append(Hex.format(cardAccess)).append('\n');
+        sb.append("@cardsecurity ").append(Hex.format(cardSecurity)).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@record 0101 ").append(Hex.format(sampleTravelRecord("USA", "20260101")))
                 .append('\n');
         sb.append("@record 0101 ").append(Hex.format(sampleTravelRecord("NLD", "20260215")))
                 .append('\n');
-        // EF.Certificates (011A, Doc 9303-10 §5.1.2): the LDS2 Travel signer
-        // certificate (the demo DSC stands in for a real LDS2 signer).
-        sb.append("@record 011A ").append(Hex.format(dscCertificate.getEncoded())).append('\n');
+        sb.append("@record 0101 ").append(Hex.format(sampleTravelRecord("JPN", "20260320")))
+                .append('\n');
+        sb.append("@record 0102 ").append(Hex.format(sampleTravelRecord("DEU", "20260601")))
+                .append('\n');
+        sb.append("@record 011A ").append(certHex).append('\n');
 
-        // --- LDS2 Visa Records instance -------------------------------------
-        sb.append("\n# LDS2 Visa Records instance: EF.VisaRecords 0103.\n");
+        sb.append("\n# LDS2 Visa Records: EF.VisaRecords 0103, EF.Certificates 011A.\n");
         sb.append("@instance ").append(LdsFileUtil.AID_VISA).append('\n');
         sb.append("@lds2 visa\n");
         sb.append("@doc ").append(DOCUMENT_NUMBER).append('\n');
@@ -355,11 +365,12 @@ public final class EmrtdPersoExporter {
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@record 0103 ").append(Hex.format(sampleVisaRecord("JPN", "20260401")))
                 .append('\n');
-        sb.append("@record 011A ").append(Hex.format(dscCertificate.getEncoded())).append('\n');
+        sb.append("@record 0103 ").append(Hex.format(sampleVisaRecord("AUS", "20260505")))
+                .append('\n');
+        sb.append("@record 011A ").append(certHex).append('\n');
 
-        // --- LDS2 Additional Biometrics instance ----------------------------
-        sb.append("\n# LDS2 Additional Biometrics instance: EF.Biometrics1 0201\n");
-        sb.append("# (a transparent EF, Doc 9303-10 §5.3.3).\n");
+        sb.append("\n# LDS2 Additional Biometrics: EF.Biometrics1 0201 (transparent),\n");
+        sb.append("# EF.Certificates 011A.\n");
         sb.append("@instance ").append(LdsFileUtil.AID_BIOMETRICS).append('\n');
         sb.append("@lds2 biometrics\n");
         sb.append("@doc ").append(DOCUMENT_NUMBER).append('\n');
@@ -367,10 +378,32 @@ public final class EmrtdPersoExporter {
         sb.append("@doe ").append(DATE_OF_EXPIRY).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@transparent 0201 ").append(Hex.format(sampleBiometric())).append('\n');
-        return sb.toString();
+        sb.append("@record 011A ").append(certHex).append('\n');
     }
 
-    /** A fresh P-256 (secp256r1) key pair for Chip Authentication. */
+    // --- LDS1 data groups ----------------------------------------------------
+
+    /** All deterministic demo data groups (DG1..DG16 except the reserved DG6). */
+    static Map<Integer, byte[]> dataGroups(File portrait) throws Exception {
+        Map<Integer, byte[]> dgs = new LinkedHashMap<Integer, byte[]>();
+        dgs.put(1, dg1());
+        dgs.put(2, dg2(portrait));
+        dgs.put(3, dg3());
+        dgs.put(4, dg4());
+        dgs.put(5, dg5());
+        dgs.put(7, dg7());
+        dgs.put(8, dg8());
+        dgs.put(9, dg9());
+        dgs.put(10, dg10());
+        dgs.put(11, dg11());
+        dgs.put(12, dg12());
+        dgs.put(13, dg13());
+        dgs.put(16, dg16());
+        // DG14/DG15 depend on the CA/AA keys and are added by the caller.
+        return dgs;
+    }
+
+    /** A fresh P-256 (secp256r1) key pair. */
     private static KeyPair generateP256Key() throws Exception {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
         generator.initialize(new ECGenParameterSpec("secp256r1"));
@@ -378,22 +411,28 @@ public final class EmrtdPersoExporter {
     }
 
     /**
-     * EF.CardAccess SecurityInfos: PACE ECDH-GM 3DES + AES-128, CA ECDH 3DES +
-     * AES-128.
-     *
-     * <p>AES-128 is advertised for both PACE and Chip Authentication; the card
-     * runs CA v1 with AES via {@code MSE:Set AT + GENERAL AUTHENTICATE}
-     * (BSI TR-03110-3 B.2).  A reader that negotiates the strongest advertised
-     * profile (e.g. ReadID) therefore finishes the ~8 KB DG2 read.  Both
-     * profiles remain offered (ICAO Doc 9303-11 §4.4/§6.2).
+     * EF.CardAccess SecurityInfos: PACE ECDH-GM 3DES + AES-128 and CA ECDH
+     * 3DES + AES-128 always; for the ECDSA AA variant also
+     * {@code ActiveAuthenticationInfo} (ICAO Doc 9303-11 §9.2.4, which is
+     * REQUIRED only for ECDSA AA).
      */
-    private static byte[] cardAccessInfos() {
-        return DerWriter.set(
+    private static byte[] cardAccessInfos(String aaAlgorithm) {
+        byte[] set = DerWriter.set(
                 paceInfo(SecurityInfo.ID_PACE_ECDH_GM_3DES),
                 paceInfo(SecurityInfo.ID_PACE_ECDH_GM_AES_128),
                 caInfo(SecurityInfo.ID_CA_ECDH_3DES),
                 caInfo(SecurityInfo.ID_CA_ECDH_AES_128),
                 taInfo());
+        if ("ecdsa".equalsIgnoreCase(aaAlgorithm)) {
+            set = DerWriter.set(
+                    paceInfo(SecurityInfo.ID_PACE_ECDH_GM_3DES),
+                    paceInfo(SecurityInfo.ID_PACE_ECDH_GM_AES_128),
+                    caInfo(SecurityInfo.ID_CA_ECDH_3DES),
+                    caInfo(SecurityInfo.ID_CA_ECDH_AES_128),
+                    aaInfo("0.4.0.127.0.7.1.1.4.1.3"), // id-ecdsa-plain-SHA256
+                    taInfo());
+        }
+        return set;
     }
 
     /** TerminalAuthenticationInfo SEQUENCE { id-TA, version 1 } (ICAO Doc 9303-11 §9.2.8). */
@@ -401,12 +440,15 @@ public final class EmrtdPersoExporter {
         return DerWriter.sequence(DerWriter.oid(SecurityInfo.ID_TA), DerWriter.integer(1));
     }
 
+    /** ActiveAuthenticationInfo SEQUENCE { id-AA, version 1, signatureAlgorithm } (§9.2.4). */
+    private static byte[] aaInfo(String signatureAlgorithmOid) {
+        return DerWriter.sequence(DerWriter.oid(SecurityInfo.ID_AA), DerWriter.integer(1),
+                DerWriter.oid(signatureAlgorithmOid));
+    }
+
     /**
-     * The demo CVCA trust point used when a script does not declare {@code @cvca}
-     * (the built-in sample): the CVCA public key W(65) || refLen(1) || CAR ||
-     * Effective Date || relative authorization [ePassport CHAT, Travel, Visa,
-     * Biometrics].  The demo CVCA matches {@link TaChain#demo} so the host can
-     * build a verifiable chain.
+     * The demo ECDSA CVCA trust point used by {@link TaChain#demo}: the CVCA
+     * public key W(65) || CAR || Effective Date || relative authorization.
      */
     private static LdsScript.TrustPoint demoTrustPoint() {
         TaChain.Chain chain = TaChain.demo(new java.security.SecureRandom());
@@ -417,21 +459,51 @@ public final class EmrtdPersoExporter {
                 new byte[] { 0x03, 0x0F, 0x0F, 0x0F }, false);
     }
 
-    /** Writes DGI FF07/FF09 for each trust point and FF08 for the ICC date. */
+    /** The demo RSA-PSS CVCA trust point used by {@link TaChain#demoRsa}. */
+    private static LdsScript.TrustPoint demoRsaTrustPoint() {
+        return new LdsScript.TrustPoint(TaChain.demoRsaModulus(), TaChain.demoRsaExponent(),
+                TaChain.DEMO_RSA_CAR, TA_CURRENT_DATE, new byte[] { 0x03, 0x0F, 0x0F, 0x0F },
+                false);
+    }
+
+    /** Writes the EC (FF07/FF09) and RSA (FF0B/FF0C) trust points and the ICC date. */
     private static void writeTrustPoints(ByteArrayOutputStream out, LdsScript.Entry entry) {
         for (LdsScript.TrustPoint tp : entry.trustPoints) {
-            writeDgi(out, tp.secondary ? 0xFF09 : 0xFF07, trustPointValue(tp));
+            if (tp.rsa) {
+                writeDgi(out, tp.secondary ? 0xFF0C : DGI_TA_TRUST_POINT_RSA, rsaTrustPointValue(tp));
+            } else {
+                writeDgi(out, tp.secondary ? 0xFF09 : DGI_TA_TRUST_POINT, trustPointValue(tp));
+            }
         }
         writeDgi(out, DGI_TA_CURRENT_DATE, taCurrentDate(entry.taDate));
     }
 
     /**
-     * Encodes one trust point: {@code W(65) || refLen(1) || CAR || effective(6)
+     * Encodes an EC trust point: {@code W(65) || refLen(1) || CAR || effective(6)
      * || auth(4)} (ICAO Doc 9303-11 §7.1.4.3.1).
      */
     private static byte[] trustPointValue(LdsScript.TrustPoint tp) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         out.write(tp.publicKey, 0, tp.publicKey.length);
+        out.write(tp.car.length());
+        out.write(tp.car.getBytes(java.nio.charset.StandardCharsets.US_ASCII), 0, tp.car.length());
+        out.write(dateBytes(tp.effective), 0, 6);
+        out.write(tp.authorization, 0, 4);
+        return out.toByteArray();
+    }
+
+    /**
+     * Encodes an RSA trust point: {@code modLen(2) || modulus || expLen(2) ||
+     * exponent || refLen(1) || CAR || effective(6) || auth(4)} (DGI FF0B).
+     */
+    private static byte[] rsaTrustPointValue(LdsScript.TrustPoint tp) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write((tp.modulus.length >> 8) & 0xFF);
+        out.write(tp.modulus.length & 0xFF);
+        out.write(tp.modulus, 0, tp.modulus.length);
+        out.write((tp.exponent.length >> 8) & 0xFF);
+        out.write(tp.exponent.length & 0xFF);
+        out.write(tp.exponent, 0, tp.exponent.length);
         out.write(tp.car.length());
         out.write(tp.car.getBytes(java.nio.charset.StandardCharsets.US_ASCII), 0, tp.car.length());
         out.write(dateBytes(tp.effective), 0, 6);
@@ -482,7 +554,7 @@ public final class EmrtdPersoExporter {
 
     /** A demo Additional Biometrics EF.Biometrics1 content (transparent EF 0201). */
     private static byte[] sampleBiometric() {
-        return Hex.parse("7F6108020101020203040506");
+        return Hex.parse("7F611002010102020304050608010A0B0C0D0E0F10");
     }
 
     /** Loads an X.509 certificate from a PEM/DER file. */
@@ -525,28 +597,53 @@ public final class EmrtdPersoExporter {
         return Dg2Builder.buildFromImage(portrait);
     }
 
-    /**
-     * DG15 = 6F { SubjectPublicKeyInfo } (ICAO Doc 9303-11 §6.1.5, RFC 5280):
-     * a SEQUENCE of the rsaEncryption AlgorithmIdentifier and a BIT STRING
-     * holding the DER RSAPublicKey.
-     */
-    private static byte[] dg15(BigInteger modulus) {
-        byte[] rsaPublicKey = DerWriter.sequence(
-                DerWriter.integer(modulus),
-                DerWriter.integer(BigInteger.valueOf(65537)));
-        byte[] subjectPublicKey = DerWriter.tlv(0x03,
-                DerWriter.concat(new byte[] { 0x00 }, rsaPublicKey));
-        byte[] algorithm = DerWriter.sequence(
-                DerWriter.oid("1.2.840.113549.1.1.1"),
-                DerWriter.nullValue());
-        return tlv(0x6F, DerWriter.sequence(algorithm, subjectPublicKey));
+    /** DG3 = {@code 63 { 7F61 { 7F60 { 5F2E <fingerprint> } } }} (fingerprints). */
+    private static byte[] dg3() {
+        byte[] bir = tlv(0x7F60, tlv(0x5F2E,
+                Hex.parse("0102030405060708090A0B0C0D0E0F1011121314")));
+        return tlv(0x63, tlv(0x7F61, bir));
+    }
+
+    /** DG4 = {@code 76 { 7F61 { 7F60 { 5F2E <iris> } } }} (irises). */
+    private static byte[] dg4() {
+        byte[] bir = tlv(0x7F60, tlv(0x5F2E,
+                Hex.parse("2122232425262728292A2B2C2D2E2F30")));
+        return tlv(0x76, tlv(0x7F61, bir));
+    }
+
+    /** DG5 = {@code 65 { 5F2E <portrait> }} (displayed portrait). */
+    private static byte[] dg5() {
+        return tlv(0x65, tlv(0x5F2E, Hex.parse("FFD8FFE000104A4649460001")));
+    }
+
+    /** DG7 = {@code 67 { 7F61 { 5F2E <signature image> } }} (signature). */
+    private static byte[] dg7() {
+        return tlv(0x67, tlv(0x7F61, tlv(0x5F2E, Hex.parse("FFD8FFE000104A4649460002"))));
+    }
+
+    /** DG8 = {@code 68 { 5F2B..5F2E }} (data features). */
+    private static byte[] dg8() {
+        ByteArrayOutputStream inner = new ByteArrayOutputStream();
+        TlvWriter.writeTlv(inner, 0x5F2B, Hex.parse("01010101"));
+        TlvWriter.writeTlv(inner, 0x5F2C, Hex.parse("02020202"));
+        TlvWriter.writeTlv(inner, 0x5F2D, Hex.parse("03030303"));
+        TlvWriter.writeTlv(inner, 0x5F2E, Hex.parse("04040404"));
+        return tlv(0x68, inner.toByteArray());
+    }
+
+    /** DG9 = {@code 69 { 5F2B <structure feature points> }}. */
+    private static byte[] dg9() {
+        return tlv(0x69, tlv(0x5F2B, Hex.parse("000102030405060708090A0B")));
+    }
+
+    /** DG10 = {@code 6A { 5F2B <substance feature points> }}. */
+    private static byte[] dg10() {
+        return tlv(0x6A, tlv(0x5F2B, Hex.parse("101112131415161718191A1B")));
     }
 
     /**
      * DG11 = {@code 6B { 5C <tag list> 5F0E <full name> 5F11 <place of birth>
-     * 5F42 <address> 5F12 <telephone> }} (ICAO Doc 9303-10 §4.7.11).  The tag
-     * list mirrors the optional-group form an issuing State normally writes;
-     * the values follow the ICAO Doc 9303-11 sample passport.
+     * 5F42 <address> 5F12 <telephone> }} (ICAO Doc 9303-10 §4.7.11).
      */
     private static byte[] dg11() {
         byte[] tags = { 0x5F, 0x0E, 0x5F, 0x11, 0x5F, 0x42, 0x5F, 0x12 };
@@ -562,8 +659,7 @@ public final class EmrtdPersoExporter {
     /**
      * DG12 = {@code 6C { 5C <tag list> 5F19 <issuing authority> 5F26 <date of
      * issue> 5F55 <date/time of personalization> 5F56 <personalization system
-     * serial> }} (ICAO Doc 9303-10 §4.7.12).  The last two mirror the metadata
-     * a personalization system normally stamps.
+     * serial> }} (ICAO Doc 9303-10 §4.7.12).
      */
     private static byte[] dg12() {
         byte[] tags = { 0x5F, 0x19, 0x5F, 0x26, 0x5F, 0x55, 0x5F, 0x56 };
@@ -576,25 +672,50 @@ public final class EmrtdPersoExporter {
         return tlv(0x6C, inner.toByteArray());
     }
 
+    /** DG13 = {@code 6D { 5F2B <optional details> }} (ICAO Doc 9303-10 §4.7.13). */
+    private static byte[] dg13() {
+        return tlv(0x6D, tlv(0x5F2B, Hex.parse("2021222324252627")));
+    }
+
+    /** DG16 = {@code 70 { 61 { 5F0E <name> } }} (persons to notify, §4.7.16). */
+    private static byte[] dg16() {
+        return tlv(0x70, tlv(0x61, tlv(0x5F0E,
+                "UTOPIA<CONTACT".getBytes(java.nio.charset.StandardCharsets.US_ASCII))));
+    }
+
     /**
      * DG14 = {@code 6E { SecurityInfos }} (ICAO Doc 9303-10 §4.7.14): the same
-     * DER {@code SET OF SecurityInfo} that EF.CardSecurity signs, i.e. the
-     * EF.CardAccess SecurityInfos plus the chip's Chip Authentication public
-     * key.  The value is supplied by {@link CardSecurityBuilder#securityInfos}.
+     * DER {@code SET OF SecurityInfo} that EF.CardSecurity signs.
      */
     private static byte[] dg14(byte[] securityInfos) {
         return tlv(0x6E, securityInfos);
+    }
+
+    /**
+     * DG15 = {@code 6F { SubjectPublicKeyInfo } } for an RSA AA key
+     * (ICAO Doc 9303-11 §6.1.5).
+     */
+    private static byte[] dg15Rsa(BigInteger modulus) {
+        byte[] rsaPublicKey = DerWriter.sequence(
+                DerWriter.integer(modulus),
+                DerWriter.integer(BigInteger.valueOf(65537)));
+        byte[] subjectPublicKey = DerWriter.tlv(0x03,
+                DerWriter.concat(new byte[] { 0x00 }, rsaPublicKey));
+        byte[] algorithm = DerWriter.sequence(
+                DerWriter.oid("1.2.840.113549.1.1.1"),
+                DerWriter.nullValue());
+        return tlv(0x6F, DerWriter.sequence(algorithm, subjectPublicKey));
+    }
+
+    /** DG15 = {@code 6F { SubjectPublicKeyInfo } } for an EC AA key (RFC 5480). */
+    private static byte[] dg15Ec(byte[] subjectPublicKeyInfo) {
+        return tlv(0x6F, subjectPublicKeyInfo);
     }
 
     /** Appends {@code tag || len || US-ASCII(value)} to {@code out}. */
     private static void ascii(ByteArrayOutputStream out, int tag, String value) {
         TlvWriter.writeTlv(out, tag,
                 value.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-    }
-
-    /** The DGI FF0A value for a script's {@code @aa-alg} keyword. */
-    private static byte aaAlgorithmByte(String algorithm) {
-        return "sha256".equalsIgnoreCase(algorithm) ? AA_ALGORITHM_SHA256 : AA_ALGORITHM_SHA1;
     }
 
     private static byte[] aaPrivateKey(BigInteger modulus, BigInteger privateExponent) {
@@ -610,14 +731,19 @@ public final class EmrtdPersoExporter {
         return out.toByteArray();
     }
 
+    private static byte aaAlgorithmByte(String algorithm) {
+        if ("ecdsa".equalsIgnoreCase(algorithm)) {
+            return AA_ALGORITHM_ECDSA;
+        }
+        return "sha256".equalsIgnoreCase(algorithm) ? AA_ALGORITHM_SHA256 : AA_ALGORITHM_SHA1;
+    }
+
     private static byte[] sha256(byte[] data) throws Exception {
         return java.security.MessageDigest.getInstance("SHA-256").digest(data);
     }
 
     /**
-     * The 20-byte PACE key seed SHA-1(MRZ_information) (DGI FF04).  The card
-     * derives K_pi = KDF(seed, 3) from it (BSI TR-03110-3 A.3/B.1,
-     * ICAO Doc 9303-11 §9.7.3).
+     * The 20-byte PACE key seed SHA-1(MRZ_information) (DGI FF04).
      */
     private static byte[] paceSeed(String documentNumber, String dateOfBirth,
                                    String dateOfExpiry) throws Exception {
@@ -625,11 +751,7 @@ public final class EmrtdPersoExporter {
                 MrzKeySeed.mrzInformation(documentNumber, dateOfBirth, dateOfExpiry));
     }
 
-    /**
-     * The PACE password encoding {@code f(CAN)} (DGI FF06, password reference
-     * 0x02, BSI TR-03110-3 A.2.3 Table 5): the raw CAN octets, not a hash.  The
-     * card applies the KDF with counter 3, giving {@code SHA-1(CAN || 00 00 00 03)}.
-     */
+    /** The PACE password encoding {@code f(CAN)} (DGI FF06, password reference 0x02). */
     private static byte[] canSeed(String can) {
         return can.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
     }
@@ -666,6 +788,7 @@ public final class EmrtdPersoExporter {
         String dscPath = DEFAULT_DSC;
         String dscKeyPath = DEFAULT_DSC_KEY;
         String facePath = Dg2Builder.DEFAULT_PORTRAIT;
+        String aa = DEFAULT_AA;
         boolean emit = false;
         for (String arg : args) {
             if (arg.startsWith("-script=")) {
@@ -676,6 +799,8 @@ public final class EmrtdPersoExporter {
                 dscKeyPath = arg.substring("-dsc-key=".length());
             } else if (arg.startsWith("-face=")) {
                 facePath = arg.substring("-face=".length());
+            } else if (arg.startsWith("-aa=")) {
+                aa = arg.substring("-aa=".length());
             } else if (arg.equals("-emit")) {
                 emit = true;
             } else {
@@ -686,17 +811,17 @@ public final class EmrtdPersoExporter {
         PrivateKey dscKey = loadPrivateKey(dscKeyPath);
         File portrait = new File(facePath);
         if (emit) {
-            System.out.print(script(generateAaKey(), dsc, dscKey, portrait));
+            System.out.print(script(aa, dscPath, dscKeyPath, portrait));
             return;
         }
+        LdsScript parsed;
         if (scriptPath != null) {
-            LdsScript parsed = LdsScript.parse(new File(scriptPath));
-            for (LdsScript.Entry entry : parsed.entries) {
-                System.out.println(entry.aid + " " + Hex.format(dgiSequence(entry, dsc, dscKey)));
-            }
-            return;
+            parsed = LdsScript.parse(new File(scriptPath));
+        } else {
+            parsed = LdsScript.parse(script(aa, dscPath, dscKeyPath, portrait));
         }
-        System.out.println(LdsScript.DEFAULT_AID + " "
-                + Hex.format(dgiSequence(generateAaKey(), dsc, dscKey, portrait)));
+        for (LdsScript.Entry entry : parsed.entries) {
+            System.out.println(entry.aid + " " + Hex.format(dgiSequence(entry, dsc, dscKey)));
+        }
     }
 }

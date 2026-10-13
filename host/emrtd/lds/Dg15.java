@@ -16,6 +16,10 @@ import card42.host.common.codec.Tags;
  * Doc 9303-11 §6.1.5).  DG15 = 6F { SubjectPublicKeyInfo }, an RFC 5280
  * SubjectPublicKeyInfo (H1.3).  The key is RSA (ISO/IEC 9796-2 Scheme 1 AA) or
  * an EC key (ECDSA AA, Doc 9303-11 §6.1.2.3).
+ *
+ * <p>The EC point is kept as the raw uncompressed P-256 point so verification
+ * uses the self-contained {@code card42.host.common.crypto.Ecdsa} and needs no
+ * external EC provider (the integration JVM does not always expose SunEC).
  */
 public final class Dg15 {
 
@@ -28,12 +32,16 @@ public final class Dg15 {
     public final BigInteger modulus;
     /** RSA public exponent, or null for an ECDSA key. */
     public final BigInteger exponent;
+    /** EC uncompressed P-256 point {@code 04||X||Y}, or null for RSA. */
+    public final byte[] ecPointW;
 
-    private Dg15(PublicKey publicKey, boolean ecdsa, BigInteger modulus, BigInteger exponent) {
+    private Dg15(PublicKey publicKey, boolean ecdsa, BigInteger modulus, BigInteger exponent,
+                 byte[] ecPointW) {
         this.publicKey = publicKey;
         this.ecdsa = ecdsa;
         this.modulus = modulus;
         this.exponent = exponent;
+        this.ecPointW = ecPointW;
     }
 
     public static Dg15 parse(byte[] dg15) {
@@ -49,18 +57,24 @@ public final class Dg15 {
             if (OID_RSA.equals(algorithm)) {
                 RSAPublicKey key = (RSAPublicKey) KeyFactory.getInstance("RSA")
                         .generatePublic(new X509EncodedKeySpec(subjectPublicKeyInfo));
-                return new Dg15(key, false, key.getModulus(), key.getPublicExponent());
+                return new Dg15(key, false, key.getModulus(), key.getPublicExponent(), null);
             }
-            PublicKey key = KeyFactory.getInstance("EC")
-                    .generatePublic(new X509EncodedKeySpec(subjectPublicKeyInfo));
-            return new Dg15(key, true, null, null);
+            // id-ecPublicKey: the BIT STRING holds 0x00 || 04 || X(32) || Y(32).
+            Der.Tlv bitString = fields.get(1);
+            byte[] value = Der.value(subjectPublicKeyInfo, bitString);
+            if (value.length != 66 || value[0] != 0x00 || value[1] != 0x04) {
+                throw new IllegalArgumentException("DG15 EC point is not an uncompressed P-256 key");
+            }
+            byte[] point = new byte[65];
+            System.arraycopy(value, 1, point, 0, 65);
+            return new Dg15(null, true, null, null, point);
         } catch (GeneralSecurityException e) {
             throw new IllegalArgumentException(
                     "DG15 is not a supported SubjectPublicKeyInfo", e);
         }
     }
 
-    /** The AA public key as a JDK key for signature verification. */
+    /** The AA RSA public key as a JDK key for signature verification (null for EC). */
     public PublicKey toPublicKey() {
         return publicKey;
     }

@@ -16,6 +16,7 @@ import card42.emrtd.MrzKeySeed;
 import card42.host.common.crypto.P256;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.aa.ActiveAuthentication;
+import card42.host.emrtd.lds.Dg15;
 
 /**
  * Pure-JVM tests for the eMRTD card-side crypto and LDS file system.
@@ -469,6 +470,37 @@ final class EmrtdCryptoTest {
         Asserts.check(ActiveAuthentication.verifySignature(pub, challenge,
                         java.util.Arrays.copyOf(sigDirect, directLen)),
                 "AA SHA-256 direct construction verifies");
+
+        // ECDSA-SHA-256 (DGI FF0A = 3): the card signs RND.IFD directly with
+        // P-256 and returns the TR-03111 plain r||s (Doc 9303-11 §6.1.2.3).
+        KeyPairGenerator ecGen = KeyPairGenerator.getInstance("EC");
+        ecGen.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
+        KeyPair ecKp = ecGen.generateKeyPair();
+        AaCrypto ecAa = new AaCrypto((short) 2048, AaCrypto.AA_ECDSA_SHA256);
+        byte[] scalar = unsigned(
+                ((java.security.interfaces.ECPrivateKey) ecKp.getPrivate()).getS());
+        ecAa.setEcPrivateKey(scalar, (short) 0, (short) scalar.length);
+        Asserts.check(ecAa.isInitialized(), "AA ECDSA private key initialized");
+        byte[] ecSig = new byte[64];
+        short ecLen = ecAa.sign(challenge, (short) 0, (short) 8, ecSig, (short) 0);
+        Asserts.eq(64, ecLen, "AA ECDSA signature length");
+        Dg15 ecDg15 = Dg15.parse(dg15(ecKp.getPublic().getEncoded()));
+        Asserts.check(ecDg15.ecdsa, "DG15 detects an EC AA key");
+        Asserts.check(ActiveAuthentication.verifySignature(ecDg15, challenge,
+                        java.util.Arrays.copyOf(ecSig, ecLen)),
+                "AA ECDSA signature verifies (plain r||s)");
+        Asserts.check(!ActiveAuthentication.verifySignature(ecDg15, Hex.parse("0102030405060709"),
+                        java.util.Arrays.copyOf(ecSig, ecLen)),
+                "AA ECDSA signature rejects a different challenge");
+    }
+
+    /** Wraps a SubjectPublicKeyInfo in the DG15 outer tag 6F. */
+    private static byte[] dg15(byte[] subjectPublicKeyInfo) {
+        byte[] out = new byte[subjectPublicKeyInfo.length + 2];
+        out[0] = 0x6F;
+        out[1] = (byte) subjectPublicKeyInfo.length;
+        System.arraycopy(subjectPublicKeyInfo, 0, out, 2, subjectPublicKeyInfo.length);
+        return out;
     }
 
     // BouncyCastle ISO9796d2Signer KAT (1024-bit key, SHA-1, M = RND.IC || RND.IFD).

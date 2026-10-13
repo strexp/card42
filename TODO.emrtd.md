@@ -85,13 +85,13 @@
 
 ## 待办
 
-- [ ] **算法支持增量（可选，按 matrix §4）**：**第一期已完成（2026-10-13）**——PA
-  RSASSA-PSS/SHA-224 映射、AA 卡侧 SHA-256 接线（DGI FF0A）、CA ECDH-AES-128（`MSE:Set AT` +
-  `GENERAL AUTHENTICATE`），jcsl 与 J3R180 实测通过（新增 `EmrtdChipAuthAesIntegrationTest`）。
-  剩余：第二期 AA 卡侧 ECDSA-SHA-256（+ EF.CardAccess `ActiveAuthenticationInfo`）、多 CA 密钥/
-  keyId 选择；第三期 PACE ECDH-CAM、DH 版 CA、TA 非 SHA-1 变体、非标域参数/Brainpool（须先探针）。
-  平台不可能项（AES-192/256、PACE DH-GM/IM）见 matrix §3；附加生物识别加密见「延后 / 范围外」。
-  判据与复杂度/瞬态评估见
+- [ ] **算法支持增量（可选，按 matrix §4）**：**第一期（PA PSS、AA SHA-256、CA AES-128）与第二期
+  AA ECDSA-SHA-256 已完成（2026-10-13）**，jcsl 与 J3R180 实测通过。样例改为按 AA 算法分档的
+  `perso/emrtd/sample-<aa>.perso`（`-emit -aa=`，`make perso-emrtd-emit`），每个 sample 同时含
+  PACE/CA 3DES+AES 与 ECDSA+RSA-PSS 两个 TA 信任点；`EmrtdPerfTest` 计时各算法。剩余：多 CA
+  密钥/keyId 选择（第二期）；PACE ECDH-CAM、DH 版 CA、TA 非 SHA-1 变体、非标域参数/Brainpool
+  （第三期，须先探针）。平台不可能项（AES-192/256、PACE DH-GM/IM）见 matrix §3；附加生物识别加密
+  见「延后 / 范围外」。判据与复杂度/瞬态评估见
   [`docs/specs/emrtd/algorithm-support.md`](docs/specs/emrtd/algorithm-support.md) §4。
 - [ ] **T5.1 PACE 官方 BSI 测试向量**：BSI TR-03110 Test-Vector 文档未提供；现以 BSI KDF
   定义独立计算的 KAT + 第三方独立主机库互操作验证。

@@ -94,7 +94,7 @@ public final class EmrtdLds2AppsIntegrationTest {
         TaSupport.authenticate(terminal, biometricsPace, new java.security.SecureRandom());
         Checks.check("Chip + Terminal Authentication on the Biometrics application", true);
         byte[] biometrics = LdsReader.read(terminal, LdsFileUtil.FID_BIOMETRICS);
-        Checks.bytes(Hex.parse("7F6108020101020203040506"), biometrics,
+        Checks.bytes(Hex.parse("7F611002010102020304050608010A0B0C0D0E0F10"), biometrics,
                 "EF.Biometrics1 content");
     }
 }

@@ -89,10 +89,10 @@ TAv1 or 2 for TAv2, efCVCA FileID OPTIONAL -- MUST NOT be used for version 2 }`
 |-----------|------|------|
 | 卡侧签发：RSA-2048 + ISO/IEC 9796-2 DS1 + SHA-1 | ✅ | `EmrtdApplet` 固定 `new AaCrypto(2048, AA_SHA1)`；编码用 `Cipher.ALG_RSA_NOPAD` 手工完成 |
 | 卡侧签发：RSA ISO 9796-2 + SHA-256（option 2 trailer `0x34CC`） | ✅ | 经个性化 DGI `FF0A` 接线；示例个性化已用 SHA-256（jcsl + J3R180 实测） |
-| 卡侧签发：ECDSA-SHA-256（Doc 9303-11 §6.1.2.3） | ○ | 平台探针显示 `getInstance(ALG_SHA_256, SIG_CIPHER_ECDSA_PLAIN, PAD_NULL)` 可用；**签名方向未真卡实测** |
+| 卡侧签发：ECDSA-SHA-256（Doc 9303-11 §6.1.2.3） | ✅ | P-256 私钥 DGI `FF0D`，DG15 为 RFC 5480 EC SPKI，签 RND.IFD 返回 TR-03111 plain `r‖s`；jcsl + J3R180 实测（`sample-ecdsa.perso`，`EmrtdBacTest`） |
 | 主机校验：RSA ISO 9796-2 DS1，SHA-1 / SHA-256 / SHA-384 / SHA-512 | ✅ | `ActiveAuthentication.verifySignature`（trailer 选项 1/2） |
 | 主机校验：ECDSA-SHA-256（plain `r‖s` → DER） | ✅ | `verifyEcdsa` |
-| EF.CardAccess 宣告 `ActiveAuthenticationInfo` | ○ | ICAO §9.2.4 仅在 **ECDSA** AA 时必需（signatureAlgorithm 为 TR-03111 OID）；RSA ISO 9796-2 无此 OID，故不宣告。随第二期 ECDSA AA 一起做 |
+| EF.CardAccess 宣告 `ActiveAuthenticationInfo` | ✅ | ICAO §9.2.4 仅 ECDSA AA 需要（signatureAlgorithm `0.4.0.127.0.7.1.1.4.1.3` = id-ecdsa-plain-SHA256）；`sample-ecdsa.perso` 宣告，RSA 变体不宣告 |
 
 ### 2.5 Terminal Authentication / CVCA
 
@@ -133,31 +133,37 @@ TAv1 or 2 for TAv2, efCVCA FileID OPTIONAL -- MUST NOT be used for version 2 }`
 
 ## 4. 可实现但未做项（○ 的清单）
 
-按**性价比**分期推进。复杂度/瞬态按现有实测口径评估：eMRTD context 瞬态预算 ≈2056 B、热路径
-≈1514 B（余量 ≈540 B）；on-card eMRTD 代码（release 组件）≈36 KB（`Method.cap` ≈19 KB）。
+按**性价比**分期推进。复杂度/瞬态按现有实测口径评估：eMRTD context 瞬态预算 ≈2056 B；on-card
+eMRTD 代码（release 组件）≈36 KB（`Method.cap` ≈19 KB）。
 依据见 [`../common/risks.md`](../common/risks.md) §2 与 [`../../../TODO.emrtd.md`](../../../TODO.emrtd.md)。
+
+**样例与变体**：`perso/emrtd/sample-<aa>.perso`（`aa = sha1 | sha256 | ecdsa`，`sample.perso` 为
+默认 `sha256`）由 `make perso-emrtd-emit` 生成。**能同时支持的算法在每个 sample 里全开**：PACE 与
+Chip Authentication 宣告 3DES+AES-128；Terminal Authentication 同时个性化 **ECDSA 与 RSA-PSS 两个
+CVCA 信任点**（DGI `FF07` + `FF0B`，卡侧两槽并存），主机可任选其一认证。**唯一互斥轴是 AA**（卡侧
+一次只能签一种），故按后缀拆分。每个 sample 数据齐全（DG1–DG16 除保留的 DG6、LDS2 三应用多记录）。
+`EmrtdPerfTest` 计时：AA（随变体）、PACE/CA 3DES vs AES 的整段 DG2 读、TA ECDSA vs RSA-PSS；
+`make test-emrtd-card` / `test-emrtd-sim` 内含。
 
 ### 4.1 第一期（已完成，2026-10-13）
 
 1. **PA 映射补全**（纯主机 JDK）：`AlgorithmIds` 增加 RSASSA-PSS（`1.2.840.113549.1.1.10`）、
    SHA-224 与 ECDSA SHA-1/224/512 映射；`PassiveAuthentication` 从签名 AlgorithmIdentifier 解析
    RSASSA-PSS-params（RFC 4055）。单测覆盖（`EmrtdCardAccessTest`，PSS SOD 正/负例）。
-2. **AA 卡侧接线 SHA-256**：项目 DGI `FF0A` 选择算法（`AaCrypto.setAlgorithm`），示例个性化改用
-   SHA-256（trailer option 2）；主机校验已支持。jcsl + J3R180 实测。
-   `ActiveAuthenticationInfo` 属 ECDSA AA（见 4.2）。
+2. **AA 卡侧接线 SHA-256**：项目 DGI `FF0A` 选择算法（`AaCrypto.setAlgorithm`）。jcsl + J3R180 实测。
 3. **CA ECDH + AES-128**（`id-CA-ECDH-AES-CBC-CMAC-128`）：卡侧 `MSE:Set AT` + `GENERAL
    AUTHENTICATE`（v1 无响应数据），KDF 仍 SHA-1 但不做 DES parity；CA 后 SM 切 `Iso7816SmAes`。
-   主机 `ChipAuth` 支持两种 profile。真卡实测（新增 `EmrtdChipAuthAesIntegrationTest`）。
+   主机 `ChipAuth` 支持两种 profile。真卡实测（`EmrtdChipAuthAesIntegrationTest`）。
 
-### 4.2 第二期（中复杂度）
+### 4.2 第二期（AA ECDSA 已完成 2026-10-13；多 CA 密钥待做）
 
-4. **AA 卡侧 ECDSA-SHA-256**（Doc 9303-11 §6.1.2.3）：平台探针显示
-   `getInstance(ALG_SHA_256, SIG_CIPHER_ECDSA_PLAIN, PAD_NULL)` 可用，但**签名方向未经真卡实测**；
-   `AaCrypto` 现为 RSA-only，需并列 EC 路径，DG15 改 RFC 5480 SPKI；并在 EF.CardAccess 增加
-   `ActiveAuthenticationInfo`（§9.2.4 仅 ECDSA 需要）。主机 `verifyEcdsa` 已就绪。
-5. **多 CA 密钥 / keyId 选择语义**：卡侧 keyId→静态私钥表 + `MSE:Set KAT`/`MSE:Set AT` DO`84'`
-   选键，EF.CardSecurity 适配多 `ChipAuthenticationPublicKeyInfo`；主机按 keyId 取键（现取
-   `get(0)`），并可优先 AES。
+4. **AA 卡侧 ECDSA-SHA-256**（Doc 9303-11 §6.1.2.3）：✅ 已实现。P-256 私钥 DGI `FF0D`、DG15 为
+   RFC 5480 EC SPKI、签 RND.IFD 返回 plain `r‖s`；主机改用自包含 P-256 验签（不依赖 JCE EC
+   provider）；ECDSA 变体的 EF.CardAccess 宣告 `ActiveAuthenticationInfo`。真卡 AA ≈3.3 ms/次，
+   RSA-2048 ≈17.9 ms/次（`EmrtdPerfTest`）。
+5. **多 CA 密钥 / keyId 选择语义**（待做）：卡侧 keyId→静态私钥表 + `MSE:Set KAT`/`MSE:Set AT`
+   DO`84'` 选键，EF.CardSecurity 适配多 `ChipAuthenticationPublicKeyInfo`；主机按 keyId 取键（现取
+   `get(0)`）。
 
 ### 4.3 第三期（低价值 / 需先探针）
 

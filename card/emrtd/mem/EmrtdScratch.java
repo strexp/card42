@@ -42,9 +42,11 @@ final class EmrtdScratch {
 
     /**
      * Command/response I/O buffer: the unwrapped command data (up to the
-     * 256-byte short-APDU bound) and, later in the same command, the wrapped
-     * SM response (up to ~290 bytes for a 256-byte AA signature).  320 covers
-     * both.
+     * short-APDU 256-byte bound, or a larger extended Terminal-Authentication
+     * {@code PSO:Verify Certificate} with an RSA chain) and, later in the same
+     * command, the wrapped SM response (up to ~290 bytes for a 256-byte AA
+     * signature).  512 covers an RSA-1024 PSO body+signature (~417 bytes) and
+     * the wrapped response.
      */
     static byte[] io;
 
@@ -58,8 +60,11 @@ final class EmrtdScratch {
      * plaintext.
      *
      * <p>Persistent on purpose: it is the rare extended-command buffer, and its
-     * 320 bytes are spent on the hot shared session scratch instead
-     * (docs/specs/common/risks.md §2).
+     * bytes are spent on the hot shared session scratch instead
+     * (docs/specs/common/risks.md §2).  512 bytes cover a Terminal
+     * Authentication {@code PSO:Verify Certificate} with an RSA-1024 chain
+     * (the certificate body plus a 128-byte RSA signature, SM-wrapped exceeds
+     * 320 bytes).
      */
     static byte[] raw;
 
@@ -105,7 +110,7 @@ final class EmrtdScratch {
         if (initialized) {
             return;
         }
-        io = TransientBuffers.makeByteArray((short) 320);
+        io = TransientBuffers.makeByteArray((short) 512);
         response = TransientBuffers.makeByteArray((short) 256);
         initialized = true;
     }
@@ -141,7 +146,7 @@ final class EmrtdScratch {
      */
     static void initExtended() {
         if (raw == null) {
-            raw = new byte[(short) 320];
+            raw = new byte[(short) 512];
         }
     }
 }

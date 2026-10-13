@@ -39,20 +39,20 @@ final class SmScratch {
 
     /**
      * The wrapping scratch is used in two phases that never overlap, so one
-     * region serves both (docs/specs/common/risks.md §2):
+     * region serves both:
      *
      *   - MAC input: SSC (16) + the largest DO'87'/DO'85' (the extended-command
-     *     envelope, up to the 320-byte {@code EmrtdScratch.raw} including its
-     *     4 header bytes) + DO'99' (4), M2-padded to a 16-byte boundary = 352;
+     *     envelope, up to the 512-byte {@code EmrtdScratch.raw} including its
+     *     4 header bytes, i.e. an RSA Terminal-Authentication
+     *     {@code PSO:Verify Certificate}) + DO'99' (4), M2-padded to a 16-byte
+     *     boundary;
      *   - encryption input: the plaintext response plus M2 padding (272 for a
      *     256-byte AA signature).
      *
      * The ciphertext is written straight to the caller's output buffer, so the
-     * two phases share offset 0 and no second staging region is needed.  A
-     * 352-byte buffer is enough, leaving the rest of the eMRTD transient context
-     * free (TODO.emrtd.md §A3).
+     * two phases share offset 0 and no second staging region is needed.
      */
-    private static final short SIZE = (short) 352;
+    private static final short SIZE = (short) 512;
 
     /** The framing scratch handed out by {@link #get()} (see {@link #SIZE}). */
     private static byte[] buffer;

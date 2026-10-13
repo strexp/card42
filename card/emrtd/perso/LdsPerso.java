@@ -24,8 +24,14 @@ public final class LdsPerso extends DgiStream.Sink {
     public static final short DGI_SEED = EmrtdTags.DGI_BAC_SEED;
     /** DGI carrying the AA private key (modLen || modulus || expLen || exponent). */
     public static final short DGI_AA_KEY = EmrtdTags.DGI_AA_KEY;
-    /** DGI carrying the AA signature algorithm (1 octet: 1 = SHA-1, 2 = SHA-256). */
+    /** DGI carrying the AA signature algorithm (1 octet: 1 = SHA-1, 2 = SHA-256, 3 = ECDSA). */
     public static final short DGI_AA_ALGORITHM = EmrtdTags.DGI_AA_ALGORITHM;
+    /** DGI carrying the ECDSA AA private scalar (32 bytes). */
+    public static final short DGI_AA_EC_KEY = EmrtdTags.DGI_AA_EC_KEY;
+    /** DGI carrying an RSA CVCA trust point (TA). */
+    public static final short DGI_TA_TRUST_POINT_RSA = EmrtdTags.DGI_TA_TRUST_POINT_RSA;
+    /** DGI carrying the secondary RSA CVCA trust point (TA). */
+    public static final short DGI_TA_TRUST_POINT_RSA_2 = EmrtdTags.DGI_TA_TRUST_POINT_RSA_2;
     /** DGI carrying the Chip Authentication static private scalar (32 bytes). */
     public static final short DGI_CA_KEY = EmrtdTags.DGI_CA_KEY;
     /** DGI carrying the PACE key seed SHA-1(MRZ_info) (20 bytes). */
@@ -55,6 +61,9 @@ public final class LdsPerso extends DgiStream.Sink {
     private static final byte MODE_TA_DATE = 10;
     private static final byte MODE_TA2 = 11;
     private static final byte MODE_AA_ALG = 12;
+    private static final byte MODE_AA_EC = 13;
+    private static final byte MODE_TA_RSA = 14;
+    private static final byte MODE_TA_RSA2 = 15;
 
     private final LdsCatalog catalog;
     private final AaCrypto aa;
@@ -137,6 +146,8 @@ public final class LdsPerso extends DgiStream.Sink {
             mode = MODE_AA;
         } else if (dgi == DGI_AA_ALGORITHM) {
             mode = MODE_AA_ALG;
+        } else if (dgi == DGI_AA_EC_KEY) {
+            mode = MODE_AA_EC;
         } else if (dgi == DGI_CA_KEY) {
             mode = MODE_CA;
         } else if (dgi == DGI_PACE_SEED) {
@@ -147,6 +158,10 @@ public final class LdsPerso extends DgiStream.Sink {
             mode = MODE_TA;
         } else if (dgi == DGI_TA_TRUST_POINT_2) {
             mode = MODE_TA2;
+        } else if (dgi == DGI_TA_TRUST_POINT_RSA) {
+            mode = MODE_TA_RSA;
+        } else if (dgi == DGI_TA_TRUST_POINT_RSA_2) {
+            mode = MODE_TA_RSA2;
         } else if (dgi == DGI_TA_CURRENT_DATE) {
             mode = MODE_TA_DATE;
         } else if (dgi == EmrtdTags.FID_CARD_ACCESS) {
@@ -212,6 +227,8 @@ public final class LdsPerso extends DgiStream.Sink {
                 ISOException.throwIt(ISO7816.SW_WRONG_DATA);
             }
             aa.setAlgorithm(scratch[0]);
+        } else if (mode == MODE_AA_EC) {
+            aa.setEcPrivateKey(scratch, (short) 0, scratchLen);
         } else if (mode == MODE_CA) {
             chipAuth.setPrivateKey(scratch, (short) 0, scratchLen);
         } else if (mode == MODE_PACE) {
@@ -222,6 +239,12 @@ public final class LdsPerso extends DgiStream.Sink {
             ta.setTrustPoint(scratch, (short) 0, scratchLen);
         } else if (mode == MODE_TA2) {
             ta.setTrustPointSecondary(scratch, (short) 0, scratchLen);
+        } else if (mode == MODE_TA_RSA) {
+            // RSA primary occupies slot 1 so it coexists with an EC trust point
+            // in slot 0 (the demo carries both algorithm families at once).
+            ta.setTrustPointRsa(scratch, (short) 0, scratchLen, (short) 1);
+        } else if (mode == MODE_TA_RSA2) {
+            ta.setTrustPointRsa(scratch, (short) 0, scratchLen, (short) 1);
         } else if (mode == MODE_TA_DATE) {
             ta.setCurrentDate(scratch, (short) 0, scratchLen);
         }

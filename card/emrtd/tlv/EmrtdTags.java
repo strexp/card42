@@ -77,10 +77,20 @@ public final class EmrtdTags {
     public static final short DGI_AA_KEY = (short) 0xFF02;
     /**
      * AA signature algorithm (project DGI FF0A): 1 octet, 0x01 = RSA ISO/IEC
-     * 9796-2 + SHA-1 (trailer option 1), 0x02 = + SHA-256 (option 2)
-     * (ICAO Doc 9303-11 §6.1.2.2).  Absent keeps the SHA-1 default.
+     * 9796-2 + SHA-1 (trailer option 1), 0x02 = + SHA-256 (option 2),
+     * 0x03 = ECDSA-SHA-256 (P-256, plain r||s) (ICAO Doc 9303-11 §6.1.2).
      */
     public static final short DGI_AA_ALGORITHM = (short) 0xFF0A;
+    /**
+     * RSA CVCA trust point (project DGI FF0B):
+     * {@code modLen(2) || modulus || expLen(2) || exponent || refLen(1) || CAR
+     * || [effective(6)] || [auth(4)]}.  The EC form uses FF07.
+     */
+    public static final short DGI_TA_TRUST_POINT_RSA = (short) 0xFF0B;
+    /** Secondary RSA CVCA trust point (project DGI FF0C), same layout as FF0B. */
+    public static final short DGI_TA_TRUST_POINT_RSA_2 = (short) 0xFF0C;
+    /** ECDSA AA private scalar (project DGI FF0D), 32 bytes (P-256). */
+    public static final short DGI_AA_EC_KEY = (short) 0xFF0D;
     /** Chip Authentication static P-256 private scalar (32 bytes). */
     public static final short DGI_CA_KEY = (short) 0xFF03;
     /** PACE key seed SHA-1(MRZ_information) (20 bytes), password reference 0x01. */

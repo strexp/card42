@@ -132,6 +132,9 @@ public class Signature {
 
     public short sign(byte[] inBuff, short inOffset, short inLength,
                       byte[] sigBuff, short sigOffset) {
+        if (ecdsaPlain) {
+            return signEcdsaPlain(inBuff, inOffset, inLength, sigBuff, sigOffset);
+        }
         if (desData != null) {
             if (inLength > 0) {
                 desData.write(inBuff, inOffset, inLength);
@@ -221,6 +224,24 @@ public class Signature {
         }
     }
 
+    /** P-256 ECDSA plain (r||s) signing, delegating to the JDK's SunEC. */
+    private short signEcdsaPlain(byte[] inBuff, short inOffset, short inLength,
+                                 byte[] sigBuff, short sigOffset) {
+        try {
+            java.security.Signature signer =
+                    java.security.Signature.getInstance("SHA256withECDSA");
+            signer.initSign(jceEcPrivate((ECPrivateKey) key));
+            if (inLength > 0) {
+                signer.update(inBuff, inOffset, inLength);
+            }
+            byte[] plain = derToPlain(signer.sign());
+            System.arraycopy(plain, 0, sigBuff, sigOffset, plain.length);
+            return (short) plain.length;
+        } catch (Exception e) {
+            throw new CryptoException((short) 1);
+        }
+    }
+
     public short getLength() {
         if (algorithm == ALG_DES_MAC8_ISO9797_M2 || algorithm == ALG_DES_MAC8_NOPAD) {
             return 8;
@@ -263,6 +284,61 @@ public class Signature {
         BigInteger y = new BigInteger(1, Arrays.copyOfRange(w, 33, 65));
         return KeyFactory.getInstance("EC")
                 .generatePublic(new ECPublicKeySpec(new ECPoint(x, y), spec));
+    }
+
+    private static java.security.PrivateKey jceEcPrivate(ECPrivateKey key) throws Exception {
+        java.security.AlgorithmParameters params =
+                java.security.AlgorithmParameters.getInstance("EC");
+        params.init(new ECGenParameterSpec("secp256r1"));
+        java.security.spec.ECParameterSpec spec =
+                params.getParameterSpec(java.security.spec.ECParameterSpec.class);
+        return KeyFactory.getInstance("EC").generatePrivate(
+                new java.security.spec.ECPrivateKeySpec(
+                        new BigInteger(1, key.scalarBytes()), spec));
+    }
+
+    /** X9.62 DER ECDSA signature to the TR-03111 plain (r||s) 64-byte form. */
+    private static byte[] derToPlain(byte[] der) {
+        if (der.length < 8 || (der[0] & 0xFF) != 0x30) {
+            throw new CryptoException((short) 1);
+        }
+        int p = 1;
+        int len = der[p++] & 0xFF;
+        if ((len & 0x80) != 0) {
+            int n = len & 0x7F;
+            len = 0;
+            for (int i = 0; i < n; i++) {
+                len = (len << 8) | (der[p++] & 0xFF);
+            }
+        }
+        if (p + len > der.length || (der[p] & 0xFF) != 0x02) {
+            throw new CryptoException((short) 1);
+        }
+        p++;
+        int rLen = der[p++] & 0xFF;
+        int rOff = p;
+        p += rLen;
+        if ((der[p] & 0xFF) != 0x02) {
+            throw new CryptoException((short) 1);
+        }
+        p++;
+        int sLen = der[p++] & 0xFF;
+        int sOff = p;
+        byte[] out = new byte[64];
+        copyInt(der, rOff, rLen, out, 0);
+        copyInt(der, sOff, sLen, out, 32);
+        return out;
+    }
+
+    private static void copyInt(byte[] src, int off, int len, byte[] out, int outOff) {
+        while (len > 1 && src[off] == 0) {
+            off++;
+            len--;
+        }
+        if (len > 32) {
+            throw new CryptoException((short) 1);
+        }
+        System.arraycopy(src, off, out, outOff + 32 - len, len);
     }
 
     /** TR-03111 plain (r||s) to X9.62 DER, for the JDK verifier. */

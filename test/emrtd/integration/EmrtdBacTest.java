@@ -60,10 +60,16 @@ public final class EmrtdBacTest {
         ResponseAPDU selected = terminal.selectLds1();
         Checks.check("SELECT LDS1", selected.getSW(), 0x9000);
 
+        // DG15 is a public key and is readable without BAC; its type selects the
+        // AA signature length (RSA-2048 -> 256, ECDSA -> 64) and the verifier.
+        byte[] dg15 = LdsReader.read(terminal, LdsFileUtil.FID_DG15);
+        Dg15 parsedDg15 = Dg15.parse(dg15);
+        Checks.check("DG15 AA key present",
+                parsedDg15.ecdsa || parsedDg15.modulus.signum() > 0);
+
         // The applet implements javacardx.apdu.ExtendedLength, so an
         // extended-length INTERNAL AUTHENTICATE (as a conformant reader sends
-        // for an RSA-2048 AA key) must reach it and return the 256-byte
-        // signature.
+        // for an RSA-2048 AA key) must reach it and return the signature.
         byte[] extChallenge = new byte[8];
         new SecureRandom().nextBytes(extChallenge);
         byte[] extApdu = new byte[17];
@@ -73,14 +79,8 @@ public final class EmrtdBacTest {
         ResponseAPDU extended = terminal.base().transmit(extApdu);
         Checks.check("extended-length INTERNAL AUTHENTICATE reaches the applet",
                 extended.getSW(), 0x9000);
-        Checks.check("extended AA signature length", extended.getData().length, 256);
-
-        // Active Authentication is run in the clear: the 256-byte RSA signature
-        // does not fit an SM-wrapped short APDU.  DG15 is a public key and is
-        // readable without BAC.
-        byte[] dg15 = LdsReader.read(terminal, LdsFileUtil.FID_DG15);
-        Dg15 parsedDg15 = Dg15.parse(dg15);
-        Checks.check("DG15 AA key present", parsedDg15.modulus.signum() > 0);
+        Checks.check("AA signature length", extended.getData().length,
+                parsedDg15.ecdsa ? 64 : 256);
 
         // The short-EF-identifier READ BINARY form is MANDATORY for the eMRTD
         // (Doc 9303-10 §3.6.3.2 Table 5) and is what most inspection
@@ -90,7 +90,7 @@ public final class EmrtdBacTest {
         ResponseAPDU dg15Sfi = terminal.readBinarySfi(0x0F, 0, LdsReader.CHUNK);
         Checks.check("SFI READ BINARY DG15", dg15Sfi.getSW(), 0x9000);
         Checks.check("SFI READ BINARY DG15 window", dg15Sfi.getData().length,
-                LdsReader.CHUNK);
+                Math.min(dg15.length, LdsReader.CHUNK));
         Checks.bytes(java.util.Arrays.copyOf(dg15, dg15Sfi.getData().length),
                 dg15Sfi.getData(), "SFI READ BINARY DG15 data");
         ResponseAPDU unknownSfi = terminal.readBinarySfi(0x1F, 0, 0x08);

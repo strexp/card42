@@ -22,14 +22,17 @@ import card42.host.common.util.Hex;
  *   @dg &lt;n&gt; &lt;hex&gt;               EF.DG&lt;n&gt; content (DG1 mandatory)
  *   @sod &lt;hex&gt;                  EF.SOD content
  *   @aa &lt;hex&gt;                   AA private key (modLen || modulus || expLen || exponent)
- *   @aa-alg sha1|sha256         AA signature algorithm (default sha1; DGI FF0A)
+ *   @aa-ec &lt;hex&gt;               AA ECDSA private scalar (P-256)
+ *   @aa-alg sha1|sha256|ecdsa   AA signature algorithm (default sha1; DGI FF0A)
  *   @ca &lt;hex&gt;                   Chip Authentication P-256 private scalar (DGI FF03)
  *   @cardsecurity &lt;hex&gt;         LDS1 master-file EF.CardSecurity SignedData (DGI FF05)
  *   @ta-date &lt;YYMMDD&gt;           ICC current date (DGI FF08)
  *   @cvca &lt;W-hex&gt; &lt;CAR&gt; &lt;YYMMDD&gt; &lt;auth-hex&gt; [secondary]
- *                                CVCA trust point (DGI FF07, or FF09 with
+ *                                EC CVCA trust point (DGI FF07, or FF09 with
  *                                {@code secondary}): EC public point, holder
  *                                reference, Effective Date, relative authorization
+ *   @cvca-rsa &lt;n&gt; &lt;e&gt; &lt;CAR&gt; &lt;YYMMDD&gt; &lt;auth-hex&gt; [secondary]
+ *                                RSA-PSS CVCA trust point (DGI FF0B/FF0C)
  *   @lds2 &lt;role&gt;               lds2 role: travel | visa | biometrics
  *   @record &lt;fid-hex&gt; &lt;hex&gt;     append one record to an LDS2 record EF
  *   @transparent &lt;fid-hex&gt; &lt;hex&gt;  set one LDS2 transparent EF (e.g. 0201)
@@ -59,7 +62,9 @@ public final class LdsScript {
         public final Map<Integer, byte[]> dataGroups = new LinkedHashMap<Integer, byte[]>();
         public byte[] sod;
         public byte[] aaKey;
-        /** AA signature algorithm: {@code sha1} (default) or {@code sha256}. */
+        /** AA ECDSA private scalar (DGI FF0D), 32 bytes (P-256). */
+        public byte[] aaEcKey;
+        /** AA signature algorithm: {@code sha1} (default), {@code sha256} or {@code ecdsa}. */
         public String aaAlgorithm = "sha1";
         /** Chip Authentication static P-256 private scalar (DGI FF03). */
         public byte[] caKey;
@@ -85,10 +90,15 @@ public final class LdsScript {
         }
     }
 
-    /** A CVCA trust point from {@code @cvca} (ICAO Doc 9303-11 §7.1.4.3.1). */
+    /** A CVCA trust point from {@code @cvca} / {@code @cvca-rsa} (ICAO Doc 9303-11 §7.1.4.3.1). */
     public static final class TrustPoint {
-        /** EC public point W (65 bytes, {@code 04||X||Y}). */
+        /** True for an RSA-PSS trust point (RSA modulus/exponent), else ECDSA. */
+        public final boolean rsa;
+        /** EC public point W (65 bytes, {@code 04||X||Y}); null for RSA. */
         public final byte[] publicKey;
+        /** RSA modulus / exponent; null for EC. */
+        public final byte[] modulus;
+        public final byte[] exponent;
         /** Certificate Authority Reference (ISO 8859-1). */
         public final String car;
         /** Effective Date, 6 digits YYMMDD. */
@@ -99,7 +109,22 @@ public final class LdsScript {
 
         TrustPoint(byte[] publicKey, String car, String effective, byte[] authorization,
                    boolean secondary) {
+            this.rsa = false;
             this.publicKey = publicKey;
+            this.modulus = null;
+            this.exponent = null;
+            this.car = car;
+            this.effective = effective;
+            this.authorization = authorization;
+            this.secondary = secondary;
+        }
+
+        TrustPoint(byte[] modulus, byte[] exponent, String car, String effective,
+                   byte[] authorization, boolean secondary) {
+            this.rsa = true;
+            this.publicKey = null;
+            this.modulus = modulus;
+            this.exponent = exponent;
             this.car = car;
             this.effective = effective;
             this.authorization = authorization;
@@ -170,6 +195,9 @@ public final class LdsScript {
             case "@aa":
                 current.aaKey = Hex.parse(parts[1]);
                 break;
+            case "@aa-ec":
+                current.aaEcKey = Hex.parse(parts[1]);
+                break;
             case "@aa-alg":
                 current.aaAlgorithm = parts[1];
                 break;
@@ -197,6 +225,18 @@ public final class LdsScript {
                 boolean secondary = a.length > 5 && "secondary".equals(a[5]);
                 current.trustPoints.add(new TrustPoint(
                         Hex.parse(a[1]), a[2], a[3], Hex.parse(a[4]), secondary));
+                break;
+            }
+            case "@cvca-rsa": {
+                String[] a = line.split("\\s+");
+                if (a.length < 6) {
+                    throw new IllegalArgumentException(
+                            "@cvca-rsa needs <mod-hex> <exp-hex> <CAR> <YYMMDD> <auth-hex> [secondary]");
+                }
+                boolean secondary = a.length > 6 && "secondary".equals(a[6]);
+                current.trustPoints.add(new TrustPoint(
+                        Hex.parse(a[1]), Hex.parse(a[2]), a[3], a[4], Hex.parse(a[5]),
+                        secondary));
                 break;
             }
             case "@record": {

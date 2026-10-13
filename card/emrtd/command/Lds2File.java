@@ -28,6 +28,13 @@ public final class Lds2File {
             // EmrtdApplet.selectByName).
             return applet.selectByName(data, off, len);
         }
+        if (len == 0 || (len == 2 && Util.getShort(data, off) == EmrtdTags.FID_MF)) {
+            // SELECT MF: clear the current EF/DF so a following SELECT 011C
+            // resolves to the master-file EF.CardAccess (ISO/IEC 7816-4 §7.1.1).
+            applet.selectedMf = null;
+            applet.lds2.clearSelection();
+            return 0;
+        }
         if (len != 2) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }

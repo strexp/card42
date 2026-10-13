@@ -32,10 +32,10 @@ final class TaSupport {
     /** Runs Chip Authentication and returns its result (terminal ephemeral key). */
     static ChipAuth.Result chipAuthentication(EmrtdTerminal terminal) throws Exception {
         CardAccess cardAccess = CardAccess.parse(
-                LdsReader.read(terminal, LdsFileUtil.FID_CARD_ACCESS));
+                LdsReader.readMf(terminal, LdsFileUtil.FID_CARD_ACCESS));
         ChipAuthenticationInfo caInfo = cardAccess.chipAuthenticationInfos().get(0);
         CardSecurity cardSecurity = CardSecurity.parse(
-                LdsReader.read(terminal, LdsFileUtil.FID_CARD_SECURITY));
+                LdsReader.readMf(terminal, LdsFileUtil.FID_CARD_SECURITY));
         byte[] chipPublicKeyW = cardSecurity.publicKeyInfos().get(0).rawPoint();
         return ChipAuth.authenticateResult(terminal, chipPublicKeyW, caInfo);
     }
@@ -43,13 +43,25 @@ final class TaSupport {
     /** Runs Terminal Authentication with the demo chain. */
     static void terminalAuthentication(EmrtdTerminal terminal, Pace.Session pace,
                                        byte[] caKeyHash, SecureRandom random) throws Exception {
-        TaChain.Chain chain = TaChain.demo(random);
+        terminalAuthentication(terminal, pace, caKeyHash, random, false);
+    }
+
+    /**
+     * Runs Terminal Authentication with the demo ECDSA ({@code rsa == false}) or
+     * RSA-PSS ({@code rsa == true}) chain.  Both CVCA trust points are
+     * personalized, so either chain verifies.
+     */
+    static void terminalAuthentication(EmrtdTerminal terminal, Pace.Session pace,
+                                       byte[] caKeyHash, SecureRandom random, boolean rsa)
+            throws Exception {
+        TaChain.Chain chain = rsa ? TaChain.demoRsa() : TaChain.demo(random);
         List<CvCertificate> parsed = new ArrayList<CvCertificate>();
         for (byte[] encoded : chain.toSend()) {
             parsed.add(CvCertificateCodec.parse(encoded));
         }
         TerminalAuth.authenticate(terminal, parsed, chain.terminalPrivateScalar,
-                TerminalAuth.chipIdentifier(pace.piccPublicKey), caKeyHash, random);
+                chain.terminalRsaKey, TerminalAuth.chipIdentifier(pace.piccPublicKey),
+                caKeyHash, random);
     }
 
     /** Runs Chip + Terminal Authentication. */

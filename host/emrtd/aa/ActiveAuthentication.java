@@ -10,6 +10,7 @@ import javax.crypto.Cipher;
 import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.codec.DerWriter;
+import card42.host.common.crypto.Ecdsa;
 import card42.host.common.util.Sw;
 import card42.host.emrtd.lds.Dg15;
 import card42.host.emrtd.transport.EmrtdTerminal;
@@ -56,7 +57,10 @@ public final class ActiveAuthentication {
     public static boolean verifySignature(Dg15 dg15, byte[] rndIfd, byte[] signature)
             throws Exception {
         if (dg15.ecdsa) {
-            return verifyEcdsa(dg15.toPublicKey(), rndIfd, signature, "SHA-256");
+            // ECDSA-SHA-256 over RND.IFD, TR-03111 plain r||s (Doc 9303-11
+            // §6.1.2.3); the self-contained P-256 verifier avoids a JCE EC
+            // provider dependency.
+            return Ecdsa.verify(rndIfd, dg15.ecPointW, signature);
         }
         return verifySignature(dg15.toPublicKey(), rndIfd, signature);
     }

@@ -1,7 +1,8 @@
 # eMRTD (ICAO 9303) — card42-emrtd
 
 > eMRTD 实现的当前设计：LDS1 + BAC + ISO/IEC 7816-4 安全报文 + Passive Authentication +
-> Active Authentication，以及 LDS2 应用、EF.CardAccess/SecurityInfo 解析、Chip
+> Active Authentication（RSA ISO 9796-2 SHA-1/SHA-256 或 ECDSA-SHA-256，随样例变体），以及
+> LDS2 应用、EF.CardAccess/SecurityInfo 解析、Chip
 > Authentication（ECDH，3DES / AES-128）、PACE（ECDH 通用映射，3DES 与 AES-128 宣告，MRZ 与 CAN）与
 > **Terminal Authentication（v1，ECDSA-SHA-256 / RSA-PSS-SHA-256；含 EF.CVCA 与 PACE 下发
 > CAR）**。EAC 1.11 的附加生物识别加密属 ICAO 范围外（Doc 9303-11 §7.2 未定义算法/密钥，
@@ -172,8 +173,10 @@ DG15 以 RFC 5280 `SubjectPublicKeyInfo` 存放 AA 公钥
 卡用个性化注入的 AA 私钥对消息 `M = RND.IC ‖ RND.IFD` 做 **ISO/IEC 9796-2 Digital
 Signature Scheme 1** 签名（消息恢复）：`RND.IC` 由卡生成（可恢复部分 M1），`RND.IFD` 为
 8 字节 INTERNAL AUTHENTICATE 挑战；SHA-1 用 trailer 选项 1（`0xBC`），SHA-256 用选项 2
-（`0x34CC`），算法由个性化 DGI `FF0A` 选择（示例用 SHA-256）。终端用 DG15 公钥做消息恢复并校验
-`H(M)`（Doc 9303-11 §6.1.2.2）。256 字节
+（`0x34CC`），算法由个性化 DGI `FF0A` 选择（`sample-sha1`/`sample-sha256`）。**ECDSA-SHA-256**
+（`FF0A=03`，`sample-ecdsa`，DGI `FF0D` 走 EC 私钥标量）签 **RND.IFD**（无消息恢复），DG15 存
+RFC 5480 EC SPKI，返回 TR-03111 plain `r‖s`（Doc 9303-11 §6.1.2.3）；主机用自包含 P-256 验签。
+终端用 DG15 公钥做消息恢复并校验 `H(M)`（RSA）。256 字节
 RSA 签名装不进 SM 封装的短 APDU，故 AA 在明文下执行（DG15 为公钥，可无 BAC 读取）。
 
 ## 7. Passive Authentication (Doc 9303-10 §4.6.2, Doc 9303-11 §5.1)
@@ -212,7 +215,9 @@ DGI 编号即目标 FID；两个项目 DGI 承载 BAC 与 AA 密钥材料：
 | `FF04` | PACE 密钥种子 SHA-1(MRZ_information)（20 字节，口令引用 `01`） |
 | `FF05` | LDS1 主文件 EF.CardSecurity CMS SignedData（DGI 专用：DF 的 `011D` 已是 EF.SOD） |
 | `FF06` | PACE 口令编码 f(CAN) = 原始 CAN 字符（6 字节，口令引用 `02`） |
-| `FF0A` | AA 签名算法（1 字节：`01` = ISO 9796-2 + SHA-1，`02` = + SHA-256） |
+| `FF0A` | AA 签名算法（1 字节：`01` = ISO 9796-2 + SHA-1，`02` = + SHA-256，`03` = ECDSA-SHA-256） |
+| `FF0B`/`FF0C` | RSA CVCA 信任点（TA，主/次）：`modLen(2)‖modulus‖expLen(2)‖exponent‖refLen(1)‖CAR‖[eff(6)]‖[auth(4)]` |
+| `FF0D` | ECDSA AA 私钥标量（P-256，32 字节） |
 | `<FID>` | EF 内容（DG1 `0101`、DG2 `0102`、DG14 `010E`、DG15 `010F`、COM `011E`、SOD `011D`、EF.CardAccess `011C` 等） |
 
 对 LDS2 角色，DGI 编号是透明 EF 的 FID；EF.CardAccess `011C` 与 EF.CardSecurity `011D`
@@ -268,6 +273,13 @@ host/emrtd/
   PACE（3DES/AES-128，MRZ 与 CAN）、LDS1 Chip Authentication（PACE → 主文件 EF.CardSecurity → CA →
   新 SM 下读 DG1）；样例 DG2 约 8 KB（>4096），覆盖流式个性化 + 分页 EF + 大 DG 读回。
 - `make test-both-sim` — both 矩阵（EMV 生产 + eMRTD LDS1/LDS2 共存）。
+- `EmrtdTaAlgorithmsIntegrationTest`（在 `test-emrtd-{sim,card}` 内）— 同一 LDS1 实例上分别用
+  ECDSA 与 RSA-PSS 链做 PACE→CA→TA，并读 CHAT 门控的 DG3/DG4。
+- `EmrtdPerfTest`（在套件内）— 打印各算法耗时：AA（随 `sample-<aa>` 变体）、PACE/CA 3DES vs
+  AES-128 整段 DG2 读、TA ECDSA vs RSA-PSS；模拟器与真卡可对照。
+- 样例按 AA 算法分档：`perso/emrtd/sample-{sha1,sha256,ecdsa}.perso`（`sample.perso` = 默认
+  `sha256`），由 `make perso-emrtd-emit` 生成；个性化用
+  `EMRTD_PERSO_SCRIPT=perso/emrtd/sample-<aa>.perso` 切换。
 
 ## 11. LDS2 应用 (Doc 9303-10 §5)
 
@@ -466,10 +478,13 @@ DER 转换。完整决策、APDU 序列与开放点见 [terminal-authentication.
   接入 `SecurityInfo`/`CardAccess`；`host/common/crypto/Ecdsa` 为自包含 P-256（plain）。
   CLI：`terminal emrtd ta-export -dir=<path>` 生成 demo 链；`terminal emrtd read -pace -ca -ta
   -ta-chain=<file> -ta-key=<hex>` 跑完整 PACE→CA→TA。
-- **个性化**：`EmrtdPersoExporter` 按脚本 `@cvca`/`@ta-date` 对 LDS1 追写 `FF07`（+/`FF09`）信任点
-  与 `FF08` 当前日期，并在 EF.CardAccess 中宣告 `TerminalAuthenticationInfo`（`id-TA`，**version 1**，
-  默认 FID 故省略 `efCVCA`）；`EF.CVCA`（LDS1 DF `011C`）由信任点惰性生成，PACE 期间可经
-  `0x7F4C`→`0x87`/`0x88` 下发 CAR；`perso/emrtd/sample.perso` 为每个 LDS2 实例提供 `@ca` 静态标量。
+- **个性化**：`EmrtdPersoExporter` 按脚本 `@cvca`/`@cvca-rsa`/`@ta-date` 对 LDS1 追写信任点与
+  `FF08` 当前日期，并在 EF.CardAccess 中宣告 `TerminalAuthenticationInfo`（`id-TA`，**version 1**，
+  默认 FID 故省略 `efCVCA`）。EC 信任点用 `FF07`（+/`FF09`），RSA-PSS 信任点用 `FF0B`（+/`FF0C`，
+  `modLen(2)‖modulus‖expLen(2)‖exponent‖refLen(1)‖CAR‖…`）：演示样例**两个信任点并存**（EC 槽 0、
+  RSA 槽 1，CAR 不同），因此终端可用任一算法链认证（`EmrtdTaAlgorithmsIntegrationTest`）。
+  `EF.CVCA`（LDS1 DF `011C`）由信任点惰性生成，PACE 期间可经 `0x7F4C`→`0x87`/`0x88` 下发 CAR。
 - **端到端**：`EmrtdTerminalAuthIntegrationTest`（PACE→CA→TA 后 LDS2 Travel 记录读/追加放行，
-  TA 前 `6982`）；`EmrtdLds2*`/`EmrtdChipAuthIntegrationTest` 均加 CA+TA。TA 的
-  `PSO:Verify Certificate`（SM 封装 >255 B）走卡侧扩展长度命令接收路径。
+  TA 前 `6982`）；`EmrtdLds2*`/`EmrtdChipAuthIntegrationTest` 均加 CA+TA；`EmrtdTaAlgorithmsIntegrationTest`
+  在 LDS1 上分别以 ECDSA 与 RSA-PSS 链认证并读 CHAT 门控的 DG3/DG4。TA 的
+  `PSO:Verify Certificate`（SM 封装 >255 B，RSA-1024 链可达 ~450 B）走卡侧扩展长度命令接收路径。

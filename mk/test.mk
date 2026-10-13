@@ -27,7 +27,7 @@
 # simulator after these (see above).
 EMV_SUITES   := EmvFlowTest ContactKernelTest DirectoryTest BoundaryTest LogTest VelocityTest \
                 AesFlowTest ContactlessTest OnlineClosedLoopTest TerminalCliTest IssuerScriptTest
-EMRTD_SUITES := EmrtdBacTest EmrtdCvcaTest EmrtdLds2IntegrationTest EmrtdLds2AppsIntegrationTest EmrtdPaceIntegrationTest EmrtdChipAuthIntegrationTest EmrtdChipAuthAesIntegrationTest EmrtdLds1ChipAuthIntegrationTest EmrtdTerminalAuthIntegrationTest
+EMRTD_SUITES := EmrtdBacTest EmrtdCvcaTest EmrtdLds2IntegrationTest EmrtdLds2AppsIntegrationTest EmrtdPaceIntegrationTest EmrtdChipAuthIntegrationTest EmrtdChipAuthAesIntegrationTest EmrtdTaAlgorithmsIntegrationTest EmrtdLds1ChipAuthIntegrationTest EmrtdTerminalAuthIntegrationTest EmrtdPerfTest
 
 # Both matrix: a single coexistence deployment runs the production EMV suites
 # that need only the production instances (the test instances 04/06/08 are not

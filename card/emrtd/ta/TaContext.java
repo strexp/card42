@@ -355,10 +355,57 @@ public final class TaContext {
         trustRefLength[slot] = refLen;
         trustEffectiveValid[slot] = 0;
         Util.arrayFillNonAtomic(trustAuth, (short) (slot * 4), (short) 4, (byte) 0);
-        // After the CAR: optional Effective Date (6) then relative auth (4), or
-        // the legacy authorization only.
-        short rest = (short) (len - base);
-        short p = (short) (off + base);
+        parseTrustPointTail(src, off, len, (short) (off + base), slot);
+        seedAuthorization();
+    }
+
+    /**
+     * Personalization (DGI FF0B/FF0C): an RSA CVCA trust point
+     * {@code modLen(2) || modulus || expLen(2) || exponent || refLen(1) || CAR
+     * || [effective(6)] || [auth(4)]} (BSI TR-03110-3 C.1.2.2).  The card
+     * verifies RSA-PSS-SHA-256 certificates against it.
+     */
+    public void setTrustPointRsa(byte[] src, short off, short len, short slot) {
+        if (len < (short) 5) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        short modLen = Util.getShort(src, off);
+        short expLenOff = (short) (off + 2 + modLen);
+        if (modLen < 1 || modLen > MAX_MODULUS || (short) (expLenOff + 2) > (short) (off + len)) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        short expLen = Util.getShort(src, expLenOff);
+        short expOff = (short) (expLenOff + 2);
+        short refLenOff = (short) (expOff + expLen);
+        if (expLen < 1 || expLen > MAX_EXPONENT || (short) (refLenOff + 1) > (short) (off + len)) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        short refLen = (short) (src[refLenOff] & 0xFF);
+        short base = (short) (refLenOff + 1 + refLen - off);
+        if (refLen < 1 || refLen > REFERENCE_LENGTH || (short) (off + base) > (short) (off + len)) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        Util.arrayCopyNonAtomic(src, (short) (off + 2), trustKey,
+                (short) (slot * MAX_MODULUS), modLen);
+        Util.arrayCopyNonAtomic(src, expOff, trustExp, (short) (slot * MAX_EXPONENT), expLen);
+        trustKind[slot] = KIND_RSA;
+        trustKeyLength[slot] = modLen;
+        trustExpLength[slot] = expLen;
+        Util.arrayCopyNonAtomic(src, (short) (refLenOff + 1), trustRef,
+                (short) (slot * REFERENCE_LENGTH), refLen);
+        trustRefLength[slot] = refLen;
+        trustEffectiveValid[slot] = 0;
+        Util.arrayFillNonAtomic(trustAuth, (short) (slot * 4), (short) 4, (byte) 0);
+        parseTrustPointTail(src, off, len, (short) (off + base), slot);
+        seedAuthorization();
+    }
+
+    /**
+     * Parses the optional {@code [effective(6)] [auth(4)]} tail shared by the EC
+     * (FF07/FF09) and RSA (FF0B/FF0C) trust-point layouts.
+     */
+    private void parseTrustPointTail(byte[] src, short off, short len, short p, short slot) {
+        short rest = (short) ((short) (off + len) - p);
         if (rest >= (short) 6) {
             for (short i = 0; i < 6; i++) {
                 if (src[(short) (p + i)] > 9) {
@@ -373,7 +420,6 @@ public final class TaContext {
         if (rest >= (short) 4) {
             Util.arrayCopyNonAtomic(src, p, trustAuth, (short) (slot * 4), (short) 4);
         }
-        seedAuthorization();
     }
 
     /**
