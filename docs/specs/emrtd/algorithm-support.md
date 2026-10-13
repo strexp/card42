@@ -67,7 +67,7 @@ TAv1 or 2 for TAv2, efCVCA FileID OPTIONAL -- MUST NOT be used for version 2 }`
 | 口令 MRZ（`DO'83'=01`）、CAN（`=02`） | ✅ | |
 | 标准化域参数 P-256（param id 12） | ✅ | 卡侧 `Pace.mseSetAt` **忽略** `DO'84'`，始终用固定 P-256（§6 备注） |
 | KDF：`KDF(x,c)=SHA-1(x‖000000c)` | ✅ | PACE 规范固定 SHA-1，**不存在 SHA-256 KDF 变体** |
-| ECDH Chip Authentication Mapping（CAM） | ○ | 复用通用映射原语，属 PACE v2 可选件，未做 |
+| ECDH Chip Authentication Mapping（CAM） | ○ | 复用通用映射原语与静态 CA 私钥，属 PACE v2 可选件，未做（见 §4.3） |
 | DH 通用映射（`…4.1.x`） | ⛔ | 卡侧缺 MODP 模乘原语（见 §3） |
 | 集成映射 IM（DH/ECDH，`…4.4`/`…4.5`） | ⛔ | Java Card classic 无 IM/MAP2 原语（见 §3） |
 | AES-192/256 PACE（`…4.2.3`/`…4.2.4`） | ⛔ | 同 2.1（jcsl 无 AES-192/256） |
@@ -78,7 +78,7 @@ TAv1 or 2 for TAv2, efCVCA FileID OPTIONAL -- MUST NOT be used for version 2 }`
 | 组合 | 卡侧 | 主机侧 | 说明 |
 |------|------|--------|------|
 | ECDH + 3DES（`id-CA-ECDH-3DES-CBC-CBC`，v1） | ✅ | ✅ | 唯一已宣告/实现；P-256 静态密钥，KDF SHA-1，CA 后 SM=3DES |
-| ECDH + AES-128（`…3.2.2`） | ○ | ○ | ECDH 与 AES-128 SM 均具备；需 AES-CMAC 形式 KDF 与 keyId 绑定 |
+| ECDH + AES-128（`…3.2.2`） | ○ | ○ | ECDH 与 AES-128 SM 均具备；KDF 仍为 SHA-1（BSI TR-03110-3 A.2.3.2，仅不做 DES parity），需 CA profile 标志、CA 后切 AES SM 与 keyId 绑定 |
 | ECDH/DH + AES-192/256（`…3.2.3`/`…3.2.4`、`…3.1.3`/`…3.1.4`） | ⛔ | ⛔ | jcsl 无 AES-192/256 |
 | DH + 3DES（`id-CA-DH-3DES-CBC-CBC`） | ○ | ○ | `KeyAgreement.ALG_DH_PLAIN` 可算 CA 的 `Z = PK^SK mod p`（不需要 PACE-GM 的模乘） |
 | 多 CA 密钥 / keyId 选择语义 | ⚠️ | ⚠️ | 卡侧仅存一个 CA 私钥（DGI `FF03`）；主机取 `publicKeyInfos().get(0)` |
@@ -115,7 +115,7 @@ TAv1 or 2 for TAv2, efCVCA FileID OPTIONAL -- MUST NOT be used for version 2 }`
 | 签名 RSA v1.5（SHA-1/256/384/512）、ECDSA（SHA-256/384） | ✅ | `AlgorithmIds.signature` |
 | RSASSA-PSS OID（`1.2.840.113549.1.1.10`）、SHA-224 等映射 | ○ | 纯主机 JDK 可补 |
 | 证书链/策略/有效期/吊销检查 | ⚠️ | 仅校验 DSC 由 CSCA 签名（`DscVerifier`）；生产需补策略/有效期/吊销 |
-| LDS2 的语义（附加生物识别加密，Doc 9303-11 §7.2） | ○ | 见 §4「EAC 残余」 |
+| LDS2 附加生物识别加密（Doc 9303-11 §7.2） | ▢ | ICAO 不定义算法/密钥（State-specific），无可互操作线上格式；见 §5 |
 
 ## 3. 平台不可能项（⛔ 的依据）
 
@@ -133,23 +133,53 @@ TAv1 or 2 for TAv2, efCVCA FileID OPTIONAL -- MUST NOT be used for version 2 }`
 
 ## 4. 可实现但未做项（○ 的清单）
 
-按优先级（性价比）排序：
+按**性价比**分三期推进。复杂度/瞬态按现有实测口径评估：eMRTD context 瞬态预算 ≈2056 B、热路径
+≈1514 B（余量 ≈540 B）；on-card eMRTD 代码（release 组件）≈36 KB（`Method.cap` ≈19 KB）。
+依据见 [`../common/risks.md`](../common/risks.md) §2 与 [`../../../TODO.emrtd.md`](../../../TODO.emrtd.md)。
 
-1. **附加生物识别加密（Doc 9303-11 §7.2，即仓库旧称 “EAC 1.11” 的残余）**——唯一的 EAC 真实缺口，
-   用现有 ECDH/CA 密钥派生加密密钥即可，平台能力足够。
-2. **CA ECDH + AES-128**——ECDH 与 AES-128 SM 均已具备，需补 AES-CMAC 形式的 `KDF(Z,c)` 与
+### 4.1 第一期（低复杂度、高价值，建议先做）
+
+1. **PA 映射补全**（纯主机 JDK）：RSASSA-PSS OID（`1.2.840.113549.1.1.10`，需
+   `PSSParameterSpec`）、SHA-224 等；生产环境另需证书策略/有效期/吊销检查
+   （`AlgorithmIds`/`DscVerifier`/`PassiveAuthentication`）。卡侧零改动。
+2. **AA 卡侧接线 SHA-256**：`AaCrypto.AA_SHA256` 分支已存在，仅未接线；个性化选定算法，并在
+   EF.CardAccess 增加 `ActiveAuthenticationInfo`（`id-AA` + signatureAlgorithm）。
+3. **CA ECDH + AES-128**（`id-CA-ECDH-AES-CBC-CMAC-128`）：ECDH 与 AES-128 SM 均已具备。
+   **KDF 仍为 SHA-1**（BSI TR-03110-3 A.2.3.2，仅不做 DES parity；不是 "AES-CMAC 形式的 KDF"）；
+   改动为 `ChipAuth` 加 profile 标志、`EmrtdApplet` 在 CA 后按 profile 选 `sm3des`/`smAes`
+   （当前硬编码回退 3DES）、主机接受 AES OID 并用无 parity KDF + `Iso7816SmAes`，以及
    `MSE:Set KAT` 的 keyId→静态密钥绑定。
-3. **AA 卡侧接线**：SHA-256（`AaCrypto.AA_SHA256` 已存在）与 ECDSA-SHA-256（平台已验证），
-   并在 EF.CardAccess 增加 `ActiveAuthenticationInfo`。
-4. **PA 映射补全**（纯主机 JDK）：RSASSA-PSS OID、SHA-224 等；生产环境另需证书策略/有效期/吊销检查。
-5. **PACE ECDH-CAM**；**DH 版 CA**（`ALG_DH_PLAIN` 够用）；**多 CA 密钥 / keyId 选择语义**。
-6. **TA 其它签名变体**（ECDSA/RSA-PSS 的 SHA-384/512、RSA v1.5）——安全上仅在非 SHA-1 时考虑。
-7. **非标准域参数 / Brainpool**（软件可做，需先对 J3R180 做曲线支持探针）。
+
+### 4.2 第二期（中复杂度）
+
+4. **AA 卡侧 ECDSA-SHA-256**（Doc 9303-11 §6.1.2.3）：平台探针显示
+   `getInstance(ALG_SHA_256, SIG_CIPHER_ECDSA_PLAIN, PAD_NULL)` 可用，但**签名方向未经真卡实测**；
+   `AaCrypto` 现为 RSA-only，需并列 EC 路径，DG15 改 RFC 5480 SPKI。主机 `verifyEcdsa` 已就绪。
+5. **多 CA 密钥 / keyId 选择语义**：卡侧 keyId→静态私钥表 + `MSE:Set KAT` DO`84'` 选键，
+   EF.CardSecurity 适配多 `ChipAuthenticationPublicKeyInfo`；主机按 keyId 取键（现取 `get(0)`）。
+
+### 4.3 第三期（低价值 / 需先探针）
+
+6. **PACE ECDH-CAM**：复用既有通用映射原语与静态 CA 私钥，去掉独立 CA；属 PACE v2 语义
+   （eID/eIDAS），护照场景罕见。
+7. **DH 版 CA**（`id-CA-DH-3DES-CBC-CBC`）：`KeyAgreement.ALG_DH_PLAIN` 够算 `Z = PK^SK mod p`
+   （不需要 PACE-GM 的模乘），但需 DH 私钥/参数与主机 MODP，并把 64 B 共享密钥 scratch 扩到
+   模长（~256 B，或改持久）。
+8. **TA 其它签名变体**（ECDSA/RSA-PSS 的 SHA-384/512、RSA v1.5）——安全上仅在非 SHA-1 时考虑。
+9. **非标准域参数 / Brainpool**：`P256` 现为固定曲线，需通用 `ECKey` 曲线参数设置与主机曲线运算，
+   并解析 `PACEDomainParameterInfo`（现将未知 PACE OID 静默丢弃）；**须先对 J3R180 做曲线支持
+   探针**（§7 维护约定）。
+
+> 附加生物识别加密见 §5（范围外）；AES-192/256、PACE DH-GM/IM 见 §3（平台不可能）。
 
 ## 5. 范围外（▢）
 
 - **eID / eIDAS token**：TA v2、CA v2（General Authentication Procedure）、Restricted
   Identification、假名签名、eSign、PIN 管理、eID 应用数据组（BSI TR-03110-4 App E）。
+- **附加生物识别加密（Doc 9303-11 §7.2）**：ICAO 明确 *"Defining the encryption/decryption
+  algorithm and the keys to be used is up to the implementing State and is outside the scope of
+  this document"*——**没有可互操作的线上格式**；旧 BSI EAC v1.11 的私有约定已由 ICAO EAC v1
+  取代。故不作为算法缺口实现（仅在出现明确对手方需求时按该私有约定另议）。
 - 国别 profile 的额外扩展、生物 CVM、LDS2 之外的附加应用；生产证书体系（真实 CSCA/DSC、
   有效期/策略/吊销）见 [`../common/risks.md`](../common/risks.md)。
 

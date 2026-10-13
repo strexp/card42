@@ -395,8 +395,8 @@ READ RECORD SFI=1 rec=1: 70 L  61 L  4F <AID> 50 <label> 87 01 <prio> ...
 eMRTD 与 EMV 并列，复用 `card42.common`（`AppletBase`、`Tlv`、`RetailMac` 等）。范围：
 **LDS1 文件系统 + BAC + ISO/IEC 7816-4 安全报文 + Passive Authentication + Active
 Authentication**，以及 **LDS2 应用 + EF.CardAccess/CardSecurity 解析 + Chip Authentication
-（ECDH）+ PACE（ECDH 通用映射，3DES/AES-128，MRZ）**；EAC 1.11 仍为待办
-（[../../TODO.emrtd.md](../../../TODO.emrtd.md)）。
+（ECDH）+ PACE（ECDH 通用映射，3DES/AES-128，MRZ）**。EAC 1.11 的附加生物识别加密属 ICAO
+范围外（Doc 9303-11 §7.2 未定义算法，见 [algorithm-support.md](../emrtd/algorithm-support.md) §5）。
 
 - **实例 AID / 角色**：ICAO LDS1 DF name `A0 00 00 02 47 10 01`；LDS2 Travel/Visa/
   Biometrics DF name `A0 00 00 02 47 20 01/02/03`；`EmrtdInstallParameters` 按实例 AID

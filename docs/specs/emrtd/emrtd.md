@@ -4,7 +4,8 @@
 > Active Authentication，以及 LDS2 应用、EF.CardAccess/SecurityInfo 解析、Chip
 > Authentication（ECDH）、PACE（ECDH 通用映射，3DES 与 AES-128 宣告，MRZ 与 CAN）与
 > **Terminal Authentication（v1，ECDSA-SHA-256 / RSA-PSS-SHA-256；含 EF.CVCA 与 PACE 下发
-> CAR）**。EAC 1.11（附加生物识别加密）仍为可选待办
+> CAR）**。EAC 1.11 的附加生物识别加密属 ICAO 范围外（Doc 9303-11 §7.2 未定义算法/密钥，
+> 见 [`algorithm-support.md`](algorithm-support.md) §5），不作为缺口
 > （[`TODO.emrtd.md`](../../../TODO.emrtd.md)）。TA 的决策与协议见
 > [terminal-authentication.md](terminal-authentication.md)。
 

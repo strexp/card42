@@ -41,8 +41,10 @@ Control**, **ISO/IEC 7816-4 secure messaging**, **Passive Authentication**,
 **Active Authentication**, the LDS2 applications (Travel/Visa/Additional
 Biometrics records and transparent files), **EF.CardAccess/EF.CardSecurity**
 parsing and **Chip Authentication** (ECDH); plus **PACE** (ECDH generic mapping,
-3DES and AES-128, MRZ password).  See [`docs/specs/emrtd/`](docs/specs/emrtd/);
-EAC 1.11 is the remaining optional item (see [`TODO.emrtd.md`](TODO.emrtd.md)).
+3DES and AES-128, MRZ password).  See [`docs/specs/emrtd/`](docs/specs/emrtd/).
+EAC 1.11 additional biometric encryption is out of ICAO scope (Doc 9303-11 §7.2
+defines no algorithm), see
+[`algorithm-support.md`](docs/specs/emrtd/algorithm-support.md) §5.
 
 ## Prerequisites
 

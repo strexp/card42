@@ -60,7 +60,8 @@
   BCD YYMMDD）由个性化 DGI `FF08` 注入；`PSO:Verify Certificate` 对**非 CVCA Link** 证书做
   过期判断（`Expiration < current` → `6A80`），并把 `Effective Date` 前移当前日期（CVCA/DV，
   以及由**本国 DV** 签发的 Accurate Terminal 证书）；卡侧单测覆盖"日期前移"与"过期拒绝"。
-- **残余（非阻塞）**：EAC 1.11（TAv1/EF.CVCA）。
+- **附加生物识别加密（Doc 9303-11 §7.2）**：ICAO 未定义算法/密钥（State-specific），属范围外；
+  见 [algorithm-support.md](algorithm-support.md) §5。
 - **（2026-10-12 增强 + 真卡复测）** 原残余 ②/③/④ 已落地：LDS1 的 DG3/DG4 按 ePassport CHAT 位
   门控（`EmrtdApplet.requireLds1ChatAccess`，无信任点时为 PACE-only）；信任点改为**最多两个**并支持
   运行期 **CVCA Link Certificate** 导入与**按 Effective Date 启用**（未到期不可作 DST 校验键、最新

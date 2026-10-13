@@ -85,11 +85,12 @@
 
 ## 待办
 
-- [ ] **E5.8 EAC 1.11 / 附加生物识别加密（可实现，低优先）**：EAC v1 本体
-  （PACE + CA v1 + TA v1）已落地，本项仅指 legacy “EAC 1.11” profile 及**附加生物识别加密**
-  （Doc 9303-11 §7.2）。用现有 ECDH/CA 密钥派生加密密钥即可，属**可实现未做**（非平台限制）。
-  仅在有真卡需求时做（`card/emrtd/access/*`）。支持度矩阵见
-  [`docs/specs/emrtd/algorithm-support.md`](docs/specs/emrtd/algorithm-support.md)。
+- [ ] **算法支持增量（可选，按 matrix §4 三期）**：第一期 PA RSASSA-PSS/SHA-224 映射、
+  AA 卡侧 SHA-256 接线 + `ActiveAuthenticationInfo`、CA ECDH-AES-128；第二期 AA 卡侧
+  ECDSA-SHA-256、多 CA 密钥/keyId 选择；第三期 PACE ECDH-CAM、DH 版 CA、TA 非 SHA-1 变体、
+  非标域参数/Brainpool（须先探针）。平台不可能项（AES-192/256、PACE DH-GM/IM）见 matrix §3；
+  附加生物识别加密见「延后 / 范围外」。判据与复杂度/瞬态评估见
+  [`docs/specs/emrtd/algorithm-support.md`](docs/specs/emrtd/algorithm-support.md) §4。
 - [ ] **T5.1 PACE 官方 BSI 测试向量**：BSI TR-03110 Test-Vector 文档未提供；现以 BSI KDF
   定义独立计算的 KAT + 第三方独立主机库互操作验证。
   （`test/emrtd/unit/host/EmrtdHostTest.java` 的 `paceKdf` 注释已改为“按定义计算、非 BSI
@@ -131,8 +132,8 @@
   **真卡复测已通过（2026-10-12，J3R180 / ACR1581 PICC）**：全部 7 个 eMRTD suite（含
   `EmrtdTerminalAuthIntegrationTest` 的 PACE→CA→TA 与扩展长度 PSO）全绿。**教训**：TA 的 ECDSA
   验签引擎须在**安装期**构建，不得在 SD 个性化事务内（DGI `FF07`）构建——J3R180 会 `6F00`。
-  RsaPss/双信任点/DG3-DG4 门控由单测覆盖；示例个性化仍用 ECDSA。仅附加生物识别加密
-  （Doc 9303-11 §7.2，旧称 EAC 1.11）待办。
+  RsaPss/双信任点/DG3-DG4 门控由单测覆盖；示例个性化仍用 ECDSA。附加生物识别加密
+  （Doc 9303-11 §7.2，旧称 EAC 1.11）属范围外，见「延后 / 范围外」。
 - [!] **Chip Authentication AES profile（`id-CA-*-AES-CBC-CMAC-*`，延后）**：卡侧与主机
   `ChipAuth` 均仅 ECDH+3DES（服务器宣告 `id-CA-ECDH-3DES-CBC-CBC`）；AES CA 需算法/密钥引用
   绑定（`MSE:Set KAT` 的 keyId）与 AES-CMAC KDF/SM 切换。影响：拒绝 3DES 的终端无法完成 CA，
@@ -152,6 +153,11 @@
   [`docs/specs/emrtd/algorithm-support.md`](docs/specs/emrtd/algorithm-support.md) §3。
 - [!] **PACE 非标准化域参数（`PACEDomainParameterInfo`）**：主机仅支持标准化 P-256
   （`SecurityInfo.parse` 对未知 PACE OID 静默丢弃，Doc 9303-11 §9.2.2）；影响有限。
+- **附加生物识别加密（Doc 9303-11 §7.2，范围外）**：ICAO 明确加密算法与密钥由各州自定、
+  **不在规范范围**（*"up to the implementing State and is outside the scope of this document"*），
+  没有可互操作的线上格式；旧 BSI EAC v1.11 的私有约定已被取代。故不作为算法缺口实现，仅在出现
+  明确对手方需求时按该私有约定另议。判据见
+  [`docs/specs/emrtd/algorithm-support.md`](docs/specs/emrtd/algorithm-support.md) §5。
 - **范围外**：国别 profile、生物 CVM、LDS2 之外的附加应用；代码内自签证书（`SodBuilder`
   沿用 openssl 夹具 `perso/emrtd/{csca,dsc}.crt`，生产需替换真实 CSCA/DSC 并补有效期/
   策略/吊销，见 `risks.md`）。
