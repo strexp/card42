@@ -50,8 +50,24 @@ public interface SecureMessaging {
     /**
      * Wraps the response data {@code response[0..respLen)} and status word
      * {@code sw} into {@code out}, returning the response data-field length.
+     * The shared {@code SmScratch} 512-byte framing area bounds the plaintext
+     * to a short APDU (see {@link #maxResponseData()}).
      */
     short wrap(byte[] ksEnc, byte[] ksMac, byte[] ssc,
                byte[] response, short respLen, short sw,
                byte[] out, short outOff);
+
+    /**
+     * Wraps a response larger than a short APDU (an extended-Le LDS2 record
+     * read) using a caller-supplied framing scratch.  {@code scratch} must be
+     * at least the M2-padded plaintext length plus the MAC input (SSC || DO87 ||
+     * DO99, also block-padded); the caller passes the package-shared large
+     * record buffer.  {@code response} and {@code scratch} may be the same
+     * array: the plaintext is M2-padded in place before it is encrypted into
+     * {@code out}, and the plaintext is no longer needed when the MAC input is
+     * assembled.
+     */
+    short wrapLarge(byte[] ksEnc, byte[] ksMac, byte[] ssc,
+                    byte[] response, short respLen, short sw,
+                    byte[] out, short outOff, byte[] scratch);
 }

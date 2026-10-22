@@ -138,21 +138,6 @@ final class SampleData {
                 false);
     }
 
-    /** A demo LDS2 travel record: 5F44 (state) || 5F37 (date). */
-    static byte[] sampleTravelRecord(String state, String date) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        TlvWriter.writeTlv(out, 0x5F44,
-                state.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-        TlvWriter.writeTlv(out, 0x5F37,
-                date.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-        return out.toByteArray();
-    }
-
-    /** A demo LDS2 visa record: 5F44 (state) || 5F37 (date). */
-    static byte[] sampleVisaRecord(String state, String date) {
-        return sampleTravelRecord(state, date);
-    }
-
     /** A demo Additional Biometrics EF.Biometrics1 content (transparent EF 0201). */
     static byte[] sampleBiometric() {
         return Hex.parse("7F611002010102020304050608010A0B0C0D0E0F10");

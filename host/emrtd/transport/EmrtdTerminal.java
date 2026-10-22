@@ -158,15 +158,19 @@ public final class EmrtdTerminal {
      */
     public ResponseAPDU transmit(int cla, int ins, int p1, int p2, byte[] data, int le)
             throws Exception {
+        // The outer Le of an SM command must cover the wrapped response, which
+        // is larger than the plaintext Le.  For an extended plaintext Le use
+        // the extended outer Le (65536) instead of truncating the response to
+        // the short-APDU maximum.
+        int outerLe = le > 256 ? 65536 : (le > 0 ? le : 256);
         if (sm == null) {
             CommandAPDU command = data != null && data.length > 0
-                    ? new CommandAPDU(cla, ins, p1, p2, data, le > 0 ? le : 256)
-                    : new CommandAPDU(cla, ins, p1, p2, le > 0 ? le : 256);
+                    ? new CommandAPDU(cla, ins, p1, p2, data, outerLe)
+                    : new CommandAPDU(cla, ins, p1, p2, outerLe);
             return base.transmit(command);
         }
         byte[] wrapped = sm.wrapCommand(cla, ins, p1, p2, data, le);
-        CommandAPDU command = new CommandAPDU(0x0C, ins, p1, p2, wrapped,
-                le > 0 ? le : 256);
+        CommandAPDU command = new CommandAPDU(0x0C, ins, p1, p2, wrapped, outerLe);
         ResponseAPDU raw = base.transmit(command);
         short[] sw = new short[1];
         byte[] plain;

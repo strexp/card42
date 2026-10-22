@@ -195,7 +195,7 @@ final class EmrtdReadCommand {
      * static public key.  Returns null when the card does not advertise a
      * usable ECDH/3DES Chip Authentication profile.
      */
-    private static ChipAuth.Result chipAuthentication(EmrtdTerminal terminal) throws Exception {
+    static ChipAuth.Result chipAuthentication(EmrtdTerminal terminal) throws Exception {
         CardAccess cardAccess = CardAccess.parse(
                 LdsReader.readMf(terminal, LdsFileUtil.FID_CARD_ACCESS));
         if (cardAccess.chipAuthenticationInfos().isEmpty()) {
@@ -216,7 +216,7 @@ final class EmrtdReadCommand {
     }
 
     /** Reads a master-file EF: SELECT MF then SELECT FILE by FID (Doc 9303-10 §3.11). */
-    private static byte[] readMasterFile(EmrtdTerminal terminal, int fid) throws Exception {
+    static byte[] readMasterFile(EmrtdTerminal terminal, int fid) throws Exception {
         ResponseAPDU mf = terminal.selectMf();
         if (mf.getSW() != 0x9000) {
             throw new IllegalStateException("SELECT MF -> " + sw(mf.getSW()));

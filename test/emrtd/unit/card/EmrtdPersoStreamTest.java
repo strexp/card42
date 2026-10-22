@@ -156,17 +156,18 @@ final class EmrtdPersoStreamTest {
         final Lds2RecordFile fresh = Lds2FileSystem.travel().record(EmrtdTags.FID_RECORDS);
         fresh.beginRecord();
         Asserts.sw((short) 0x6700,
-                () -> fresh.appendChunk(new byte[257], (short) 0, (short) 257),
+                () -> fresh.appendChunk(new byte[641], (short) 0, (short) 641),
                 "record over the maximum -> 6700");
         fresh.endRecord();
         Asserts.eq(0, fresh.recordLength((short) 1), "rejected record is not committed");
 
-        // Four 256-byte records fill the 1024-byte pool; the fifth -> 6A84.
+        // Three 640-byte records fill most of the 2048-byte pool; the fourth
+        // would exceed it -> 6A84.
         Lds2RecordFile pool = Lds2FileSystem.travel().record(EmrtdTags.FID_RECORDS);
-        for (int i = 0; i < 4; i++) {
-            pool.append(pattern(256), (short) 0, (short) 256);
+        for (int i = 0; i < 3; i++) {
+            pool.append(pattern(640), (short) 0, (short) 640);
         }
-        Asserts.sw((short) 0x6A84, () -> pool.append(pattern(256), (short) 0, (short) 256),
+        Asserts.sw((short) 0x6A84, () -> pool.append(pattern(640), (short) 0, (short) 640),
                 "record pool full -> 6A84");
 
         Asserts.sw((short) 0x6700,

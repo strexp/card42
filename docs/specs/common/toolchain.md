@@ -293,7 +293,9 @@ eMRTD 真卡：`card-emrtd-install` 创建的 LDS1 实例带 GP `CardReset` 权�
     测试替身与助手（`Checks`/`TestTerminals`）在 `test/emv/integration/support/`。
   - eMRTD `test/emrtd/integration/`：`EmrtdBacTest`（SELECT + AA + BAC + SM 读 DG1/DG2/COM/DG15/SOD
     + PA）、`EmrtdLds2IntegrationTest`（LDS2 Travel 记录 + CardAccess）、
-    `EmrtdLds2AppsIntegrationTest`（LDS2 Visa/Additional Biometrics）、`EmrtdPaceIntegrationTest`
+    `EmrtdLds2AppsIntegrationTest`（LDS2 Visa/Additional Biometrics）、
+    `EmrtdLds2CliIntegrationTest`（`lds2` PACE→CA→TA + 多记录 EF）、
+    `EmrtdLds2WriteIntegrationTest`（结构化签名 + APPEND + 验签）、`EmrtdPaceIntegrationTest`
     （PACE 3DES/AES-128）、`EmrtdChipAuthIntegrationTest`（Chip Authentication ECDH）。
   - suite 与介质无关：`-host=socket:...` 打模拟器（`make test-emv-sim` / `test-emv-sim-run` /
     `test-emrtd-sim` / `test-both-sim`），`-host=pcsc` 打 PC/SC 真卡（`make test-emv-card S=<Suite>`）；
@@ -407,7 +409,11 @@ version / help [command]
 terminal emrtd read    -host=... -doc=... -dob=YYMMDD -doe=YYMMDD [-pace] [-can=<6 digits>] [-ca] \
                        [-ta -ta-chain=<file> -ta-key=<hex>] [-csca=<cert>] [-json=1]  BAC/PACE+SM+CA+TA+PA+AA
 terminal emrtd inspect -host=... [-json=1]                                    只读（COM/DG15）
-terminal emrtd lds2    -host=... [-app=travel|visa|biometrics] [-json=1]      LDS2 CardAccess/记录
+terminal emrtd lds2    -host=... [-app=travel|visa|biometrics] \
+                       (-pace -doc=... -dob=YYMMDD -doe=YYMMDD | -can=<CAN>) \
+                       [-ca] [-ta -ta-chain=<file> -ta-key=<hex>] \
+                       [-record=entry|exit|visa|cert|all] [-json=1] \
+                       [-append=<json> -ts-key=<pem> [-cert-ref=n]]      LDS2 CardAccess/记录/追加
 terminal emrtd ta-export -dir=<path>                                          生成 demo CV 证书链 + 终端私钥
 terminal emrtd apdu    -host=... -apdu=<hex>                                  原始 APDU
 version / help

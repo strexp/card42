@@ -2,13 +2,25 @@ package card42.test;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import card42.host.common.codec.DerWriter;
 import card42.host.common.codec.TlvWriter;
+import card42.host.common.util.Hex;
 import card42.host.emrtd.lds.Com;
 import card42.host.emrtd.lds.Dg1;
 import card42.host.emrtd.lds.Dg15;
+import card42.host.emrtd.lds.CertificateRecord;
+import card42.host.emrtd.lds.CertificateRecordBuilder;
 import card42.host.emrtd.lds.Dg2;
+import card42.host.emrtd.lds.Lds2Record;
+import card42.host.emrtd.lds.TravelRecord;
+import card42.host.emrtd.lds.TravelRecordBuilder;
+import card42.host.emrtd.lds.VisaRecord;
+import card42.host.emrtd.lds.VisaRecordBuilder;
+import card42.host.emrtd.perso.EmrtdPersoExporter;
 import card42.host.emrtd.report.PassportReport;
 
 /**
@@ -28,7 +40,7 @@ final class PassportReportTest {
     private PassportReportTest() {
     }
 
-    static void run() {
+    static void run() throws Exception {
         System.out.println("PassportReport");
 
         // Every data group absent: an empty object is still valid JSON.
@@ -62,6 +74,137 @@ final class PassportReportTest {
         strictJson(escaped, "quoted/backslash/control values");
         Asserts.check(escaped.contains("\\\"") && escaped.contains("\\\\"),
                 "quotes and backslashes are escaped");
+
+        lds2Records();
+    }
+
+    /**
+     * LDS2 records are a sequence of top-level DOs (Travel: 5F44 || 73 || 5F37
+     * || 5F38).  The report must list those tags in order, not descend into the
+     * first DO's value, and the named-record JSON must be well formed.
+     */
+    private static void lds2Records() throws Exception {
+        byte[] record = Hex.parse("5F440355534173035F45015F3701005F380101");
+        Map<String, List<byte[]>> groups = new LinkedHashMap<>();
+        groups.put("EF.EntryRecords (0101)", List.of(record));
+        String text = PassportReport.lds2Text(null, groups);
+        Asserts.check(text.contains("tags: 5F44 73 5F37 5F38"),
+                "LDS2 report lists the top-level record DOs (" + text + ")");
+        Asserts.check(text.contains("EF.EntryRecords (0101): 1 record(s)"),
+                "LDS2 report names the record EF");
+        String json = PassportReport.lds2Json(null, groups);
+        strictJson(json, "LDS2 named record files");
+        Asserts.check(json.contains("\"recordFiles\"") && json.contains("\"hex\""),
+                "LDS2 JSON carries the record files and hex payload");
+
+        // A complete Table 86 Travel record: the fields inside DO'73' must be
+        // decoded, not just the top-level tags.
+        byte[] travelInfo = cat(
+                tlv(0x5F44, ascii("USA")),
+                tlv(0x5F45, ascii("20260101")),
+                tlv(0x5F4B, ascii("CBP")),
+                tlv(0x5F46, ascii("SFO")),
+                tlv(0x5F4A, ascii("SFO00001")));
+        byte[] travel = cat(tlv(0x5F44, ascii("USA")), tlv(0x73, travelInfo),
+                tlv(0x5F37, new byte[] { 1, 2, 3, 4 }), tlv(0x5F38, new byte[] { 1 }));
+        Map<String, List<byte[]>> travelGroups = new LinkedHashMap<>();
+        travelGroups.put("EF.EntryRecords (0101)", List.of(travel));
+        String travelText = PassportReport.lds2Text(null, travelGroups);
+        Asserts.check(travelText.contains("travelDate        : 20260101")
+                        && travelText.contains("inspectionAuthority: CBP"),
+                "structured Travel record fields are rendered (" + travelText + ")");
+        String travelJson = PassportReport.lds2Json(null, travelGroups);
+        strictJson(travelJson, "structured Travel record JSON");
+        Asserts.check(travelJson.contains("\"wellFormed\":true")
+                        && travelJson.contains("\"travelDate\":\"20260101\""),
+                "structured Travel record JSON carries the fields");
+
+        // A Visa record: 5F28 || 71{...} || 5F37 || 5F38.
+        byte[] visaInfo = cat(
+                tlv(0x5F28, ascii("NLD")),
+                tlv(0x43, ascii("VS")),
+                tlv(0x49, ascii("NEW YORK")),
+                tlv(0x5F25, ascii("20260101")),
+                tlv(0x5F24, ascii("20270101")),
+                tlv(0x5A, ascii("X1234567")),
+                tlv(0x5B, ascii("DOE JOHN")),
+                tlv(0x5F33, ascii("DOE")),
+                tlv(0x5F34, ascii("JOHN")),
+                tlv(0x5F35, ascii("M")),
+                tlv(0x5F2B, ascii("19900101")),
+                tlv(0x5F2C, ascii("NLD")),
+                tlv(0x5F1F, ascii("V<NLDDOE<<JOHN<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")));
+        byte[] visa = cat(tlv(0x5F28, ascii("NLD")), tlv(0x71, visaInfo),
+                tlv(0x5F37, new byte[] { 9, 9 }), tlv(0x5F38, new byte[] { 2 }));
+        Map<String, List<byte[]>> visaGroups = new LinkedHashMap<>();
+        visaGroups.put("EF.VisaRecords (0103)", List.of(visa));
+        String visaText = PassportReport.lds2Text(null, visaGroups);
+        Asserts.check(visaText.contains("issuingState      : NLD")
+                        && visaText.contains("documentType      : VS")
+                        && visaText.contains("placeOfIssue      : NEW YORK"),
+                "structured Visa record fields are rendered (" + visaText + ")");
+        String visaJson = PassportReport.lds2Json(null, visaGroups);
+        strictJson(visaJson, "structured Visa record JSON");
+        Asserts.check(visaJson.contains("\"wellFormed\":true")
+                        && visaJson.contains("\"issuingState\":\"NLD\""),
+                "structured Visa record JSON carries the fields");
+
+        // EF.Certificates: 5F3A { country || serial } || 72 { X.509 }.
+        byte[] cert = cat(tlv(0x5F3A, Hex.parse("55530102")),
+                tlv(0x72, Hex.parse("3003010203")));
+        Map<String, List<byte[]>> certGroups = new LinkedHashMap<>();
+        certGroups.put("EF.Certificates (011A)", List.of(cert));
+        String certText = PassportReport.lds2Text(null, certGroups);
+        Asserts.check(certText.contains("country           : US")
+                        && certText.contains("serialNumber      : 0102"),
+                "structured Certificate record fields are rendered (" + certText + ")");
+        String certJson = PassportReport.lds2Json(null, certGroups);
+        strictJson(certJson, "structured Certificate record JSON");
+        Asserts.check(certJson.contains("\"wellFormed\":true")
+                        && certJson.contains("\"certificateBytes\":5"),
+                "structured Certificate record JSON carries the X.509 length");
+
+        builders();
+    }
+
+    /** Round-trips the structured writers through the readers (no card). */
+    private static void builders() throws Exception {
+        java.security.PrivateKey key =
+                EmrtdPersoExporter.loadPrivateKey("perso/emrtd/dsc.key");
+
+        byte[] travel = new TravelRecordBuilder()
+                .state("USA").travelDate("20260101").inspectionAuthority("CBP")
+                .inspectionLocation("SFO").inspectorReference("SFO00001")
+                .certificateReference(1).build(key);
+        TravelRecord travelRecord = (TravelRecord) Lds2Record.parse(
+                "EF.EntryRecords (0101)", travel);
+        Asserts.check(travelRecord.wellFormed && "USA".equals(travelRecord.state)
+                        && "20260101".equals(travelRecord.travelDate()),
+                "TravelRecordBuilder round-trips through TravelRecord");
+
+        byte[] visa = new VisaRecordBuilder()
+                .issuingState("NLD").documentType("VS").placeOfIssue("NEW YORK")
+                .effectiveDate("20260101").expirationDate("20270101")
+                .documentNumber("X1234567").name("DOE JOHN").surname("DOE")
+                .givenNames("JOHN").sex("M").dateOfBirth("19900101")
+                .nationality("NLD")
+                .mrz("V<NLDDOE<<JOHN<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+                .certificateReference(2).build(key);
+        VisaRecord visaRecord = (VisaRecord) Lds2Record.parse(
+                "EF.VisaRecords (0103)", visa);
+        Asserts.check(visaRecord.wellFormed && "NLD".equals(visaRecord.issuingState)
+                        && "VS".equals(visaRecord.documentType())
+                        && Integer.valueOf(2).equals(visaRecord.certificateReference),
+                "VisaRecordBuilder round-trips through VisaRecord");
+
+        byte[] cert = new CertificateRecordBuilder().country("US")
+                .serialNumber(Hex.parse("0102")).certificate(Hex.parse("3003010203"))
+                .build();
+        CertificateRecord certRecord = (CertificateRecord) Lds2Record.parse(
+                "EF.Certificates (011A)", cert);
+        Asserts.check(certRecord.wellFormed && "US".equals(certRecord.country)
+                        && "0102".equals(certRecord.serialNumber),
+                "CertificateRecordBuilder round-trips through CertificateRecord");
     }
 
     /** Parses the whole document strictly and asserts it is a JSON object. */
@@ -115,6 +258,14 @@ final class PassportReportTest {
     private static byte[] tlv(int tag, byte[] value) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         TlvWriter.writeTlv(out, tag, value);
+        return out.toByteArray();
+    }
+
+    private static byte[] cat(byte[]... parts) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        for (byte[] part : parts) {
+            out.write(part, 0, part.length);
+        }
         return out.toByteArray();
     }
 

@@ -35,6 +35,13 @@ import card42.common.TransientBuffers;
  * without an EEPROM fallback (docs/specs/common/risks.md §2).  Only an
  * extended-length secure-messaging command touches it.
  *
+ * <p>{@link #record}/{@link #recordEnvelope} (1 KB each) are the exception on
+ * the response side: they are only allocated by an LDS2 role and stay
+ * persistent, because an extended-Le READ RECORD can return a 900-byte
+ * EF.Certificates record which cannot fit the 256/512-byte short-APDU buffers,
+ * and adding 2 KB to the eMRTD transient context would push the hot-path
+ * scratch into EEPROM (see the field notes and docs/specs/emrtd/emrtd.md §2/§11).
+ *
  * @author card42
  */
 
@@ -67,6 +74,28 @@ final class EmrtdScratch {
      * 320 bytes).
      */
     static byte[] raw;
+
+    /**
+     * Large LDS2 record response (plaintext) and its SM envelope.  An LDS2
+     * record can be up to 900 bytes (EF.Certificates, Doc 9303-10 Table 83),
+     * which does not fit the 256-byte {@link #response} or the 512-byte
+     * {@link #io} envelope.  These two buffers are allocated only for the LDS2
+     * roles (an LDS1-only card pays nothing) and are persistent on purpose:
+     * extending the transient hot-path buffers by 2 KB would exceed the eMRTD
+     * context budget and force the real hot-path scratch into EEPROM
+     * (docs/specs/common/risks.md §2).  A large READ RECORD is rare, so its
+     * EEPROM writes are preferable to slowing every READ BINARY.
+     *
+     * <p>{@link #record} doubles as the SM framing scratch: it holds the
+     * plaintext, is M2-padded in place, is encrypted into {@link #recordEnvelope},
+     * and is then reused for the MAC input (SSC || DO87 || DO99).  1024 bytes
+     * cover a 900-byte record with M2 padding (912), its 3DES/AES SM envelope
+     * (~930) and the padded MAC input (~944).
+     */
+    static byte[] record;
+
+    /** SM envelope of a large record response (1024 bytes, see {@link #record}). */
+    static byte[] recordEnvelope;
 
     /*
      * BAC/PACE/Chip-Authentication session state, package-shared transient.
@@ -147,6 +176,18 @@ final class EmrtdScratch {
     static void initExtended() {
         if (raw == null) {
             raw = new byte[(short) 512];
+        }
+    }
+
+    /**
+     * Allocates the large LDS2 record response buffers once, only for an LDS2
+     * role; idempotent.  They are persistent (see {@link #record}); an LDS1
+     * instance never touches them, so it does not pay the 2 KB.
+     */
+    static void initRecord() {
+        if (record == null) {
+            record = new byte[(short) 1024];
+            recordEnvelope = new byte[(short) 1024];
         }
     }
 }

@@ -255,6 +255,62 @@ final class EmrtdCryptoTest {
                 (short) aesOdd.length, aesOut, (short) 0);
         Asserts.bytes(big, java.util.Arrays.copyOf(aesOut, alen),
                 "AES SM odd-INS DO85 + BER long form host wrap -> card unwrap");
+
+        // Large READ RECORD path: a 900-byte record exceeds the short-APDU
+        // window for both profiles, so it is framed with wrapLarge() and the
+        // caller-supplied 1 KB scratch.  The independent host wrapper must
+        // still unwrap it and recover the exact plaintext.
+        byte[] large = new byte[900];
+        for (int i = 0; i < large.length; i++) {
+            large[i] = (byte) (i * 31 + 7);
+        }
+        byte[] largeOut = new byte[1024];
+        byte[] largeScratch = new byte[1024];
+        short largeN = cardSm.wrapLarge(ksEnc, ksMac, new byte[8], large,
+                (short) large.length, (short) 0x9000, largeOut, (short) 0, largeScratch);
+        card42.host.emrtd.access.Iso7816Sm hostLarge =
+                new card42.host.emrtd.access.Iso7816Sm(ksEnc, ksMac, 0L);
+        short[] largeSw = new short[1];
+        byte[] largePlain = hostLarge.unwrapResponse(
+                java.util.Arrays.copyOf(largeOut, largeN), largeSw);
+        Asserts.check(java.util.Arrays.equals(large, largePlain),
+                "3DES wrapLarge -> host unwrap");
+        Asserts.eq(0x9000, largeSw[0] & 0xFFFF, "3DES wrapLarge status word");
+
+        byte[] aesLargeOut = new byte[1024];
+        byte[] aesLargeScratch = new byte[1024];
+        short aesLargeN = cardAes.wrapLarge(ksEnc, ksMac, new byte[8], large,
+                (short) large.length, (short) 0x9000, aesLargeOut, (short) 0,
+                aesLargeScratch);
+        card42.host.emrtd.access.Iso7816SmAes hostAesLarge =
+                new card42.host.emrtd.access.Iso7816SmAes(ksEnc, ksMac, 0L);
+        short[] aesLargeSw = new short[1];
+        byte[] aesLargePlain = hostAesLarge.unwrapResponse(
+                java.util.Arrays.copyOf(aesLargeOut, aesLargeN), aesLargeSw);
+        Asserts.check(java.util.Arrays.equals(large, aesLargePlain),
+                "AES wrapLarge -> host unwrap");
+        Asserts.eq(0x9000, aesLargeSw[0] & 0xFFFF, "AES wrapLarge status word");
+
+        // READ RECORD's extended Le is carried in a two-byte DO'97' (65536 is
+        // 0x00 0x00); the card must decode it as the "whole record" marker,
+        // not as a one-byte short Le.
+        card42.host.emrtd.access.Iso7816Sm hostLe =
+                new card42.host.emrtd.access.Iso7816Sm(ksEnc, ksMac, 0L);
+        byte[] extendedCmd = hostLe.wrapCommand(0x00, 0xB2, 0x01, 0x04, null, 65536);
+        Asserts.check((extendedCmd[1] & 0xFF) == 0x02,
+                "extended Le uses a two-byte DO'97'");
+        byte[] extendedApdu = new byte[64];
+        extendedApdu[0] = (byte) 0x0C;
+        extendedApdu[1] = (byte) 0xB2;
+        extendedApdu[2] = (byte) 0x01;
+        extendedApdu[3] = (byte) 0x04;
+        System.arraycopy(extendedCmd, 0, extendedApdu, 4, extendedCmd.length);
+        card42.emrtd.Iso7816Sm leSm = new card42.emrtd.Iso7816Sm();
+        byte[] leOut = new byte[16];
+        leSm.unwrap(ksEnc, ksMac, new byte[8], extendedApdu, (short) 4,
+                (short) extendedCmd.length, leOut, (short) 0);
+        Asserts.eq(0, leSm.getLe() & 0xFFFF,
+                "two-byte DO97 0x0000 decodes as extended Le 65536");
     }
 
     private static void checkDigits() {

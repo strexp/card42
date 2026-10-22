@@ -1,0 +1,17 @@
+{
+  "type": "visa",
+  "issuingState": "JPN",
+  "documentType": "VS",
+  "placeOfIssue": "TOKYO",
+  "effectiveDate": "20260401",
+  "expirationDate": "20270401",
+  "documentNumber": "X1234567",
+  "name": "DOE JOHN",
+  "surname": "DOE",
+  "givenNames": "JOHN",
+  "sex": "M",
+  "dateOfBirth": "19900101",
+  "nationality": "JPN",
+  "mrz": "V<JPNX1234567<<DOE<<JOHN<<<<<<<<<<<<<<<<<<<<<<",
+  "certificateReference": 1
+}

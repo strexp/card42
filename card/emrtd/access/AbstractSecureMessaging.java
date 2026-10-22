@@ -205,8 +205,20 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
 
-        if (do97Len > 0) {
-            leState[0] = (short) (apdu[do97Val] & 0xFF);
+        // DO'97' carries Le in one byte for a short APDU or two bytes for an
+        // extended APDU (ISO/IEC 7816-4 §5.6.3).  A two-byte 0x0000 is the
+        // extended form of 65536; READ RECORD maps 0 to "the whole record" (its
+        // documented Le is the extended '00 00 00', Doc 9303-10 §3.7.2).
+        if (do97Len == 1) {
+            // In the short form 0x00 means 256, not "whole file"; READ RECORD
+            // distinguishes it from the extended '00 00' (65536) form.
+            short v = (short) (apdu[do97Val] & 0xFF);
+            leState[0] = v == 0 ? (short) 256 : v;
+        } else if (do97Len == 2) {
+            leState[0] = (short) (((apdu[do97Val] & 0xFF) << 8)
+                    | (apdu[(short) (do97Val + 1)] & 0xFF));
+        } else if (do97Len != 0) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
         // Odd INS carries plain command data in DO'85' (Doc 9303-11 §9.8.4).
         if (do85Start >= 0) {
@@ -228,10 +240,31 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
     public final short wrap(byte[] ksEnc, byte[] ksMac, byte[] ssc,
                             byte[] response, short respLen, short sw,
                             byte[] out, short outOff) {
+        return wrapInternal(ksEnc, ksMac, ssc, response, respLen, sw, out, outOff,
+                SmScratch.get());
+    }
+
+    public final short wrapLarge(byte[] ksEnc, byte[] ksMac, byte[] ssc,
+                                 byte[] response, short respLen, short sw,
+                                 byte[] out, short outOff, byte[] scratch) {
+        return wrapInternal(ksEnc, ksMac, ssc, response, respLen, sw, out, outOff,
+                scratch);
+    }
+
+    /**
+     * Frames one SM response.  {@code scratch} holds the M2-padded plaintext
+     * during encryption and is then reused for the MAC input; the two phases
+     * never overlap (the ciphertext is already in {@code out}).  It may be the
+     * same array as {@code response} when it is at least as large as the padded
+     * plaintext and the MAC input, which lets a large READ RECORD avoid a third
+     * kilobyte-sized buffer.
+     */
+    private short wrapInternal(byte[] ksEnc, byte[] ksMac, byte[] ssc,
+                               byte[] response, short respLen, short sw,
+                               byte[] out, short outOff, byte[] scratch) {
         increment(ssc);
         prepareSsc(ssc);
         short n = outOff;
-        byte[] scratch = SmScratch.get();
 
         short do87Len = 0;
         if (respLen > 0) {
@@ -243,7 +276,7 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
             // (scratch) and output (out) are distinct arrays, which the jcsl
             // AES doFinal requires, so no second staging region is needed and
             // the scratch only has to hold the padded plaintext.
-            encrypt(ksEnc, response, (short) 0, respLen, out, n);
+            encrypt(ksEnc, response, (short) 0, respLen, out, n, scratch);
             n += padLen;
             do87Len = (short) (n - outOff);
         }
@@ -254,7 +287,16 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         out[n++] = (byte) (sw >> 8);
         out[n++] = (byte) sw;
 
-        // MAC input: pad(SSC || DO87 || DO99).
+        // MAC input: pad(SSC || DO87 || DO99).  Reusing the encryption scratch
+        // is safe: the ciphertext is already in out.  Bound the assembled input
+        // before writing so a caller that passes a too-small scratch gets 6A84
+        // instead of an ArrayIndexOutOfBoundsException.
+        short sscLen = copySscLength();
+        short macLen = (short) (sscLen + do87Len + 4);
+        short paddedMac = paddedLength(macLen);
+        if (paddedMac > scratch.length) {
+            ISOException.throwIt(ISO7816.SW_FILE_FULL);
+        }
         short m = 0;
         m += copySsc(ssc, scratch, m);
         if (do87Len > 0) {
@@ -269,6 +311,11 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         Util.arrayCopyNonAtomic(macBuffer, (short) 0, out, n, (short) 8);
         n += 8;
         return (short) (n - outOff);
+    }
+
+    /** Length of the profile's SSC form, used only for a scratch bound check. */
+    private short copySscLength() {
+        return blockSize() == 8 ? (short) 8 : (short) 16;
     }
 
     /** Increments the 64-bit big-endian SSC (Doc 9303-11 §9.8.2). */
@@ -311,12 +358,21 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
 
     // --- shared primitives ---------------------------------------------------
 
-    /** Pads and encrypts {@code in[inOff..+inLen)} into {@code out[outOff..)}. */
+    /**
+     * Pads and encrypts {@code in[inOff..+inLen)} into {@code out[outOff..)},
+     * using {@code scratch} for the padded plaintext.  When {@code scratch} is
+     * {@code in} and starts at 0, the copy is skipped and the padding is applied
+     * in place (the large record path passes the record buffer for both).
+     */
     private void encrypt(byte[] k, byte[] in, short inOff, short inLen,
-                         byte[] out, short outOff) {
-        byte[] scratch = SmScratch.get();
+                         byte[] out, short outOff, byte[] scratch) {
         short padded = paddedLength(inLen);
-        Util.arrayCopyNonAtomic(in, inOff, scratch, (short) 0, inLen);
+        if (padded > scratch.length) {
+            ISOException.throwIt(ISO7816.SW_FILE_FULL);
+        }
+        if (scratch != in || inOff != 0) {
+            Util.arrayCopyNonAtomic(in, inOff, scratch, (short) 0, inLen);
+        }
         scratch[inLen] = (byte) 0x80;
         for (short i = (short) (inLen + 1); i < padded; i++) {
             scratch[i] = 0;

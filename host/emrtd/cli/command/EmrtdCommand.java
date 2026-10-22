@@ -43,7 +43,12 @@ public final class EmrtdCommand {
         out.println("  read    -host=... -doc=... -dob=YYMMDD -doe=YYMMDD [-pace] [-can=<6 digits>] [-ca]");
         out.println("          [-ta -ta-chain=<file> -ta-key=<hex>] [-csca=<cert>] [-json=1]");
         out.println("  inspect -host=... [-json=1]");
-        out.println("  lds2    -host=... [-app=travel|visa|biometrics] [-json=1]");
+        out.println("  lds2    -host=... [-app=travel|visa|biometrics] "
+                + "(-pace -doc=... -dob=YYMMDD -doe=YYMMDD | -can=<CAN>)");
+        out.println("          [-ca] [-ta -ta-chain=<file> -ta-key=<hex>] "
+                + "[-record=entry|exit|visa|cert|all] [-json=1]");
+        out.println("          [-append=<json> -ts-key=<pem> [-cert-ref=n]]  "
+                + "structured Travel/Visa/Certificate append");
         out.println("  apdu    -host=... -apdu=<hex>");
         out.println("  ta-export -dir=<path>   write a demo CV certificate chain + terminal key");
     }

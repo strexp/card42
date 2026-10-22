@@ -37,8 +37,14 @@ import java.util.stream.Stream;
  */
 final class AllocationCensusTest {
 
-    /** Ceiling of card-side {@code new} expressions (objects + arrays). */
-    private static final int NEW_CEILING = 255;
+    /**
+     * Ceiling of card-side {@code new} expressions (objects + arrays).  The
+     * 2026-10-22 LDS2 extended-Le READ RECORD support adds the two persistent
+     * 1 KB record/envelope buffers in {@code EmrtdScratch} (only allocated for
+     * an LDS2 role); see docs/specs/common/risks.md §2 and docs/specs/emrtd/
+     * emrtd.md §11.
+     */
+    private static final int NEW_CEILING = 257;
     /** Ceiling of card-side transient-buffer allocations. */
     private static final int TRANSIENT_CEILING = 47;
 

@@ -76,7 +76,17 @@ abstract class AbstractSecureMessaging implements SecureMessaging {
                 dataDo.write(ciphertext, 0, ciphertext.length);
             }
         }
-        byte[] do97 = le > 0 ? new byte[] { (byte) 0x97, 0x01, (byte) le } : new byte[0];
+        // DO'97' carries Le in one byte for a short APDU and two bytes for an
+        // extended one (ISO/IEC 7816-4 §5.6.3).  The extended Le 65536 is
+        // encoded as 0x00 0x00; READ RECORD uses it to request the whole record.
+        byte[] do97 = new byte[0];
+        if (le > 0) {
+            if (le <= 256) {
+                do97 = new byte[] { (byte) 0x97, 0x01, (byte) le };
+            } else {
+                do97 = new byte[] { (byte) 0x97, 0x02, (byte) (le >> 8), (byte) le };
+            }
+        }
 
         ByteArrayOutputStream macInput = new ByteArrayOutputStream();
         byte[] sscBytes = encodedSsc();

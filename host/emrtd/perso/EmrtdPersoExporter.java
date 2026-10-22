@@ -18,7 +18,10 @@ import card42.host.common.codec.DerWriter;
 import card42.host.common.codec.TlvWriter;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.access.MrzKeySeed;
+import card42.host.emrtd.lds.CertificateRecordBuilder;
 import card42.host.emrtd.lds.LdsFileUtil;
+import card42.host.emrtd.lds.TravelRecordBuilder;
+import card42.host.emrtd.lds.VisaRecordBuilder;
 import card42.host.emrtd.lds.security.SecurityInfo;
 import card42.host.emrtd.ta.TaChain;
 
@@ -317,16 +320,32 @@ public final class EmrtdPersoExporter {
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@cardsecurity ").append(Hex.format(cardSecurity)).append('\n');
 
-        appendLds2Sections(sb, cardAccess, caScalar, cardSecurity, dscCertificate);
+        appendLds2Sections(sb, cardAccess, caScalar, cardSecurity, dscCertificate, dscKey);
         return sb.toString();
     }
 
     // --- LDS2 demo sections --------------------------------------------------
 
     private static void appendLds2Sections(StringBuilder sb, byte[] cardAccess, byte[] caScalar,
-                                           byte[] cardSecurity, X509Certificate dscCertificate)
-            throws Exception {
-        String certHex = Hex.format(dscCertificate.getEncoded());
+                                           byte[] cardSecurity, X509Certificate dscCertificate,
+                                           PrivateKey dscKey) throws Exception {
+        // One LDS2-TS signer certificate record (Table 83: 5F3A || 72), referenced
+        // by every Travel/Visa record through 5F38 = 01.
+        byte[] certRecord = new CertificateRecordBuilder()
+                .country("US")
+                .serialNumber(dscCertificate.getSerialNumber().toByteArray())
+                .certificate(dscCertificate.getEncoded())
+                .build();
+        byte[] entry1 = travelRecord(dscKey, "USA", "20260101", "CBP", "SFO", "SFO00001", "A");
+        byte[] entry2 = travelRecord(dscKey, "NLD", "20260215", "KMAR", "AMS", "AMS00002", "A");
+        byte[] entry3 = travelRecord(dscKey, "JPN", "20260320", "MOJ", "NRT", "NRT00003", "A");
+        byte[] exit1 = travelRecord(dscKey, "DEU", "20260601", "BPol", "FRA", "FRA00004", "A");
+        byte[] visa1 = visaRecord(dscKey, "JPN", "X1234567", "DOE", "JOHN", "19900101",
+                "JPN", "V<JPNX1234567<<DOE<<JOHN<<<<<<<<<<<<<<<<<<<<<<",
+                "20260401", "20270401", "TOKYO", new byte[] { 0x02, 0x01 });
+        byte[] visa2 = visaRecord(dscKey, "AUS", "Y7654321", "ROE", "JANE", "19851212",
+                "AUS", "V<AUSY7654321<<ROE<<JANE<<<<<<<<<<<<<<<<<<<<<<<<",
+                "20260505", "20280505", "SYDNEY", null);
 
         sb.append("\n# LDS2 Travel Records: EntryRecords 0101, ExitRecords 0102,\n");
         sb.append("# EF.Certificates 011A; EF.CardAccess advertises PACE + CA (3DES/AES).\n");
@@ -338,15 +357,11 @@ public final class EmrtdPersoExporter {
         sb.append("@cardaccess ").append(Hex.format(cardAccess)).append('\n');
         sb.append("@cardsecurity ").append(Hex.format(cardSecurity)).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
-        sb.append("@record 0101 ").append(Hex.format(SampleData.sampleTravelRecord("USA", "20260101")))
-                .append('\n');
-        sb.append("@record 0101 ").append(Hex.format(SampleData.sampleTravelRecord("NLD", "20260215")))
-                .append('\n');
-        sb.append("@record 0101 ").append(Hex.format(SampleData.sampleTravelRecord("JPN", "20260320")))
-                .append('\n');
-        sb.append("@record 0102 ").append(Hex.format(SampleData.sampleTravelRecord("DEU", "20260601")))
-                .append('\n');
-        sb.append("@record 011A ").append(certHex).append('\n');
+        sb.append("@record 0101 ").append(Hex.format(entry1)).append('\n');
+        sb.append("@record 0101 ").append(Hex.format(entry2)).append('\n');
+        sb.append("@record 0101 ").append(Hex.format(entry3)).append('\n');
+        sb.append("@record 0102 ").append(Hex.format(exit1)).append('\n');
+        sb.append("@record 011A ").append(Hex.format(certRecord)).append('\n');
 
         sb.append("\n# LDS2 Visa Records: EF.VisaRecords 0103, EF.Certificates 011A.\n");
         sb.append("@instance ").append(LdsFileUtil.AID_VISA).append('\n');
@@ -355,11 +370,9 @@ public final class EmrtdPersoExporter {
         sb.append("@dob ").append(SampleData.DATE_OF_BIRTH).append('\n');
         sb.append("@doe ").append(SampleData.DATE_OF_EXPIRY).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
-        sb.append("@record 0103 ").append(Hex.format(SampleData.sampleVisaRecord("JPN", "20260401")))
-                .append('\n');
-        sb.append("@record 0103 ").append(Hex.format(SampleData.sampleVisaRecord("AUS", "20260505")))
-                .append('\n');
-        sb.append("@record 011A ").append(certHex).append('\n');
+        sb.append("@record 0103 ").append(Hex.format(visa1)).append('\n');
+        sb.append("@record 0103 ").append(Hex.format(visa2)).append('\n');
+        sb.append("@record 011A ").append(Hex.format(certRecord)).append('\n');
 
         sb.append("\n# LDS2 Additional Biometrics: EF.Biometrics1 0201 (transparent),\n");
         sb.append("# EF.Certificates 011A.\n");
@@ -370,7 +383,38 @@ public final class EmrtdPersoExporter {
         sb.append("@doe ").append(SampleData.DATE_OF_EXPIRY).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@transparent 0201 ").append(Hex.format(SampleData.sampleBiometric())).append('\n');
-        sb.append("@record 011A ").append(certHex).append('\n');
+        sb.append("@record 011A ").append(Hex.format(certRecord)).append('\n');
+    }
+
+    /** A Table 86 record signed by the demo LDS2-TS key. */
+    private static byte[] travelRecord(PrivateKey key, String state, String date,
+                                       String authority, String location, String inspector,
+                                       String mode) throws Exception {
+        return new TravelRecordBuilder()
+                .state(state).travelDate(date)
+                .inspectionAuthority(authority).inspectionLocation(location)
+                .inspectorReference(inspector).modeOfTravel(mode)
+                .certificateReference(1)
+                .build(key);
+    }
+
+    /** A Table 90 record signed by the demo LDS2-TS key. */
+    private static byte[] visaRecord(PrivateKey key, String state, String documentNumber,
+                                     String surname, String givenNames, String dateOfBirth,
+                                     String nationality, String mrz, String effectiveDate,
+                                     String expirationDate, String placeOfIssue,
+                                     byte[] biometricsReference) throws Exception {
+        VisaRecordBuilder builder = new VisaRecordBuilder()
+                .issuingState(state).documentType("VS")
+                .placeOfIssue(placeOfIssue).effectiveDate(effectiveDate)
+                .expirationDate(expirationDate).documentNumber(documentNumber)
+                .name(surname + " " + givenNames).surname(surname).givenNames(givenNames)
+                .sex("M").dateOfBirth(dateOfBirth).nationality(nationality).mrz(mrz)
+                .certificateReference(1);
+        if (biometricsReference != null) {
+            builder.biometricsReference(biometricsReference);
+        }
+        return builder.build(key);
     }
 
     // --- LDS1 data groups ----------------------------------------------------

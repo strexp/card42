@@ -10,7 +10,10 @@ import card42.host.common.transport.Terminal;
 import card42.host.common.cli.Args;
 import card42.host.emrtd.access.Pace;
 import card42.host.emrtd.lds.CardAccess;
+import card42.host.emrtd.lds.CertificateRecord;
+import card42.host.emrtd.lds.Lds2Record;
 import card42.host.emrtd.lds.LdsFileUtil;
+import card42.host.emrtd.lds.TravelRecord;
 import card42.host.emrtd.access.LdsReader;
 import card42.host.emrtd.perso.EmrtdPersoExporter;
 import card42.host.emrtd.transport.EmrtdTerminal;
@@ -98,12 +101,36 @@ public final class EmrtdLds2IntegrationTest {
                 new String(records.get(1), java.nio.charset.StandardCharsets.US_ASCII)
                         .contains("NLD"));
 
+        TravelRecord firstEntry = (TravelRecord) Lds2Record.parse(
+                "EF.EntryRecords (0101)", records.get(0));
+        TravelRecord secondEntry = (TravelRecord) Lds2Record.parse(
+                "EF.EntryRecords (0101)", records.get(1));
+        Checks.check("entry records are spec-conformant Table 86 records",
+                firstEntry.wellFormed && secondEntry.wellFormed);
+        Checks.check("entry record fields are decoded",
+                "20260101".equals(firstEntry.travelDate())
+                        && "CBP".equals(firstEntry.inspectionAuthority())
+                        && Integer.valueOf(1).equals(firstEntry.certificateReference));
+
+        List<byte[]> exits = LdsReader.readAllRecords(terminal,
+                LdsFileUtil.sfi(LdsFileUtil.FID_EXIT_RECORDS), 1);
+        Checks.check("exit record is a spec-conformant Table 86 record",
+                !exits.isEmpty() && ((TravelRecord) Lds2Record.parse(
+                        "EF.ExitRecords (0102)", exits.get(0))).wellFormed);
+
         // EF.Certificates (011A, Doc 9303-10 §5.1.2): the LDS2 signer
-        // certificate record; read access is PACE+TA (Travel bit b3).
+        // certificate record; read access is PACE+TA (Travel bit b3).  The
+        // record is larger than the 231/223-byte SM short-APDU window, so a
+        // full-length read also proves the extended-Le/large-response path.
         byte[] signer = LdsReader.readRecord(terminal,
                 LdsFileUtil.sfi(LdsFileUtil.FID_CERTIFICATES), 1);
-        Checks.check("EF.Certificates record 1 is an X.509 signer certificate",
-                signer.length > 0 && (signer[0] & 0xFF) == 0x30);
+        CertificateRecord signerRecord = (CertificateRecord) Lds2Record.parse(
+                "EF.Certificates (011A)", signer);
+        Checks.check("EF.Certificates record 1 is a wrapped X.509 signer certificate",
+                signerRecord.wellFormed && signerRecord.certificate != null
+                        && (signerRecord.certificate[0] & 0xFF) == 0x30);
+        Checks.check("EF.Certificates record read in full (" + signer.length
+                + " B > the SM short-APDU window)", signer.length > 512);
 
         byte[] appended = card42.host.common.util.Hex.parse("5F440343414E5F37083230323630333031");
         Checks.check("APPEND RECORD", terminal.appendRecord(LdsFileUtil.sfi(FID_ENTRY), appended).getSW(),

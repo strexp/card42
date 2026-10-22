@@ -112,6 +112,50 @@ final class EmrtdCliTest {
         Asserts.check(reachesTransport("apdu", new String[] {
                 "-host=socket:localhost:1", "-apdu=00A4040000" }),
                 "apdu flow reaches the transport");
+        Asserts.check(reachesTransport("lds2", new String[] {
+                "-host=socket:localhost:1", "-app=travel", "-pace",
+                "-doc=123456789", "-dob=000101", "-doe=300101", "-record=exit" }),
+                "lds2 flow accepts PACE and -record=exit and reaches the transport");
+        Asserts.check(reachesTransport("lds2", new String[] {
+                "-host=socket:localhost:1", "-app=visa", "-can=123456",
+                "-record=cert", "-ca" }),
+                "lds2 flow accepts PACE-CAN, -record=cert and -ca");
+        Asserts.check(reachesTransport("lds2", new String[] {
+                "-host=socket:localhost:1", "-app=travel", "-pace",
+                "-doc=123456789", "-dob=000101", "-doe=300101",
+                "-ca", "-ta", "-ta-chain=/tmp/chain.bin", "-ta-key=01",
+                "-record=all" }),
+                "lds2 flow accepts -ca/-ta and -record=all");
+
+        appendFlow();
+    }
+
+    private static void appendFlow() {
+        java.nio.file.Path json = null;
+        try {
+            json = java.nio.file.Files.createTempFile("lds2-append-", ".json");
+            java.nio.file.Files.writeString(json,
+                    "{\"type\":\"entry\",\"state\":\"USA\","
+                    + "\"travelDate\":\"20260101\","
+                    + "\"inspectionAuthority\":\"CBP\","
+                    + "\"inspectionLocation\":\"SFO\","
+                    + "\"inspectorReference\":\"SFO00001\"}");
+            Asserts.check(reachesTransport("lds2", new String[] {
+                    "-host=socket:localhost:1", "-app=travel", "-pace",
+                    "-doc=123456789", "-dob=000101", "-doe=300101",
+                    "-append=" + json, "-ts-key=perso/emrtd/dsc.key" }),
+                    "lds2 -append parses the structured JSON and reaches the transport");
+        } catch (java.io.IOException e) {
+            Asserts.check(false, "lds2 append test fixture: " + e);
+        } finally {
+            if (json != null) {
+                try {
+                    java.nio.file.Files.deleteIfExists(json);
+                } catch (java.io.IOException e) {
+                    // Best-effort cleanup.
+                }
+            }
+        }
     }
 
     /**

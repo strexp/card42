@@ -101,10 +101,9 @@ final class EmrtdCommandTest {
 
         // A search window selects bytes within each record: offset 3, length 3
         // covers the state code in the ICAO Doc 9303-10 §3.7.3 Appendix I.1
-        // example.  The offset/length are encoded here as two-byte BER integers
-        // because the handler decodes DO'02' with Util.getShort (fixed-width);
-        // the minimal one-byte form shown by the appendix is not handled — see
-        // the SEARCH RECORD entry in TODO.emrtd.md.
+        // example.  The helper now encodes these as the minimal one-byte BER
+        // integers shown by the appendix ('02 01 03'), exercising the length-
+        // aware DO'02' decoder.
         byte[] windowed = searchData(fidRef(EmrtdTags.FID_RECORDS),
                 (byte) 0x00, 3, 3, Hex.parse("555341")); // 'USA'
         n = Lds2Record.searchRecord(applet, (byte) 0xF8, windowed, (short) 0,
@@ -138,6 +137,38 @@ final class EmrtdCommandTest {
         Asserts.bytes(Hex.parse("7F7606510108020101"),
                 java.util.Arrays.copyOf(response(applet), n),
                 "SEARCH RECORD resolves a short EF identifier");
+
+        // Appendix I.1/J.1 use the raw SFI: '01' for EF.EntryRecords and '1A'
+        // for EF.Certificates.  Both must resolve to the same files as 0x08 and
+        // 0xD0 respectively.
+        byte[] rawEntry = searchData(tlv(0x51, new byte[] { 0x01 }),
+                (byte) 0x00, null, null, Hex.parse("5F44"));
+        n = Lds2Record.searchRecord(applet, (byte) 0xF8, rawEntry, (short) 0,
+                (short) rawEntry.length);
+        Asserts.bytes(Hex.parse("7F7606510101020101"),
+                java.util.Arrays.copyOf(response(applet), n),
+                "SEARCH RECORD resolves the Appendix I.1 raw SFI 01");
+
+        byte[] certRecord = Hex.parse("5F440343414E");
+        fs(applet).record(EmrtdTags.FID_CERTIFICATES).append(certRecord, (short) 0,
+                (short) certRecord.length);
+        byte[] rawCert = searchData(tlv(0x51, new byte[] { 0x1A }),
+                (byte) 0x00, null, null, Hex.parse("5F44"));
+        n = Lds2Record.searchRecord(applet, (byte) 0xF8, rawCert, (short) 0,
+                (short) rawCert.length);
+        Asserts.bytes(Hex.parse("7F760651011A020101"),
+                java.util.Arrays.copyOf(response(applet), n),
+                "SEARCH RECORD resolves the Appendix J.1 raw SFI 1A");
+
+        // The shifted form of the same certificate SFI (0x1A << 3 = 0xD0)
+        // remains accepted (Table 25 / READ-APPEND P2 coding).
+        byte[] shiftedCert = searchData(tlv(0x51, new byte[] { (byte) 0xD0 }),
+                (byte) 0x00, null, null, Hex.parse("5F44"));
+        n = Lds2Record.searchRecord(applet, (byte) 0xF8, shiftedCert, (short) 0,
+                (short) shiftedCert.length);
+        Asserts.bytes(Hex.parse("7F76065101D0020101"),
+                java.util.Arrays.copyOf(response(applet), n),
+                "SEARCH RECORD resolves the shifted certificate SFI D0");
 
         // A file identifier with no matching EF is 6A82 (§3.7.3 Table 15).
         byte[] missing = searchData(fidRef((short) 0x0199),
@@ -202,7 +233,7 @@ final class EmrtdCommandTest {
                 "FMM P2=01 returns the total byte count");
 
         // P2 = 02: remaining records, each assumed to be of maximum size (§3.8.3):
-        // (1024 - 12) / 256 = 3.
+        // (2048 - 12) / 640 = 3.
         n = Lds2Record.fileMemoryManagement(applet, (byte) 0x00, (byte) 0x02,
                 new byte[0], (short) 0, (short) 0);
         Asserts.bytes(Hex.parse("7F7803820103"),
@@ -453,8 +484,9 @@ final class EmrtdCommandTest {
                                      byte[] needle) {
         byte[] configuration = tlv(0x80, new byte[] { termination });
         if (windowOffset != null) {
-            byte[] window = cat(tlv(0x02, twoBytes(windowOffset)),
-                    tlv(0x02, twoBytes(windowLength)));
+            // Appendix I.1/J.1 encode small window values minimally ('02 01 03').
+            byte[] window = cat(tlv(0x02, number(windowOffset)),
+                    tlv(0x02, number(windowLength)));
             configuration = cat(configuration, tlv(0xB0, window));
         }
         byte[] searchString = tlv(0xA3, tlv(0xB1, tlv(0x81, needle)));
@@ -464,6 +496,10 @@ final class EmrtdCommandTest {
     private static byte[] updateData(int offset, String valueHex) {
         byte[] value = Hex.parse(valueHex);
         return cat(tlv(0x54, new byte[] { (byte) offset }), tlv(0x53, value));
+    }
+
+    private static byte[] number(int value) {
+        return value <= 0xFF ? new byte[] { (byte) value } : twoBytes(value);
     }
 
     private static byte[] twoBytes(int value) {

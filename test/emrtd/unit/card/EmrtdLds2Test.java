@@ -58,7 +58,7 @@ final class EmrtdLds2Test {
         Asserts.eq(9, entry.totalBytes(), "total record bytes");
         Asserts.eq(5, entry.recordLength((short) 2), "record 2 length");
         // FMM reports remaining records assuming every remaining record is at
-        // its maximum size (Doc 9303-10 §3.8.3): (1024 - 9) / 256 = 3.
+        // its maximum size (Doc 9303-10 §3.8.3): (2048 - 9) / 640 = 3.
         Asserts.eq(3, entry.remainingRecords(), "remaining records (max-size assumption)");
 
         byte[] out = new byte[8];

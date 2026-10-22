@@ -2,14 +2,17 @@ package card42.host.emrtd.report;
 
 
 import java.util.List;
+import java.util.Map;
 
 import card42.host.common.codec.Json;
 import card42.host.common.codec.TlvCursor;
+import card42.host.common.util.Hex;
 import card42.host.emrtd.lds.CardAccess;
 import card42.host.emrtd.lds.Com;
 import card42.host.emrtd.lds.Dg1;
 import card42.host.emrtd.lds.Dg15;
 import card42.host.emrtd.lds.Dg2;
+import card42.host.emrtd.lds.Lds2Record;
 import card42.host.emrtd.lds.security.SecurityInfo;
 
 /**
@@ -98,22 +101,12 @@ public final class PassportReport {
 
     /**
      * An LDS2 report: the advertised SecurityInfos (PACE / Chip Authentication)
-     * and the record count and outer tags of each record EF (H7.4).
+     * and the record count/outer tags of one record EF (H7.4).  The named-EF
+     * overloads also append the structured {@link Lds2Record} fields.
      */
     public static String lds2Text(CardAccess access, List<byte[]> records) {
         StringBuilder b = new StringBuilder();
-        if (access != null) {
-            b.append("CardAccess      : ").append(access.securityInfos.size())
-                    .append(" SecurityInfo(s)\n");
-            for (SecurityInfo info : access.securityInfos) {
-                b.append("  ").append(info.typeName())
-                        .append("  ").append(info.oid).append('\n');
-                String detail = info.describe();
-                if (!detail.isEmpty()) {
-                    b.append("    ").append(detail).append('\n');
-                }
-            }
-        }
+        appendAccess(b, access);
         if (records != null) {
             b.append("Records         : ").append(records.size()).append('\n');
             for (int i = 0; i < records.size(); i++) {
@@ -122,6 +115,47 @@ public final class PassportReport {
             }
         }
         return b.toString();
+    }
+
+    /**
+     * An LDS2 report over several named record EFs (Entry/Exit/Visa/Certificates),
+     * e.g. {@code "EF.EntryRecords (0101)" -> records}.  Top-level record DOs
+     * are listed in file order; use {@code -json=1} for the hex payloads.
+     */
+    public static String lds2Text(CardAccess access, Map<String, List<byte[]>> groups) {
+        StringBuilder b = new StringBuilder();
+        appendAccess(b, access);
+        if (groups != null) {
+            for (Map.Entry<String, List<byte[]>> group : groups.entrySet()) {
+                List<byte[]> records = group.getValue();
+                b.append(group.getKey()).append(": ").append(records.size())
+                        .append(" record(s)\n");
+                for (int i = 0; i < records.size(); i++) {
+                    byte[] record = records.get(i);
+                    b.append("  record ").append(i + 1).append(" (")
+                            .append(record.length).append(" B) tags: ")
+                            .append(outerTags(record)).append('\n');
+                    indent(b, Lds2Record.parse(group.getKey(), record).toText(), "    ");
+                }
+            }
+        }
+        return b.toString();
+    }
+
+    private static void appendAccess(StringBuilder b, CardAccess access) {
+        if (access == null) {
+            return;
+        }
+        b.append("CardAccess      : ").append(access.securityInfos.size())
+                .append(" SecurityInfo(s)\n");
+        for (SecurityInfo info : access.securityInfos) {
+            b.append("  ").append(info.typeName())
+                    .append("  ").append(info.oid).append('\n');
+            String detail = info.describe();
+            if (!detail.isEmpty()) {
+                b.append("    ").append(detail).append('\n');
+            }
+        }
     }
 
     /** A minimal JSON object for an LDS2 read. */
@@ -141,26 +175,79 @@ public final class PassportReport {
             out.put("recordCount", records.size());
             Json.Arr recordArr = new Json.Arr();
             for (byte[] record : records) {
-                recordArr.raw(new Json.Obj()
-                        .put("length", record.length)
-                        .put("tags", outerTags(record))
-                        .build());
+                recordArr.raw(recordJson(null, record).build());
             }
             out.raw("records", recordArr.build());
         }
         return out.build();
     }
 
+    /**
+     * A minimal JSON object for several named LDS2 record EFs: the same
+     * {@code securityInfos} plus a {@code recordFiles} object whose values are
+     * arrays of {@code {length, tags, hex, parsed}}.
+     */
+    public static String lds2Json(CardAccess access, Map<String, List<byte[]>> groups) {
+        Json.Obj out = new Json.Obj();
+        if (access != null) {
+            Json.Arr infos = new Json.Arr();
+            for (SecurityInfo info : access.securityInfos) {
+                infos.raw(new Json.Obj()
+                        .put("type", info.typeName())
+                        .put("oid", info.oid)
+                        .build());
+            }
+            out.raw("securityInfos", infos.build());
+        }
+        if (groups != null) {
+            Json.Obj files = new Json.Obj();
+            for (Map.Entry<String, List<byte[]>> group : groups.entrySet()) {
+                Json.Arr recordArr = new Json.Arr();
+                for (byte[] record : group.getValue()) {
+                    recordArr.raw(recordJson(group.getKey(), record).build());
+                }
+                files.raw(group.getKey(), recordArr.build());
+            }
+            out.raw("recordFiles", files.build());
+        }
+        return out.build();
+    }
+
+    private static Json.Obj recordJson(String label, byte[] record) {
+        return new Json.Obj()
+                .put("length", record.length)
+                .put("tags", outerTags(record))
+                .put("hex", Hex.format(record))
+                .raw("parsed", Lds2Record.parse(label, record).toJson());
+    }
+
+    private static void indent(StringBuilder out, String text, String prefix) {
+        int start = 0;
+        while (start < text.length()) {
+            int end = text.indexOf('\n', start);
+            if (end < 0) {
+                out.append(prefix).append(text.substring(start)).append('\n');
+                return;
+            }
+            out.append(prefix).append(text, start, end + 1);
+            start = end + 1;
+        }
+    }
+
+    /**
+     * The top-level DO tags of a record, in order.  A LDS2 record is a sequence
+     * of data objects (Travel: 5F44 || 73 || 5F37 || 5F38; Visa: 5F28 || 71 ||
+     * 5F37 || 5F38), not one TLV with children, so the cursor walks the whole
+     * record rather than descending into the first object.
+     */
     private static String outerTags(byte[] record) {
         StringBuilder b = new StringBuilder();
-        TlvCursor outer = new TlvCursor(record);
-        if (outer.next() != TlvCursor.Status.OK) {
-            return b.toString();
-        }
-        b.append(String.format("%02X", outer.tag()));
-        TlvCursor inner = outer.child();
-        while (inner.next() == TlvCursor.Status.OK) {
-            b.append(' ').append(String.format("%02X", inner.tag()));
+        TlvCursor cursor = new TlvCursor(record);
+        while (cursor.next() == TlvCursor.Status.OK) {
+            if (b.length() > 0) {
+                b.append(' ');
+            }
+            b.append(String.format("%02X", cursor.tag()));
         }
         return b.toString();
     }

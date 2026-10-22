@@ -11,7 +11,9 @@ import card42.host.common.cli.Args;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.access.Pace;
 import card42.host.emrtd.lds.CardAccess;
+import card42.host.emrtd.lds.Lds2Record;
 import card42.host.emrtd.lds.LdsFileUtil;
+import card42.host.emrtd.lds.VisaRecord;
 import card42.host.emrtd.access.LdsReader;
 import card42.host.emrtd.perso.EmrtdPersoExporter;
 import card42.host.emrtd.transport.EmrtdTerminal;
@@ -71,10 +73,21 @@ public final class EmrtdLds2AppsIntegrationTest {
         Checks.check("Chip + Terminal Authentication on the Visa application", true);
         List<byte[]> visa = LdsReader.readAllRecords(terminal,
                 LdsFileUtil.sfi(LdsFileUtil.FID_VISA_RECORDS), 1);
-        Checks.check("at least the personalized visa record", visa.size() >= 1);
+        Checks.check("at least the two personalized visa records (" + visa.size() + ")",
+                visa.size() >= 2);
         Checks.check("visa record carries JPN",
                 new String(visa.get(0), java.nio.charset.StandardCharsets.US_ASCII)
                         .contains("JPN"));
+        VisaRecord firstVisa = (VisaRecord) Lds2Record.parse(
+                "EF.VisaRecords (0103)", visa.get(0));
+        VisaRecord secondVisa = (VisaRecord) Lds2Record.parse(
+                "EF.VisaRecords (0103)", visa.get(1));
+        Checks.check("visa records are spec-conformant Table 90 records",
+                firstVisa.wellFormed && secondVisa.wellFormed);
+        Checks.check("visa fields are decoded",
+                "JPN".equals(firstVisa.issuingState)
+                        && "VS".equals(firstVisa.documentType())
+                        && "20260401".equals(firstVisa.effectiveDate()));
 
         // --- Additional Biometrics application ------------------------------
         // Drop the Visa secure messaging before selecting the other applet.

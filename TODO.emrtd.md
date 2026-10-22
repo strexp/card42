@@ -82,6 +82,30 @@
     `card/emrtd/command/Lds2Record.java`（SEARCH RECORD A2 含 P2、FMM 5F、UPDATE BINARY D7、
     ACTIVATE 44 的往返与错误状态字）；`test/emrtd/unit/host/EmrtdCliTest.java` 覆盖主机 CLI
     dispatcher 与 `-json`/`-pace` 参数（`docs/specs/common/toolchain.md §7.1`）。
+  - **SEARCH RECORD DO 解析修复（2026-10-22）**：窗口 `DO'02'` 改为按实际 BER 长度解 1/2 字节
+    （Appendix I.1/J.1 的 `02 01 03`），短 EF 标识符先按原始 SFI 解析、失败再回退 `SFI<<3`，
+    同时接受 `01`/`1A` 与 `08`/`D0` 两种写法；`EmrtdCommandTest` 覆盖原始/移位/窗口最小编码。
+  - **LDS2 CLI PACE/CA/TA + 多记录 EF（2026-10-22）**：`terminal emrtd lds2` 增加 `-pace/-can`、
+    `-ca`、`-ta -ta-chain -ta-key` 与 `-record=entry|exit|visa|cert|all`，可在 PACE/TA 授权后读
+    Travel/Visa 的全部记录 EF；`EmrtdLds2CliIntegrationTest` 端到端覆盖（模拟器）。
+  - **LDS2 结构化写入 + 记录容量（2026-10-22）**：新增 `TravelRecordBuilder`/`VisaRecordBuilder`/
+    `CertificateRecordBuilder`，按 Table 86/90/83 编码并由 LDS2-TS 私钥签名（RSA SHA256withRSA/
+    EC SHA256withECDSA），`Lds2RecordWriter` 负责 APPEND + SW 检查，`Lds2CertificateStore`
+    负责 EF.Certificates 的复用/追加与 `5F38` 引用，`Lds2Signature` 提供验签；CLI
+    `-append=<json>` 支持 entry/exit/visa/certificate；示例 JSON 在 `perso/emrtd/append-*.json`。样例 `perso/emrtd/sample-*.perso` 已改为
+    Table 86/90/83 的多条记录（Travel 3 Entry + 1 Exit、Visa 2、每个 LDS2 应用 1 个包装证书），
+    `Lds2SampleTest` 解析并验签。Travel/Visa 记录上限 256→**640 B**、Entry/Exit/Visa 池
+    1→**2 KB**（每包约 +3 KB 持久；真卡需复测余量）。
+  - **主机 LDS2 结构化读取（2026-10-22）**：`host/emrtd/lds/Lds2Record` + `TravelRecord`/
+    `VisaRecord`/`CertificateRecord` 按 Table 86/90/83 解析命名字段（容错 demo 记录，`wellFormed`
+    标明完整性）；`PassportReport.lds2Text/Json` 同时输出 tag/hex 与结构化字段。
+  - **LDS2 READ RECORD 扩展 Le / 大记录（2026-10-22）**：卡侧识别扩展 Le（`00 00 00`），超过
+    231/223 B 的记录改走 `EmrtdScratch.record`/`recordEnvelope`（各 1 KB，仅 LDS2 角色持久分配）
+    与 `wrapLarge()`，一次返回最大 900 B 的 EF.Certificates；主机 `LdsReader.RECORD_LE=65536`，
+    SM DO'97' 支持 1/2 字节 Le。`EmrtdLds2IntegrationTest` 断言 837 B 证书完整读回；`EmrtdCryptoTest` 覆盖 3DES/AES
+    900 B `wrapLarge`。规范见
+    [`docs/specs/emrtd/emrtd.md`](docs/specs/emrtd/emrtd.md) §2/§11 与
+    [`docs/specs/common/risks.md`](docs/specs/common/risks.md) §2。
 
 ## 待办
 
@@ -114,15 +138,6 @@
   宣告 AES-128」。根因为 `AesCmac` 逐块 ECB（平台无 AES-CMAC `Signature`），已改为
   `ALG_AES_BLOCK_128_CBC_NOPAD` 批量链式；真卡实测 AES-128 每 `READ BINARY` 81 ms（3DES 93 ms），
   `EF.CardAccess` 已重新宣告 3DES + AES-128。
-
-- [ ] **SEARCH RECORD 命令 DO 解析复核（命令级单测发现，待正文复核）**：
-  ① 搜索窗口的两个 `DO'02'`（偏移/字节数）由 `Lds2Record.searchRecord` 固定按 2 字节
-  `Util.getShort` 读取，未按 BER 长度字段解码；ICAO Doc 9303-10 §3.7.3 Table 17 与
-  Appendix I.1/J.1 的示例使用最小编码（如 `02 01 03`），按示例编码时窗口偏移被误读、
-  匹配丢失（返回 `6282`）。当前命令级单测以 2 字节 BER 形式覆盖正路径。
-  ② 1 字节 `DO'51'` 短 EF 标识符按位 b8–b4（`SFI<<3`，与 §3.8.3 Table 25 及 READ/APPEND
-  RECORD P2 的 §3.7.1/§3.7.2 Table 10/13 一致）解码；信息性 Appendix I.1/J.1 直接写原始
-  SFI（EF.Certificates 的 `1A`），两者不一致，需按正文复核。
   （`card/emrtd/command/Lds2Record.java`；测试 `test/emrtd/unit/card/EmrtdCommandTest.java`。）
 - [ ] **C2 主机纯 JVM 卡仿真**：用第三方纯 JVM 卡仿真库跑主机 PA/读流程（无 jcsl）。
 - [x] **LDS2 Terminal Authentication 授权位（已实现 2026-10-12）**：TA v1 + ECDSA-SHA-256 已落地

@@ -17,16 +17,25 @@ public final class LdsReader {
     /** Maximum READ BINARY length; the SM wrapper adds ~25 bytes of overhead. */
     public static final int CHUNK = 0xE7;
 
+    /**
+     * Le for READ RECORD.  Doc 9303-10 §3.7.2 Table 11/Appendix H.2 requires the
+     * extended form '00 00 00' (65536): one response must carry the whole
+     * record, including a 900-byte EF.Certificates record.  A short Le (0xE7)
+     * silently truncates such a record to the SM window.
+     */
+    public static final int RECORD_LE = 65536;
+
     private LdsReader() {
     }
 
     /**
      * READ RECORD one record of the selected LDS2 record EF (Doc 9303-10 §3.7).
-     * The record EF is addressed by its short EF identifier.
+     * The record EF is addressed by its short EF identifier; the extended Le
+     * lets the card return the complete record.
      */
     public static byte[] readRecord(EmrtdTerminal terminal, int sfi, int number)
             throws Exception {
-        ResponseAPDU r = terminal.readRecord(sfi, number, false, CHUNK);
+        ResponseAPDU r = terminal.readRecord(sfi, number, false, RECORD_LE);
         if (r.getSW() != 0x9000) {
             throw new IllegalStateException("READ RECORD " + String.format("%02X", sfi)
                     + "/" + number + " failed: " + Sw.format(r.getSW()));
@@ -42,7 +51,7 @@ public final class LdsReader {
             throws Exception {
         java.util.List<byte[]> out = new java.util.ArrayList<byte[]>();
         for (int number = first; ; number++) {
-            ResponseAPDU r = terminal.readRecord(sfi, number, false, CHUNK);
+            ResponseAPDU r = terminal.readRecord(sfi, number, false, RECORD_LE);
             if (r.getSW() == 0x6A83) {
                 break;
             }

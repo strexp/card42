@@ -110,6 +110,15 @@ public final class EmrtdApplet extends AppletBase
     final byte[] plain;
     final byte[] response;
 
+    /**
+     * The response buffer of the current command.  Normally {@link #response};
+     * an LDS2 READ RECORD whose record is larger than the short-APDU SM window
+     * switches it to {@link EmrtdScratch#record} and wraps the result with the
+     * large framing path.  Reset to {@link #response} at the start of every
+     * command, so no state leaks between commands.
+     */
+    byte[] activeResponse;
+
     /* Personalization.  The DGI sequence is applied incrementally as each
      * STORE DATA block arrives (a per-instance DgiStream drives LdsPerso /
      * Lds2Perso), so there is no whole-sequence buffer: peak memory is one
@@ -135,6 +144,7 @@ public final class EmrtdApplet extends AppletBase
         EmrtdScratch.initExtended();
         plain = EmrtdScratch.io;
         response = EmrtdScratch.response;
+        activeResponse = response;
         challenge = EmrtdScratch.challenge;
         kenc = EmrtdScratch.kenc;
         kmac = EmrtdScratch.kmac;
@@ -155,6 +165,11 @@ public final class EmrtdApplet extends AppletBase
                 : role == EmrtdInstallParameters.ROLE_LDS2_VISA ? Lds2FileSystem.visa()
                 : role == EmrtdInstallParameters.ROLE_LDS2_BIOMETRICS ? Lds2FileSystem.biometrics()
                 : null;
+        if (lds2 != null) {
+            // The 2 KB large-record response buffers are only needed by the LDS2
+            // roles; an LDS1 instance must not pay for them.
+            EmrtdScratch.initRecord();
+        }
         random = KdfEngines.random();
         bac = lds1Role ? new BacCrypto() : null;
         aa = lds1Role ? new AaCrypto((short) 2048, AaCrypto.AA_SHA1) : null;
@@ -331,6 +346,9 @@ public final class EmrtdApplet extends AppletBase
             le = rawLen == 0 ? readLe(apduBuffer, cdataOff) : -1;
         }
 
+        // A handler may switch to the large LDS2 record buffer (READ RECORD);
+        // reset it here so the previous command's choice cannot leak.
+        activeResponse = response;
         short respLen;
         try {
             respLen = dispatch(ins, data, dataOff, dataLen, le, apduBuffer);
@@ -347,11 +365,22 @@ public final class EmrtdApplet extends AppletBase
         }
 
         if (smActive) {
-            short n = sm.wrap(ksEnc, ksMac, ssc, response, respLen,
-                    (short) 0x9000, plain, (short) 0);
-            ApduIo.send(apdu, plain, (short) 0, n);
+            if (activeResponse == response) {
+                short n = sm.wrap(ksEnc, ksMac, ssc, response, respLen,
+                        (short) 0x9000, plain, (short) 0);
+                ApduIo.send(apdu, plain, (short) 0, n);
+            } else {
+                // Extended-Le LDS2 record: the plaintext is in the large record
+                // buffer, which also serves as the framing scratch; the SM
+                // envelope goes to the companion large buffer so the response
+                // can exceed the 256-byte short-APDU window.
+                short n = sm.wrapLarge(ksEnc, ksMac, ssc, activeResponse, respLen,
+                        (short) 0x9000, EmrtdScratch.recordEnvelope, (short) 0,
+                        EmrtdScratch.record);
+                ApduIo.send(apdu, EmrtdScratch.recordEnvelope, (short) 0, n);
+            }
         } else {
-            ApduIo.send(apdu, response, (short) 0, respLen);
+            ApduIo.send(apdu, activeResponse, (short) 0, respLen);
         }
         if (caPending) {
             // Chip Authentication: switch the SM session keys for the next
@@ -401,8 +430,13 @@ public final class EmrtdApplet extends AppletBase
      */
     private static short readLe(byte[] apduBuffer, short cdataOff) {
         if (cdataOff == ISO7816.OFFSET_CDATA) {
-            return (short) (apduBuffer[ISO7816.OFFSET_LC] & 0xFF);
+            // In the short form 0x00 means 256, not "whole file": READ RECORD
+            // distinguishes that from the extended '00 00' (65536) form.
+            short v = (short) (apduBuffer[ISO7816.OFFSET_LC] & 0xFF);
+            return v == 0 ? (short) 256 : v;
         }
+        // The extended '00 00' is reported as 0 (65536 does not fit a short);
+        // READ RECORD maps 0 to "the whole record".
         return (short) (((apduBuffer[ISO7816.OFFSET_LC + 1] & 0xFF) << 8)
                 | (apduBuffer[ISO7816.OFFSET_LC + 2] & 0xFF));
     }

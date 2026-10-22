@@ -49,6 +49,7 @@ public final class UnitTests {
         EmrtdHostNegativeTest.run();
         EmrtdCliTest.run();
         PassportReportTest.run();
+        Lds2SampleTest.run();
         EmrtdCardAccessTest.run();
         EmrtdTaTest.run();
         EmrtdTaCardTest.run();

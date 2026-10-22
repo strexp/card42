@@ -43,8 +43,8 @@ public final class Lds2FileSystem {
                 new Lds2TransparentFile[0],
                 new Lds2RecordFile[] {
                     new Lds2RecordFile(EmrtdTags.FID_CERTIFICATES, (short) 1024, (short) 254, (short) 900),
-                    new Lds2RecordFile(EmrtdTags.FID_RECORDS, (short) 1024, (short) 254, (short) 256),
-                    new Lds2RecordFile(EmrtdTags.FID_EXIT_RECORDS, (short) 1024, (short) 254, (short) 256) });
+                    new Lds2RecordFile(EmrtdTags.FID_RECORDS, (short) 2048, (short) 254, (short) 640),
+                    new Lds2RecordFile(EmrtdTags.FID_EXIT_RECORDS, (short) 2048, (short) 254, (short) 640) });
     }
 
     /** Visa Records DF: EF.Certificates, EF.VisaRecords (0103, Doc 9303-10 §5.2). */
@@ -53,7 +53,7 @@ public final class Lds2FileSystem {
                 new Lds2TransparentFile[0],
                 new Lds2RecordFile[] {
                     new Lds2RecordFile(EmrtdTags.FID_CERTIFICATES, (short) 1024, (short) 254, (short) 900),
-                    new Lds2RecordFile(EmrtdTags.FID_VISA_RECORDS, (short) 1024, (short) 254, (short) 256) });
+                    new Lds2RecordFile(EmrtdTags.FID_VISA_RECORDS, (short) 2048, (short) 254, (short) 640) });
     }
 
     /**

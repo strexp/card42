@@ -25,8 +25,16 @@ import javacard.framework.Util;
 
 public final class Lds2Record {
 
-    /** Le/response cap for one READ RECORD (the SM response buffer is 256). */
+    /** Le/response cap for one short-APDU READ RECORD. */
     private static final short RESPONSE_MAX = (short) 256;
+
+    /**
+     * The extended-Le form of READ RECORD (Le = '00 00 00', Doc 9303-10 §3.7.2
+     * Table 11 and Appendix H.2/H.3) is represented by 0 after the length
+     * decode (65536 cannot be held in a short) and means "the whole record".
+     * The actual response is bounded by the large record buffer.
+     */
+    private static final short EXTENDED_LE = (short) 0;
 
     /* Reused scratch: the J3R180 does not reclaim per-call allocations, and
      * LDS2 commands run repeatedly, so these must not be allocated in the
@@ -65,15 +73,39 @@ public final class Lds2Record {
             // P1='00' references the current record (Doc 9303-10 §3.7.2 Table 11).
             number = file.currentRecord();
         }
-        short max = le <= 0 ? RESPONSE_MAX : le;
+
+        // Doc 9303-10 §3.7.2 mandates extended Le ('00 00 00', i.e. the whole
+        // record); a short Le is out of scope.  A record longer than the SM
+        // short-APDU window (231 B for 3DES, 223 B for AES) is therefore served
+        // from the large record buffer with an extended response, instead of
+        // being silently truncated.  When the terminal sends a short Le, keep
+        // the old short-APDU behaviour so a legacy reader still gets the first
+        // part of the record rather than an error.
+        short requested = le;
+        boolean extended = requested == EXTENDED_LE || requested < 0;
+        if (extended) {
+            requested = EmrtdScratch.record != null
+                    ? (short) EmrtdScratch.record.length : RESPONSE_MAX;
+        }
+        short recordLength = file.recordLength(number);
+        short max = requested < recordLength ? requested : recordLength;
+        short shortCap = applet.sm.maxResponseData();
+        if (max > shortCap && EmrtdScratch.record != null
+                && max <= (short) EmrtdScratch.record.length) {
+            applet.activeResponse = EmrtdScratch.record;
+            if ((p2 & 0x03) == 0x01) {
+                return file.readRecords(number, EmrtdScratch.record, (short) 0, max);
+            }
+            return file.readRecord(number, EmrtdScratch.record, (short) 0, max);
+        }
+
+        // Short-APDU path: bound by the 256-byte response buffer and by the
+        // active SM envelope (AES is tighter than 3DES).
         if (max > RESPONSE_MAX) {
             max = RESPONSE_MAX;
         }
-        // The record is a window of the EF, but the SM envelope of the active
-        // profile still bounds one response (AES is tighter than 3DES).
-        short cap = applet.sm.maxResponseData();
-        if (max > cap) {
-            max = cap;
+        if (max > shortCap) {
+            max = shortCap;
         }
         if ((p2 & 0x03) == 0x01) {
             return file.readRecords(number, applet.response, (short) 0, max);
@@ -178,9 +210,24 @@ public final class Lds2Record {
         if (!Tlv.find(data, handling[0], handling[1], EmrtdTags.DO_FILE_REFERENCE, ref)) {
             ISOException.throwIt(ISO7816.SW_WRONG_DATA);
         }
-        Lds2RecordFile file = ref[1] == 1
-                ? applet.lds2.recordBySfi((short) ((data[ref[0]] & 0xFF) >> 3))
-                : applet.lds2.record(Util.getShort(data, ref[0]));
+        Lds2RecordFile file;
+        if (ref[1] == 1) {
+            // Table 17 leaves the one-byte short-EF-identifier coding implicit:
+            // Appendix I.1/J.1 use the raw SFI ('01'/'1A'), while the FMM
+            // Table 25 and READ/APPEND P2 use SFI<<3 ('08'/'D0').  Try the raw
+            // form first (the informative examples) and fall back to the
+            // shifted form so both interoperate.
+            short value = (short) (data[ref[0]] & 0xFF);
+            file = applet.lds2.recordBySfi((short) (value & 0x1F));
+            if (file == null) {
+                short shifted = (short) ((value >> 3) & 0x1F);
+                if (shifted != (value & 0x1F)) {
+                    file = applet.lds2.recordBySfi(shifted);
+                }
+            }
+        } else {
+            file = applet.lds2.record(Util.getShort(data, ref[0]));
+        }
         if (file == null) {
             ISOException.throwIt(ISO7816.SW_FILE_NOT_FOUND);
         }
@@ -197,13 +244,16 @@ public final class Lds2Record {
         if (Tlv.find(data, handling[0], handling[1], (short) 0xB0, window)) {
             short[] first = FIRST;
             if (Tlv.find(data, window[0], window[1], (short) 0x02, first)) {
-                windowOffset = Util.getShort(data, first[0]);
+                // DO'02' is a BER INTEGER: Appendix I.1/J.1 encode small
+                // offsets/sizes minimally ('02 01 03'), so decode 1 or 2 bytes
+                // by the actual length instead of always reading two.
+                windowOffset = readNumber(data, first[0], first[1]);
                 // The next '02' after the offset value is the byte count.
                 short nextOff = (short) (first[0] + first[1]);
                 short[] second = SECOND;
                 if (Tlv.find(data, nextOff, (short) (window[0] + window[1] - nextOff),
                         (short) 0x02, second)) {
-                    windowLength = Util.getShort(data, second[0]);
+                    windowLength = readNumber(data, second[0], second[1]);
                 }
             }
         }
@@ -303,6 +353,22 @@ public final class Lds2Record {
     }
 
     // --- helpers -------------------------------------------------------------
+
+    /**
+     * Reads a BER INTEGER value of 1 or 2 bytes (the SEARCH RECORD window
+     * offset/size, Doc 9303-10 §3.7.3 Table 17/Appendix I.1/J.1).  A length
+     * outside 1..2 is malformed for this card's 15-bit record offsets.
+     */
+    private static short readNumber(byte[] data, short off, short len) {
+        if (len < 1 || len > 2) {
+            ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+        }
+        short value = 0;
+        for (short i = 0; i < len; i++) {
+            value = (short) ((value << 8) | (data[(short) (off + i)] & 0xFF));
+        }
+        return value;
+    }
 
     /** Writes a minimal-length big-endian integer; returns the new offset. */
     private static short writeNumber(byte[] out, short off, short value) {

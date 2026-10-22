@@ -137,13 +137,23 @@ response: pad(SSC ‖ [DO87|DO85] ‖ DO99)
 ```
 
 SSC 是 64 位大端计数器，每次 MAC 前自增。DO87 用 BER 短/长形式长度；会超过 256 字节短
-APDU 缓冲的响应由终端分块。单次 `READ BINARY`/`READ RECORD` 的明文窗口上限由**活动 SM
+APDU 缓冲的响应由终端分块。单次 `READ BINARY` 及**短 Le** 的 `READ RECORD` 的明文窗口上限由**活动 SM
 profile 的块大小**决定（`SecureMessaging.maxResponseData()`，构造期算一次）：3DES（8 B 块）
 为 231（`0xE7`，DO87 的 `0x81` 长度 + 232 B M2 填充 + DO99/DO8E 共 250 B）；AES-128（16 B 块）
 为 223（`0xDF`，填充后到 224 B，包络 242 B）。232/224 B 明文会分别到 258 B 超限，真卡表现为
 `6700`（JMRTD 用 AES PACE 读大 DG 时暴露）。主机 `LdsReader` 请求 `CHUNK = 0xE7`，但**不得**
 以「返回块 < 请求块」判 EOF——AES 下卡会合法地只回 223 B，须读到位移越过 EF 末尾（0 字节 /
 `6B00`/`6A82`）才算完整。AES-128 的 PACE SM 用 `Iso7816SmAes`（§16）。
+
+**READ RECORD 的大记录路径（2026-10-22）**：`READ BINARY` 可以用偏移分块，但记录 EF 没有偏移，
+而 Doc 9303-10 §3.7.2 Table 11 规定 `READ RECORD` 的 Le 是扩展形式 `00 00 00`（一次返回整个
+记录）。因此超过短 APDU 窗口的记录不能沿用上面的 231/223 分块：卡侧在记录长度超过
+`maxResponseData()` 时改用 `EmrtdScratch.record`（1 KB）承载明文、`EmrtdScratch.recordEnvelope`
+（1 KB）承载 SM 信封，由 `SecureMessaging.wrapLarge()` 以 `record` 兼作加密与 MAC 输入 scratch，
+以扩展响应一次返回（最大 900 B 的 EF.Certificates）。两条缓冲**仅在 LDS2 角色**分配，且是持久
+数组（eMRTD 瞬态预算已无 2 KB 余量；大记录读是低频路径，代价是相应 EEPROM 写）。短 Le 仍按
+旧行为只返回窗口；主机 `LdsReader.RECORD_LE = 65536` 请求完整记录，SM 的 DO'97' 按 1/2 字节
+Le 编解码（2 字节 `00 00` 即扩展 65536）。
 
 **MAC 实现**：ISO/IEC 9797-1 Algorithm 3 的 CBC 段优先用平台 MAC 引擎
 （`Signature.ALG_DES_MAC8_ISO9797_M2` 处理需 M2 填充的消息，`ALG_DES_MAC8_NOPAD` 处理
@@ -253,7 +263,9 @@ host/emrtd/
 │              CmsSignedData, LdsSecurityObject, AlgorithmIds,
 │              SecurityInfo, PaceInfo, ChipAuthenticationInfo,
 │              ChipAuthenticationPublicKeyInfo, ActiveAuthenticationInfo,
-│              CardAccess, CardSecurity
+│              CardAccess, CardSecurity, Lds2Record,
+│              TravelRecord/VisaRecord/CertificateRecord + builders,
+│              Lds2RecordWriter/Lds2CertificateStore/Lds2Signature
 ├── access/    LdsReader, MrzKeySeed, Bac, Iso7816Sm, Iso7816SmAes, SecureMessaging, ChipAuth, Pace
 ├── pa/        CscaKeyStore, DscVerifier, PassiveAuthentication
 ├── aa/        ActiveAuthentication
@@ -296,9 +308,31 @@ INSTALL 时由实例 AID 决定（`EmrtdInstallParameters.role()`）：
 每个 LDS2 DF 拥有一个 `Lds2FileSystem`：少量 `Lds2TransparentFile`（无固定预算，按 DGI 声明
 长度或 UPDATE BINARY 的 File Size DO `'C0'` 增长、上限 32767；内容为 256 B 分页，按需分配、
 跨写复用，可选 ACTIVATE 锁）与 `Lds2RecordFile`（受规范记录数/记录长约束的扁平池：Certificates
-254/64、记录 900/256 字节，池容量仍是预留的内存预算；记录由 `beginRecord/appendChunk/endRecord`
+254/64、记录 900/640 字节，池容量仍是预留的内存预算（Travel Entry/Exit 与 Visa 各 2 KB）；记录由 `beginRecord/appendChunk/endRecord`
 逐块写入，池字节先写、`used`/`count` 到 `endRecord` 才提交）。LDS2 文件的短 EF 标识为其 FID
 的低字节（`0x01 || SFI`，Doc 9303-10 §5.1）。
+
+**结构化读取**：`host/emrtd/lds/Lds2Record` 按 EF 选择 `TravelRecord`（Table 86）、
+`VisaRecord`（Table 90）或 `CertificateRecord`（Table 83），解析顶层 `5F44 || 73 || 5F37 || 5F38`
+（Visa：`5F28 || 71 || 5F37 || 5F38`）并暴露命名字段；`wellFormed` 只在签名、证书引用和必填字段
+齐全时为 true。对旧版/不完整记录（例如只有 `5F44 || 5F37` 或裸 X.509）仍走容错路径并在
+报告中标 `[incomplete]`，不抛异常；`perso/emrtd/sample-*.perso` 已改为合规多记录。`PassportReport.lds2Text/Json` 同时输出原始 tag/hex 和结构化字段。
+
+**结构化写入**：`TravelRecordBuilder`/`VisaRecordBuilder` 按 Table 86/90 的固定 DO 顺序编码，
+签名覆盖完整 `73`/`71` DO（RSA 用 SHA256withRSA，EC 用 SHA256withECDSA），
+`CertificateRecordBuilder` 生成 `5F3A + 72`，`Lds2RecordWriter.append` 通过 APPEND RECORD
+写入并检查 SW；`Lds2CertificateStore.findOrAppend` 按 X.509 字节复用已有证书并返回 `5F38`
+引用（不存在时追加一条并返回下一个记录号）。`Lds2Signature`/`TravelRecord.verify`/`VisaRecord.verify`
+用 EF.Certificates 公钥校验 `5F37`。CLI `-append=<json>` 支持 `entry`/`exit`/`visa`/`certificate`。
+Travel/Visa 记录上限由 256 B 提升到 **640 B**、池 2 KB（Certificates 仍 900 B/1 KB），以容纳
+RSA-2048 LDS2-TS 签名；`EmrtdLds2WriteIntegrationTest` 用样例 DSC 签名、APPEND、读回结构化字段
+并用 `EF.Certificates` 验签。注意这会增加每包约 3 KB 持久占用，真卡需复测 6F00 余量。
+
+`READ RECORD` 按 Doc 9303-10 §3.7.2 Table 11 使用扩展 Le `00 00 00`（整个记录）；记录长度超过
+短 APDU 的 SM 窗口（231/223 B）时，卡侧以 `EmrtdScratch.record`/`recordEnvelope`（各 1 KB，
+仅 LDS2 角色分配的持久缓冲）走 `wrapLarge()` 一次返回，覆盖最大 900 B 的 EF.Certificates。短 Le
+仍只返回窗口。主机 `LdsReader.RECORD_LE = 65536`，SM DO'97' 的 Le 按 1/2 字节编解码；这一路径
+同时保证记录签名所需的完整 `EF.Certificates` 可被读回（见 §2 的 SM 窗口段）。
 
 EF.CardAccess `011C` 与 EF.CardSecurity `011D` 属**主文件**（`LdsMfStore`，包内静态、跨
 实例共享），不在任何 LDS2 DF 内（Doc 9303-10 §3.11.3/§3.11.4）。EF.CardAccess 恒可
@@ -315,7 +349,7 @@ SM 建立（BAC/PACE/CA）后收到明文 APDU 即中止会话并回 `6982`（Do
 |-----|------|------|
 | `A4` | SELECT FILE | P1=02 按 FID；P1=04 按名：明文由 JCRE 匹配，SM 内到达时由 `EmrtdApplet.selectByName` 匹配并回 FCI（保持会话） |
 | `B0` | READ BINARY | 所选透明 EF，或按短 EF 标识寻址（P1 b8=1，P2 偏移） |
-| `B2` | READ RECORD | P2 b8-b4 = SFI，b3=1，b2b1 = 单条（00）/ 全部（01）；P1 = 记录号（00 = 当前） |
+| `B2` | READ RECORD | P2 b8-b4 = SFI，b3=1，b2b1 = 单条（00）/ 全部（01）；P1 = 记录号（00 = 当前）；Le 用扩展 `00 00 00`（≤900 B 记录一次返回），短 Le 只回窗口 |
 | `E2` | APPEND RECORD | P2 b8-b4 = SFI；满时 `6A84`，记录超 EF 上限时 `6700` |
 | `A2` | SEARCH RECORD | 记录处理 DO `7F76`；响应 `7F76 { 51, 02… }`；无匹配时 `6282` |
 | `5F` | FILE AND MEMORY MANAGEMENT | P2 选总字节/剩余/已有记录数，在 `7F78` 返回 |
@@ -389,7 +423,11 @@ ECDH + KDF + SM 往返在纯 JVM 中用独立 JCE 密钥对验证（`EmrtdLds2Te
 ```
 Main terminal emrtd read    -host=<spec> -doc=<no> -dob=YYMMDD -doe=YYMMDD [-pace] [-can=<6 digits>] [-ca] [-json=1]
 Main terminal emrtd inspect -host=<spec> [-json=1]
-Main terminal emrtd lds2    -host=<spec> [-app=travel|visa|biometrics] [-json=1]
+Main terminal emrtd lds2    -host=<spec> [-app=travel|visa|biometrics] \
+                            (-pace -doc=<no> -dob=YYMMDD -doe=YYMMDD | -can=<CAN>) \
+                            [-ca] [-ta -ta-chain=<file> -ta-key=<hex>] \
+                            [-record=entry|exit|visa|cert|all] [-json=1] \
+                            [-append=<json> -ts-key=<pem> [-cert-ref=n]]
 Main terminal emrtd apdu    -host=<spec> -apdu=<hex>
 Main version | help
 ```
@@ -401,8 +439,14 @@ Main version | help
   姓名、日期、LDS/Unicode 版本、AA 模长位数）。`-can` 用 CAN 口令（`DO'83'=02`、
   `f(CAN)` = 原始 CAN 字符）跑 PACE-CAN，此时可省略 `-doc/-dob/-doe`。
 - `inspect` 无 BAC 读 COM/DG15，报告公开数据。
-- `lds2` SELECT 一个 LDS2 DF，读 EF.CardAccess 与记录 EF 的每条记录，打印 SecurityInfo 与
-  记录（文本或 JSON）。
+- `lds2` SELECT 一个 LDS2 DF，先读公开的 EF.CardAccess，再按 `-pace`/`-can` 建立 PACE（LDS2
+  记录必须 PACE）；`-ca` 可选 Chip Authentication，`-ta`（需 `-ca`、`-ta-chain`、`-ta-key`）跑
+  Terminal Authentication 以获得 LDS2 授权位。`-record=entry|exit|visa|cert|all` 选择记录 EF
+  （travel 默认 entry，visa 默认 visa）；输出每个 EF 的 SecurityInfo 与记录（文本或 JSON，
+  JSON 含记录 hex）。`-append=<json>` 用结构化 JSON 生成并 APPEND 一条记录（`type` =
+  `entry`/`exit`/`visa`/`certificate`；Travel/Visa 由 `-ts-key` 的 PKCS#8 PEM 签名，证书记录用
+  `certificateFile`/`country`/`serialHex`，`-cert-ref` 选择 `5F38` 引用）。示例见
+  `perso/emrtd/append-entry.json`、`append-visa.json`、`append-certificate.json`。
 - `apdu` 发一条原始 APDU，打印 `SW=` 与响应数据。
 - 退出码：`0` 成功，失败非零并输出 `error: <message>`。
 
