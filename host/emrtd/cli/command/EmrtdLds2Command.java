@@ -15,7 +15,7 @@ import card42.host.emrtd.access.ChipAuth;
 import card42.host.emrtd.access.LdsReader;
 import card42.host.emrtd.access.Pace;
 import card42.host.emrtd.lds.CardAccess;
-import card42.host.emrtd.lds.Lds2RecordWriter;
+import card42.host.emrtd.access.Lds2RecordWriter;
 import card42.host.emrtd.lds.LdsFileUtil;
 import card42.host.emrtd.report.PassportReport;
 import card42.host.emrtd.ta.CvCertificate;

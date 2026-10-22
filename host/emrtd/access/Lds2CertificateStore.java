@@ -1,9 +1,12 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.access;
 
 import java.security.cert.X509Certificate;
 import java.util.List;
 
-import card42.host.emrtd.access.LdsReader;
+import card42.host.emrtd.lds.CertificateRecord;
+import card42.host.emrtd.lds.CertificateRecordBuilder;
+import card42.host.emrtd.lds.Lds2Record;
+import card42.host.emrtd.lds.LdsFileUtil;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**
