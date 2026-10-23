@@ -116,5 +116,20 @@ public final class EmrtdLds2AppsIntegrationTest {
         Checks.check("EF.Biometrics1 signature verifies",
                 biometricsRecord.verify(EmrtdPersoExporter.loadCertificate(
                         "perso/emrtd/lds2.crt").getPublicKey()));
+
+        // The CAN encoding is card-wide as well: only the LDS1 section
+        // personalized DGI FF06, so a PACE-CAN on this DF proves the shared
+        // Pace storage (docs/specs/emrtd/emrtd.md §8/§11).
+        terminal.setSecureMessaging(null);
+        Checks.check("re-SELECT Additional Biometrics for PACE-CAN",
+                terminal.selectApplication(LdsFileUtil.AID_BIOMETRICS).getSW(), 0x9000);
+        Pace.Session canPace = Pace.authenticateCan(terminal,
+                EmrtdPersoExporter.CARD_ACCESS_NUMBER);
+        terminal.setSecureMessaging(canPace.secureMessaging());
+        Checks.check("PACE-CAN established on the Biometrics application", true);
+        TaSupport.authenticate(terminal, canPace, new java.security.SecureRandom());
+        byte[] biometricsViaCan = LdsReader.read(terminal, LdsFileUtil.FID_BIOMETRICS);
+        Checks.check("EF.Biometrics1 readable after inherited PACE-CAN",
+                java.util.Arrays.equals(biometrics, biometricsViaCan));
     }
 }

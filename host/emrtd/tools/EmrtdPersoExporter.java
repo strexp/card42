@@ -38,7 +38,10 @@ import card42.host.emrtd.lds.security.SecurityInfo;
  * SHA-1(MRZ_information), {@code FF06} = raw CAN PACE password encodings,
  * {@code FF0A} = the AA algorithm, {@code FF0B}/{@code FF0C} = RSA CVCA trust
  * points, {@code FF0D} = the ECDSA AA scalar, and {@code FF05} = the
- * master-file EF.CardSecurity.
+ * master-file EF.CardSecurity.  The two PACE encodings are card-wide: the
+ * sample personalizes them once in the LDS1 section and the LDS2 sections
+ * inherit them (FF04/FF06 written by an LDS2 section would override the value
+ * for every DF, see docs/specs/emrtd/emrtd.md §8/§11).
  *
  * <p>The demo data is comprehensive: DG1, DG2 and DG3–DG16 (DG6 reserved),
  * the LDS2 Travel/Visa/Additional Biometrics applications with several records,
@@ -183,9 +186,11 @@ public final class EmrtdPersoExporter {
     /**
      * The LDS2 DGI sequence for one script entry: EF.CardAccess/EF.CardSecurity
      * as transparent FIDs and each record appended to its record EF (the DGI
-     * high bit marks an append).  The PACE key seed (FF04) and the Chip
-     * Authentication static private scalar (FF03) make the PACE/CA advertised by
-     * EF.CardAccess usable.
+     * high bit marks an append).  The Chip Authentication static private scalar
+     * (FF03) makes the CA advertised by EF.CardAccess usable.  The PACE key
+     * seeds (FF04/FF06) are optional here: they are card-wide and normally
+     * personalized by the LDS1 section, so an LDS2 entry only carries them to
+     * override the value for the whole card.
      */
     public static byte[] lds2Sequence(LdsScript.Entry entry) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -278,7 +283,7 @@ public final class EmrtdPersoExporter {
         sb.append("# (@aa-alg), e.g. sample-").append(aa).append(".perso.\n");
         sb.append("#\n");
         sb.append("#   @instance <AID-hex>          start a section\n");
-        sb.append("#   @doc/@dob/@doe               BAC MRZ fields\n");
+        sb.append("#   @doc/@dob/@doe               MRZ fields (LDS1: BAC + PACE f(MRZ))\n");
         sb.append("#   @can <6 digits>              Card Access Number for PACE (ref 0x02)\n");
         sb.append("#   @dg <n> <hex>                EF.DG<n> content\n");
         sb.append("#   @sod <hex>                   EF.SOD content\n");
@@ -291,6 +296,11 @@ public final class EmrtdPersoExporter {
         sb.append("#   @cvca <W> <CAR> <date> <auth> [secondary]        EC CVCA trust point\n");
         sb.append("#   @cvca-rsa <n> <e> <CAR> <date> <auth> [secondary] RSA CVCA trust point\n");
         sb.append("#   @lds2 <role> / @record <fid> <hex> / @transparent <fid> <hex>\n");
+        sb.append("#\n");
+        sb.append("# PACE credentials are card-wide: DGI FF04/FF06 personalized by the\n");
+        sb.append("# LDS1 section are inherited by every LDS2 application, so the LDS2\n");
+        sb.append("# sections below carry neither @doc nor @can.  An LDS2 section may\n");
+        sb.append("# still write them to override the value for the whole card.\n");
         sb.append("#\n");
         sb.append("# The EF.SOD is signed by the DSC fixture (perso/emrtd/dsc.crt + dsc.key);\n");
         sb.append("# the AA/CA keys are throwaway demo keys.  NEVER use them on a real card.\n");
@@ -362,12 +372,9 @@ public final class EmrtdPersoExporter {
 
         sb.append("\n# LDS2 Travel Records: EntryRecords 0101, ExitRecords 0102,\n");
         sb.append("# EF.Certificates 011A; EF.CardAccess advertises PACE + CA (3DES/AES).\n");
+        sb.append("# PACE f(MRZ)/f(CAN) are inherited from the LDS1 section above.\n");
         sb.append("@instance ").append(LdsFileUtil.AID_TRAVEL).append('\n');
         sb.append("@lds2 travel\n");
-        sb.append("@doc ").append(SampleData.DOCUMENT_NUMBER).append('\n');
-        sb.append("@dob ").append(SampleData.DATE_OF_BIRTH).append('\n');
-        sb.append("@doe ").append(SampleData.DATE_OF_EXPIRY).append('\n');
-        sb.append("@can ").append(SampleData.CARD_ACCESS_NUMBER).append('\n');
         sb.append("@cardaccess ").append(Hex.format(cardAccess)).append('\n');
         sb.append("@cardsecurity ").append(Hex.format(cardSecurity)).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
@@ -378,25 +385,18 @@ public final class EmrtdPersoExporter {
         sb.append("@record 011A ").append(Hex.format(certRecord)).append('\n');
 
         sb.append("\n# LDS2 Visa Records: EF.VisaRecords 0103, EF.Certificates 011A.\n");
+        sb.append("# PACE f(MRZ)/f(CAN) are inherited from the LDS1 section above.\n");
         sb.append("@instance ").append(LdsFileUtil.AID_VISA).append('\n');
         sb.append("@lds2 visa\n");
-        sb.append("@doc ").append(SampleData.DOCUMENT_NUMBER).append('\n');
-        sb.append("@dob ").append(SampleData.DATE_OF_BIRTH).append('\n');
-        sb.append("@doe ").append(SampleData.DATE_OF_EXPIRY).append('\n');
-        sb.append("@can ").append(SampleData.CARD_ACCESS_NUMBER).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@record 0103 ").append(Hex.format(visa1)).append('\n');
         sb.append("@record 0103 ").append(Hex.format(visa2)).append('\n');
         sb.append("@record 011A ").append(Hex.format(certRecord)).append('\n');
 
         sb.append("\n# LDS2 Additional Biometrics: EF.Biometrics1 0201 (transparent),\n");
-        sb.append("# EF.Certificates 011A.\n");
+        sb.append("# EF.Certificates 011A.  PACE credentials are inherited from LDS1.\n");
         sb.append("@instance ").append(LdsFileUtil.AID_BIOMETRICS).append('\n');
         sb.append("@lds2 biometrics\n");
-        sb.append("@doc ").append(SampleData.DOCUMENT_NUMBER).append('\n');
-        sb.append("@dob ").append(SampleData.DATE_OF_BIRTH).append('\n');
-        sb.append("@doe ").append(SampleData.DATE_OF_EXPIRY).append('\n');
-        sb.append("@can ").append(SampleData.CARD_ACCESS_NUMBER).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@transparent 0201 ").append(Hex.format(biometrics)).append('\n');
         sb.append("@record 011A ").append(Hex.format(certRecord)).append('\n');

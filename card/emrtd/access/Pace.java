@@ -21,7 +21,14 @@ import javacardx.crypto.Cipher;
  * (BSI TR-03110-3 A.3/B.1, ICAO Doc 9303-11 §4.4).  The card holds the
  * PACE password encodings f(MRZ) = SHA-1(MRZ_info) (DGI FF04, ref 0x01) and
  * f(CAN) = the raw CAN octets (DGI FF06, ref 0x02) and derives
- * K_pi = KDF(f(π), 3) from the one named by MSE:Set AT DO'83'.  The generic
+ * K_pi = KDF(f(π), 3) from the one named by MSE:Set AT DO'83'.  Both
+ * encodings are card-wide, not per application: the MRZ and the CAN belong to
+ * the document, so every eMRTD DF of this package (LDS1 and the LDS2
+ * applications) must accept the same values.  Their storage is package-static
+ * (the four applet instances share the package context): personalizing one
+ * instance, normally the LDS1 section, serves every DF, and an LDS2 section may
+ * still carry FF04/FF06 to override the value for the whole card
+ * (docs/specs/emrtd/emrtd.md §8/§11).  The generic
  * mapping uses the platform KeyAgreement ALG_EC_PACE_GM (verified on the
  * J3R180).
  *
@@ -51,16 +58,22 @@ public final class Pace implements PaceSeedSink {
     private static final byte STAGE_MAPPED = 3;
     private static final byte STAGE_KEYED = 4;
 
-    private final byte[] seed = new byte[20];
-    private boolean seedSet;
+    /*
+     * Card-wide PACE password encodings (see the class comment).  The arrays
+     * are allocated once by {@link #initShared()} rather than in static field
+     * initializers, matching the package-shared scratch below; all eMRTD
+     * instances read and write the same fields.
+     */
+    private static byte[] seed;
+    private static boolean seedSet;
     /**
      * PACE password encoding f(CAN) for password reference 0x02 (DGI FF06):
      * the raw CAN octets, NOT a hash (BSI TR-03110-3 A.2.3 Table 5).  The
      * KDF is applied to these bytes with counter 3 at MSE:Set AT.
      */
-    private final byte[] canSeed = new byte[16];
-    private short canSeedLen;
-    private boolean canSeedSet;
+    private static byte[] canSeed;
+    private static short canSeedLen;
+    private static boolean canSeedSet;
     private byte stage;
     private boolean aes;
     /** True when MSE:Set AT carried DO'7F4C: the terminal wants the CARs back. */
@@ -143,11 +156,14 @@ public final class Pace implements PaceSeedSink {
             scratch = new byte[96];
             tokenInput = new byte[96];
             tokenMac = new byte[16];
+            seed = new byte[20];
+            canSeed = new byte[16];
         }
     }
 
-    /** Stores the 20-byte PACE key seed SHA-1(MRZ_info) (perso DGI FF04;
-     * ICAO Doc 9303-11 §4.4.1). */
+    /** Stores the card-wide 20-byte PACE key seed SHA-1(MRZ_info) (perso DGI
+     * FF04; ICAO Doc 9303-11 §4.4.1).  Any instance's write is visible to every
+     * eMRTD DF of the package; the LDS2 sections normally omit it. */
     public void setSeed(byte[] src, short off, short len) {
         if (len != (short) 20) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
@@ -156,12 +172,14 @@ public final class Pace implements PaceSeedSink {
         seedSet = true;
     }
 
+    /** True when a PACE-MRZ seed has been personalized (card-wide). */
     public boolean seedSet() {
         return seedSet;
     }
 
-    /** Stores the PACE password encoding f(CAN): the raw CAN octets (DGI FF06;
-     * ICAO Doc 9303-11 §4.4.1). */
+    /** Stores the card-wide PACE password encoding f(CAN): the raw CAN octets
+     * (DGI FF06; ICAO Doc 9303-11 §4.4.1).  Any instance's write is visible to
+     * every eMRTD DF of the package; the LDS2 sections normally omit it. */
     public void setCanSeed(byte[] src, short off, short len) {
         if (len <= 0 || len > canSeed.length) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);

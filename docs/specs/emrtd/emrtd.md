@@ -230,9 +230,9 @@ DGI 编号即目标 FID；两个项目 DGI 承载 BAC 与 AA 密钥材料：
 | `FF01` | BAC K_seed（16 字节） |
 | `FF02` | AA 私钥：`modLen(2) ‖ modulus ‖ expLen(2) ‖ exponent` |
 | `FF03` | Chip Authentication 静态私钥标量（P-256，32 字节） |
-| `FF04` | PACE 密钥种子 SHA-1(MRZ_information)（20 字节，口令引用 `01`） |
+| `FF04` | PACE 密钥种子 SHA-1(MRZ_information)（20 字节，口令引用 `01`；**卡级**，包级 static） |
 | `FF05` | LDS1 主文件 EF.CardSecurity CMS SignedData（DGI 专用：DF 的 `011D` 已是 EF.SOD） |
-| `FF06` | PACE 口令编码 f(CAN) = 原始 CAN 字符（6 字节，口令引用 `02`） |
+| `FF06` | PACE 口令编码 f(CAN) = 原始 CAN 字符（6 字节，口令引用 `02`；**卡级**，包级 static） |
 | `FF0A` | AA 签名算法（1 字节：`01` = ISO 9796-2 + SHA-1，`02` = + SHA-256，`03` = ECDSA-SHA-256） |
 | `FF0B`/`FF0C` | RSA CVCA 信任点（TA，主/次）：`modLen(2)‖modulus‖expLen(2)‖exponent‖refLen(1)‖CAR‖[eff(6)]‖[auth(4)]` |
 | `FF0D` | ECDSA AA 私钥标量（P-256，32 字节） |
@@ -241,7 +241,10 @@ DGI 编号即目标 FID；两个项目 DGI 承载 BAC 与 AA 密钥材料：
 对 LDS2 角色，DGI 编号是透明 EF 的 FID；EF.CardAccess `011C` 与 EF.CardSecurity `011D`
 写入主文件存储 `LdsMfStore`（不在 DF 内），`0x7000 | FID` 则向记录 EF（EF.Certificates
 `011A`、Entry/Visa `0101`/`0103`、Exit `0102`）追加一条记录。`Lds2Perso` 同样消费
-`FF03`/`FF04`/`FF06`，故 LDS2 EF.CardAccess 宣告的 Chip Authentication 与 PACE 实际可用。`CardSecurityBuilder` 围绕匹配密钥的 `ChipAuthenticationPublicKeyInfo`
+`FF03`，故 LDS2 EF.CardAccess 宣告的 Chip Authentication 实际可用。`FF04`/`FF06` 是
+**卡级** PACE 口令编码（`Pace` 内的包级 static，四个 eMRTD 实例共享）：通常只在 LDS1 段
+写一次，三个 LDS2 DF 直接继承；LDS2 段若写这两个 DGI，则覆盖全卡值。样例脚本因此只在
+LDS1 段携带 `@can`/`@doc/@dob/@doe`。`CardSecurityBuilder` 围绕匹配密钥的 `ChipAuthenticationPublicKeyInfo`
 构造 EF.CardSecurity CMS SignedData（`id-SecurityObject` `0.4.0.127.0.7.3.2.1`）。
 
 `EmrtdPersoExporter` 用新的 RSA-2048 AA 密钥和由 DSC 夹具
@@ -504,13 +507,21 @@ AES-128 一度因真卡上每包开销约比原生 DES retail MAC 高一个数�
 （如 ReadID）也能按时读完 DG2（Doc 9303-11 §4.4）。
 
 LDS1 EF.CardAccess 在 `011C` 提供；LDS1 实例带 GP `CardReset`（Default Selected）时可在选
-应用前于 MF 层读，选择后始终可读。LDS2 DF 在自己的 EF.CardAccess 中宣告 PACE/CA，并以
-PACE 密钥种子（FF04/FF06）个性化，CA 另有静态 P-256 标量（FF03）与 EF.CardSecurity。
+应用前于 MF 层读，选择后始终可读。LDS2 DF 在自己的 EF.CardAccess 中宣告 PACE/CA；PACE
+口令编码（FF04/FF06）是卡级值，LDS1 段个性化一次后三个 LDS2 DF 共享（`Pace` 的包级
+static，见 §8），LDS2 段可省略、也可写入以覆盖全卡值；CA 另有静态 P-256 标量（FF03）与
+EF.CardSecurity。PACE **会话**不共享：选择另一个 DF 会复位该实例的 SM/TA 状态
+（`EmrtdApplet.onSelect` → `resetSession()`，ISO/IEC 7816-4），每个 DF 仍须各自完成
+PACE（及需要的 TA）。
 
 - PACE 口令编码 f(π)（BSI TR-03110-3 A.2.3 Table 5）：MRZ 为 `SHA-1(MRZ_information)`
   （DGI `FF04`）、CAN 为**原始 CAN 字符**（DGI `FF06`，不是哈希）；卡按 `DO'83'` 选择，
   派生 `K_pi = KDF(f(π), 3) = SHA-1(f(π) ‖ 00 00 00 03)`（基于 SHA-1；仅 3DES 调整 DES
   奇偶校验）。
+- **口令编码卡级共享**：`Pace` 的 `f(MRZ)`/`f(CAN)` 是包级 static（四个 eMRTD 实例共用
+  一份），LDS1 段个性化一次即对全部 LDS2 DF 生效；LDS2 段写 FF04/FF06 会覆盖全卡值。
+  PACE 会话本身不共享（见上，SELECT 复位），每个 DF 各自完成 `MSE:Set AT` 与四步
+  `GENERAL AUTHENTICATE`。
 - `MSE:Set AT`（P1=41 或 C1，P2=A4）携带 `DO'80'`（PACE OID）与 `DO'83'`（口令引用
   `01` = MRZ、`02` = CAN；缺省为 MRZ）。
 - 四步 `GENERAL AUTHENTICATE`（BSI TR-03110-3 B.1）：`DO'80'` 加密 nonce `E(K_pi, s)`、

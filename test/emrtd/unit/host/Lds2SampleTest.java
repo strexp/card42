@@ -29,6 +29,7 @@ final class Lds2SampleTest {
         LdsScript script = LdsScript.parse(new File("perso/emrtd/sample-sha256.perso"));
         X509Certificate signer =
                 EmrtdPersoExporter.loadCertificate("perso/emrtd/lds2.crt");
+        paceCredentialsAreCardWide(script);
 
         int entries = 0;
         int exits = 0;
@@ -86,5 +87,30 @@ final class Lds2SampleTest {
         Asserts.eq(2, visas, "sample has two conformant Visa records");
         Asserts.eq(3, certificates, "each LDS2 app has one wrapped certificate record");
         Asserts.eq(1, biometrics, "sample has one signed biometrics EF");
+    }
+
+    /**
+     * PACE credentials (DGI FF04/FF06) are card-wide: the checked-in sample
+     * personalizes them once in the LDS1 section and every LDS2 section inherits
+     * them through the package-static {@code Pace} storage.  Keeping the LDS2
+     * sections free of {@code @doc}/{@code @can} is what the simulator suites
+     * exercise (PACE-MRZ on Visa/Biometrics, PACE-CAN on Travel); a per-DF copy
+     * would hide a broken inheritance path.
+     */
+    private static void paceCredentialsAreCardWide(LdsScript script) {
+        LdsScript.Entry lds1 = script.entries.get(0);
+        Asserts.check(!lds1.isLds2() && lds1.documentNumber != null && lds1.can != null,
+                "LDS1 section carries the card-wide PACE MRZ/CAN seeds");
+        int lds2 = 0;
+        for (LdsScript.Entry entry : script.entries) {
+            if (!entry.isLds2()) {
+                continue;
+            }
+            lds2++;
+            Asserts.check(entry.documentNumber == null && entry.dateOfBirth == null
+                            && entry.dateOfExpiry == null && entry.can == null,
+                    "LDS2 " + entry.aid + " inherits the card-wide PACE credentials");
+        }
+        Asserts.eq(3, lds2, "sample has three LDS2 sections without PACE credentials");
     }
 }
