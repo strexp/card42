@@ -13,6 +13,7 @@ import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.codec.TlvWriter;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.data.TerminalConfig;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.kernel.entry.PseSelection;
@@ -45,7 +46,7 @@ final class PseSelectionTest {
         pse.add(0x9000, adfFci(AID_B));
         PseSelection selection = new PseSelection(new String[] { AID_A, AID_B });
         Terminal terminal = new Terminal(pse);
-        TransactionResult.Mutable result = new TransactionResult.Mutable();
+        TransactionResultWriter result = TransactionResult.newWriter();
         Asserts.eq(AID_A, selection.select(terminal, new TransactionRequest(TerminalConfig.builder().build()), result),
                 "PSE directory selects the highest priority ADF");
         Asserts.eq(AID_A, result.aidHex(), "result carries the PSE-selected AID");
@@ -60,7 +61,7 @@ final class PseSelectionTest {
         fallback.add(0x6A82, null); // SELECT AID_A refused
         fallback.add(0x9000, adfFci(AID_B));
         Asserts.eq(AID_B, new PseSelection(new String[] { AID_A, AID_B }).select(
-                        new Terminal(fallback), new TransactionRequest(TerminalConfig.builder().build()), new TransactionResult.Mutable()),
+                        new Terminal(fallback), new TransactionRequest(TerminalConfig.builder().build()), TransactionResult.newWriter()),
                 "List of AIDs fallback selects a supported ADF");
 
         // PSE SELECT 6A81 terminates the session (EMV v4.4 Book 1 §12.3.2 step 1).
@@ -69,7 +70,7 @@ final class PseSelectionTest {
         boolean terminated = false;
         try {
             new PseSelection(new String[] { AID_A }).select(
-                    new Terminal(blocked), new TransactionRequest(TerminalConfig.builder().build()), new TransactionResult.Mutable());
+                    new Terminal(blocked), new TransactionRequest(TerminalConfig.builder().build()), TransactionResult.newWriter());
         } catch (IllegalStateException e) {
             terminated = true;
         }
@@ -82,7 +83,7 @@ final class PseSelectionTest {
         other.add(0x6A82, null); // SELECT AID_A refused
         other.add(0x9000, adfFci(AID_B));
         Asserts.eq(AID_B, new PseSelection(new String[] { AID_A, AID_B }).select(
-                        new Terminal(other), new TransactionRequest(TerminalConfig.builder().build()), new TransactionResult.Mutable()),
+                        new Terminal(other), new TransactionRequest(TerminalConfig.builder().build()), TransactionResult.newWriter()),
                 "PSE 6283 falls back to the List of AIDs");
 
         // A directory READ RECORD error clears the candidates and falls back to
@@ -93,7 +94,7 @@ final class PseSelectionTest {
         readFail.add(0x6A82, null);
         readFail.add(0x9000, adfFci(AID_B));
         Asserts.eq(AID_B, new PseSelection(new String[] { AID_A, AID_B }).select(
-                        new Terminal(readFail), new TransactionRequest(TerminalConfig.builder().build()), new TransactionResult.Mutable()),
+                        new Terminal(readFail), new TransactionRequest(TerminalConfig.builder().build()), TransactionResult.newWriter()),
                 "directory read failure falls back to the List of AIDs");
 
         // A PSE FCI whose Directory SFI ('88') is missing, not one byte, or
@@ -112,7 +113,7 @@ final class PseSelectionTest {
         noMatch.add(0x6A83, null);
         noMatch.add(0x9000, adfFci(AID_A));
         Asserts.eq(AID_A, new PseSelection(new String[] { AID_A }).select(
-                        new Terminal(noMatch), new TransactionRequest(TerminalConfig.builder().build()), new TransactionResult.Mutable()),
+                        new Terminal(noMatch), new TransactionRequest(TerminalConfig.builder().build()), TransactionResult.newWriter()),
                 "PSE with no supported candidate falls back to the List of AIDs");
 
         // The selected DF Name is written to terminal data object 9F06
@@ -124,7 +125,7 @@ final class PseSelectionTest {
         idChannel.add(0x9000, adfFci(AID_A));
         TransactionRequest tdata = new TransactionRequest(TerminalConfig.builder().build());
         new PseSelection(new String[] { AID_A, AID_B }).select(
-                new Terminal(idChannel), tdata, new TransactionResult.Mutable());
+                new Terminal(idChannel), tdata, TransactionResult.newWriter());
         Asserts.bytes(Hex.parse(AID_A), tdata.applicationIdentifier,
                 "terminal 9F06 set to the selected DF Name");
 
@@ -138,7 +139,7 @@ final class PseSelectionTest {
         prefixChannel.add(0x9000, adfFci(longer));
         TransactionRequest prefixData = new TransactionRequest(TerminalConfig.builder().build());
         new PseSelection(new String[] { AID_A, AID_B }).select(
-                new Terminal(prefixChannel), prefixData, new TransactionResult.Mutable());
+                new Terminal(prefixChannel), prefixData, TransactionResult.newWriter());
         Asserts.bytes(Hex.parse(longer), prefixData.applicationIdentifier,
                 "terminal 9F06 set to the returned longer DF Name");
     }
@@ -150,7 +151,7 @@ final class PseSelectionTest {
         channel.add(0x6A82, null); // SELECT AID_A refused
         channel.add(0x9000, adfFci(AID_B));
         Asserts.eq(AID_B, new PseSelection(new String[] { AID_A, AID_B }).select(
-                        new Terminal(channel), new TransactionRequest(TerminalConfig.builder().build()), new TransactionResult.Mutable()),
+                        new Terminal(channel), new TransactionRequest(TerminalConfig.builder().build()), TransactionResult.newWriter()),
                 "PSE with " + what + " falls back to the List of AIDs");
     }
 

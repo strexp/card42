@@ -4,6 +4,7 @@ import javax.smartcardio.ResponseAPDU;
 
 import card42.host.emv.kernel.core.OdaVerifier;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.data.TerminalDol;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.kernel.data.Tvr;
@@ -59,7 +60,7 @@ public final class OfflineDataAuthentication implements OdaVerifier {
 
     @Override
     public void verify(Terminal terminal, TransactionRequest data,
-            TransactionResult.Mutable result) throws Exception {
+            TransactionResultWriter result) throws Exception {
         boolean cardSda = (result.aip() & 0x4000) != 0;
         boolean cardDda = (result.aip() & 0x2000) != 0;
         boolean cardCda = (result.aip() & 0x0100) != 0;
@@ -187,7 +188,7 @@ public final class OfflineDataAuthentication implements OdaVerifier {
     @Override
     public byte[] verifyCda(byte[] responseData, byte[] cdol1Data, byte[] cdol2Data,
             byte[] pdolData, byte[] unpredictableNumber, IssuerKey iccKey,
-            int expectedCid, TransactionResult.Mutable result) {
+            int expectedCid, TransactionResultWriter result) {
         CamVerifier.Result cda = CamVerifier.verifyCda(responseData, cdol1Data, cdol2Data,
                 pdolData, unpredictableNumber, iccKey, null, expectedCid);
         if (!cda.ok) {

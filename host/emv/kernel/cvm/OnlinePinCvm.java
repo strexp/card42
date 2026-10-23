@@ -5,6 +5,7 @@ import card42.host.emv.crypto.AcCrypto;
 import card42.host.emv.kernel.core.CvmPerformer;
 import card42.host.emv.kernel.core.OnlinePinProvider;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.kernel.data.Tvr;
 
@@ -21,10 +22,10 @@ public final class OnlinePinCvm implements CvmPerformer {
 
     private final OnlinePinProvider provider;
     private final TransactionRequest data;
-    private final TransactionResult.Mutable result;
+    private final TransactionResultWriter result;
 
     public OnlinePinCvm(OnlinePinProvider provider, TransactionRequest data,
-                        TransactionResult.Mutable result) {
+                        TransactionResultWriter result) {
         this.provider = provider;
         this.data = data;
         this.result = result;

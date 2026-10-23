@@ -17,6 +17,7 @@ import card42.host.emv.kernel.ContactlessKernel;
 import card42.host.emv.kernel.core.KernelListener;
 import card42.host.emv.kernel.core.Outcome;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.data.TerminalConfig;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.kernel.entry.Combination;
@@ -54,7 +55,7 @@ final class PpseSelectionTest {
         channel.addSelect(PPSE_AID, 0x9000, ppseFci());
         channel.addSelect(AID_A, 0x6A82, null);
         channel.addSelect(AID_B, 0x9000, adfFci(AID_B));
-        TransactionResult.Mutable result = new TransactionResult.Mutable();
+        TransactionResultWriter result = TransactionResult.newWriter();
         PpseSelection first = new PpseSelection(CombinationTable.defaults(supported), new EntryPointConfiguration());
         String selected = first.select(new Terminal(channel), new TransactionRequest(TerminalConfig.builder().build()), result);
         Asserts.eq(AID_B, selected, "refused candidate falls back to the next one");
@@ -72,7 +73,7 @@ final class PpseSelectionTest {
         badFci.addSelect(PPSE_AID, 0x9000, ppseFci());
         badFci.addSelect(AID_A, 0x9000, adfFci(AID_B));
         badFci.addSelect(AID_B, 0x9000, adfFci(AID_B));
-        TransactionResult.Mutable badFciResult = new TransactionResult.Mutable();
+        TransactionResultWriter badFciResult = TransactionResult.newWriter();
         Asserts.eq(AID_B, new PpseSelection(CombinationTable.defaults(supported), new EntryPointConfiguration()).select(
                         new Terminal(badFci), new TransactionRequest(TerminalConfig.builder().build()), badFciResult),
                 "mismatched DF Name drops the Combination");
@@ -85,7 +86,7 @@ final class PpseSelectionTest {
         boolean failed = false;
         try {
             new PpseSelection(CombinationTable.defaults(supported), new EntryPointConfiguration()).select(new Terminal(allRefused),
-                    new TransactionRequest(TerminalConfig.builder().build()), new TransactionResult.Mutable());
+                    new TransactionRequest(TerminalConfig.builder().build()), TransactionResult.newWriter());
         } catch (card42.host.emv.kernel.core.EndApplicationException e) {
             failed = e.messageIdentifier()
                     == card42.host.emv.kernel.core.EndApplicationException.INSERT_SWIPE_OR_TRY_ANOTHER_CARD;
@@ -99,7 +100,7 @@ final class PpseSelectionTest {
         boolean ppseFailed = false;
         try {
             new PpseSelection(CombinationTable.defaults(supported), new EntryPointConfiguration()).select(new Terminal(noPpse),
-                    new TransactionRequest(TerminalConfig.builder().build()), new TransactionResult.Mutable());
+                    new TransactionRequest(TerminalConfig.builder().build()), TransactionResult.newWriter());
         } catch (card42.host.emv.kernel.core.EndApplicationException e) {
             ppseFailed = true;
         }
@@ -162,14 +163,14 @@ final class PpseSelectionTest {
         visaNoTtq.addSelect(visa, 0x9000, adfFciWithPdol(visa, Hex.parse("9F0206")));
         visaNoTtq.addSelect(AID_B, 0x9000, adfFci(AID_B));
         Asserts.eq(AID_B, new PpseSelection(visaReader, visaConfig).select(
-                        new Terminal(visaNoTtq), new TransactionRequest(TerminalConfig.builder().build()), new TransactionResult.Mutable()),
+                        new Terminal(visaNoTtq), new TransactionRequest(TerminalConfig.builder().build()), TransactionResult.newWriter()),
                 "Visa Kernel 3 without 9F66 PDOL falls through to the next candidate");
 
         ScriptedChannel visaTtq = new ScriptedChannel();
         visaTtq.addSelect(PPSE_AID, 0x9000, ppseFciWithKernel(visa, 0x01, null));
         visaTtq.addSelect(visa, 0x9000, adfFciWithPdol(visa, Hex.parse("9F6604")));
         Asserts.eq(visa, new PpseSelection(visaReader, visaConfig).select(
-                        new Terminal(visaTtq), new TransactionRequest(TerminalConfig.builder().build()), new TransactionResult.Mutable()),
+                        new Terminal(visaTtq), new TransactionRequest(TerminalConfig.builder().build()), TransactionResult.newWriter()),
                 "Visa Kernel 3 with 9F66 PDOL is accepted");
         Asserts.check(EntryPoint.dolContainsTag(Hex.parse("9F02069F6604"), 0x9F66),
                 "DOL tag scan finds 9F66");
@@ -184,11 +185,11 @@ final class PpseSelectionTest {
         PpseSelection selection = new PpseSelection(CombinationTable.defaults(supported), new EntryPointConfiguration());
         Terminal reselectTerminal = new Terminal(reselectChannel);
         Asserts.eq(AID_A, selection.select(reselectTerminal, new TransactionRequest(TerminalConfig.builder().build()),
-                        new TransactionResult.Mutable()), "first candidate selected");
+                        TransactionResult.newWriter()), "first candidate selected");
         Asserts.eq(AID_B, selection.reselect(reselectTerminal, new TransactionRequest(TerminalConfig.builder().build()),
-                        new TransactionResult.Mutable()), "reselect returns the next candidate");
+                        TransactionResult.newWriter()), "reselect returns the next candidate");
         Asserts.check(selection.reselect(reselectTerminal, new TransactionRequest(TerminalConfig.builder().build()),
-                        new TransactionResult.Mutable()) == null,
+                        TransactionResult.newWriter()) == null,
                 "reselect returns null when the candidate list is exhausted");
 
         // --- SPI (Book B Annex C) -------------------------------------------
@@ -200,7 +201,7 @@ final class PpseSelectionTest {
         spi.setSpi(0x9000, ppseFci(entry(AID_B, 0x01)));
         spi.addSelect(AID_B, 0x9000, adfFci(AID_B));
         Asserts.eq(AID_B, new PpseSelection(CombinationTable.defaults(supported), new EntryPointConfiguration()).select(
-                        new Terminal(spi), new TransactionRequest(TerminalConfig.builder().build()), new TransactionResult.Mutable()),
+                        new Terminal(spi), new TransactionRequest(TerminalConfig.builder().build()), TransactionResult.newWriter()),
                 "SPI response FCI drives the Candidate List");
         Asserts.check(spi.spiSent, "SEND POI INFORMATION was sent");
         // The POI Information ID '0001' is two bytes on the wire
@@ -217,7 +218,7 @@ final class PpseSelectionTest {
         boolean spiFailed = false;
         try {
             new PpseSelection(CombinationTable.defaults(supported), new EntryPointConfiguration()).select(
-                    new Terminal(spiFail), new TransactionRequest(TerminalConfig.builder().build()), new TransactionResult.Mutable());
+                    new Terminal(spiFail), new TransactionRequest(TerminalConfig.builder().build()), TransactionResult.newWriter());
         } catch (card42.host.emv.kernel.core.EndApplicationException e) {
             spiFailed = true;
         }
@@ -230,7 +231,7 @@ final class PpseSelectionTest {
                 ppseFciWithCategories(entry(AID_A, 0x01), Hex.parse("0002")));
         noCategory.addSelect(AID_A, 0x9000, adfFci(AID_A));
         Asserts.eq(AID_A, new PpseSelection(CombinationTable.defaults(supported), new EntryPointConfiguration()).select(
-                        new Terminal(noCategory), new TransactionRequest(TerminalConfig.builder().build()), new TransactionResult.Mutable()),
+                        new Terminal(noCategory), new TransactionRequest(TerminalConfig.builder().build()), TransactionResult.newWriter()),
                 "category absent from 9F3E: PPSE FCI drives selection");
         Asserts.check(!noCategory.spiSent,
                 "SPI is not sent when the terminal category is absent and no 9F3F");
@@ -246,7 +247,7 @@ final class PpseSelectionTest {
         Asserts.eq(AID_A, new PpseSelection(CombinationTable.defaults(supported), new EntryPointConfiguration()).select(
                         new Terminal(categoryOnly),
                         new TransactionRequest(TerminalConfig.builder().build()),
-                        new TransactionResult.Mutable()),
+                        TransactionResult.newWriter()),
                 "category on 9F3E and no 9F3F still sends SPI");
         Asserts.check(Hex.format(categoryOnly.lastSpiData).endsWith("0001020001"),
                 "SPI with no SDOL carries only the Terminal Category object");
@@ -260,7 +261,7 @@ final class PpseSelectionTest {
         sdolOnly.addSelect(AID_A, 0x9000, adfFci(AID_A));
         new PpseSelection(CombinationTable.defaults(supported), new EntryPointConfiguration()).select(new Terminal(sdolOnly),
                 new TransactionRequest(TerminalConfig.builder().build()),
-                new TransactionResult.Mutable());
+                TransactionResult.newWriter());
         Asserts.check(Hex.format(sdolOnly.lastSpiData).endsWith("0250"),
                 "SPI with only SDOL omits the Terminal Category object");
 
@@ -273,7 +274,7 @@ final class PpseSelectionTest {
         sdolPoi.addSelect(AID_A, 0x9000, adfFci(AID_A));
         new PpseSelection(CombinationTable.defaults(supported), new EntryPointConfiguration()).select(new Terminal(sdolPoi),
                 new TransactionRequest(TerminalConfig.builder().build()),
-                new TransactionResult.Mutable());
+                TransactionResult.newWriter());
         Asserts.check(Hex.format(sdolPoi.lastSpiData).endsWith("0001020001"),
                 "SDOL 8B is filled with the POI Information value");
 
@@ -286,7 +287,7 @@ final class PpseSelectionTest {
         PpseSelection extSel = new PpseSelection(CombinationTable.defaults(AID_A), extended);
         Asserts.eq(AID_A, extSel.select(
                         new Terminal(ext), new TransactionRequest(TerminalConfig.builder().build()),
-                        new TransactionResult.Mutable()),
+                        TransactionResult.newWriter()),
                 "Extended Selection appends 9F29 to the SELECT ADF Name");
         Asserts.eq(AID_A + "AABB", ext.lastSelectAid,
                 "SELECT carried the extended ADF Name");
@@ -317,7 +318,7 @@ final class PpseSelectionTest {
         new PpseSelection(CombinationTable.defaults(supported), new EntryPointConfiguration(),
                 listener).select(new Terminal(listenerChannel),
                         new TransactionRequest(TerminalConfig.builder().build()),
-                        new TransactionResult.Mutable());
+                        TransactionResult.newWriter());
         Asserts.eq(2, candidateNames.size(), "listener receives both candidates");
         Asserts.eq(AID_A, candidateNames.get(0), "listener candidates are in priority order");
         Asserts.eq(AID_B, candidateNames.get(1), "listener candidates are in priority order");
@@ -330,11 +331,11 @@ final class PpseSelectionTest {
         PpseSelection resume = new PpseSelection(CombinationTable.defaults(supported), new EntryPointConfiguration());
         Terminal resumeTerminal = new Terminal(resumeChannel);
         Asserts.eq(AID_A, resume.activate(resumeTerminal, new TransactionRequest(TerminalConfig.builder().build()),
-                        new TransactionResult.Mutable()).adfName, "first activation");
+                        TransactionResult.newWriter()).adfName, "first activation");
         Asserts.eq(AID_B, resume.activateNext(resumeTerminal, new TransactionRequest(TerminalConfig.builder().build()),
-                        new TransactionResult.Mutable()).adfName, "activateNext resumes the Candidate List");
+                        TransactionResult.newWriter()).adfName, "activateNext resumes the Candidate List");
         Asserts.check(resume.activateNext(resumeTerminal, new TransactionRequest(TerminalConfig.builder().build()),
-                        new TransactionResult.Mutable()) == null,
+                        TransactionResult.newWriter()) == null,
                 "activateNext returns null when exhausted");
 
         // --- Per-Combination Entry Point Configuration (C13, Book A §5.7) ----
@@ -355,7 +356,7 @@ final class PpseSelectionTest {
         perComboData.amountAuthorised = Hex.parse("000000000200"); // 200 > limit
         PpseSelection perComboSel = new PpseSelection(perCombo, open);
         Asserts.eq(AID_B, perComboSel.select(new Terminal(perComboChannel), perComboData,
-                        new TransactionResult.Mutable()),
+                        TransactionResult.newWriter()),
                 "a Combination over the Reader Contactless Transaction Limit is dropped");
         Asserts.check(!perComboSel.indicators().contactlessApplicationNotAllowed,
                 "selected Combination indicators allow the application");
@@ -373,7 +374,7 @@ final class PpseSelectionTest {
         boolean tryAnother = false;
         try {
             new PpseSelection(allLimited, limited2).select(new Terminal(allLimitedChannel),
-                    perComboData, new TransactionResult.Mutable());
+                    perComboData, TransactionResult.newWriter());
         } catch (card42.host.emv.kernel.core.EndApplicationException e) {
             tryAnother = e.messageIdentifier()
                     == card42.host.emv.kernel.core.EndApplicationException.TRY_ANOTHER_INTERFACE;
@@ -390,7 +391,7 @@ final class PpseSelectionTest {
         startBChannel.addSelect(AID_A, 0x9000, adfFci(AID_A));
         PpseSelection startBSel = new PpseSelection(CombinationTable.defaults(supported), autorun);
         startBSel.select(new Terminal(startBChannel), new TransactionRequest(TerminalConfig.builder().build()),
-                new TransactionResult.Mutable());
+                TransactionResult.newWriter());
         Asserts.eq(Outcome.START_B, startBSel.activation().start,
                 "Autorun -> Start B without a status check");
         Asserts.check(!startBSel.indicators().statusCheckRequested,
@@ -405,11 +406,11 @@ final class PpseSelectionTest {
         Terminal tryAgainTerminal = new Terminal(tryAgainChannel);
         KernelActivation activated = tryAgainSel.activate(tryAgainTerminal,
                 new TransactionRequest(TerminalConfig.builder().build()),
-                new TransactionResult.Mutable());
+                TransactionResult.newWriter());
         Asserts.eq(Outcome.START_A, activated.start, "initial activation is Start A");
         KernelActivation again = tryAgainSel.restartStartB(tryAgainTerminal,
                 new TransactionRequest(TerminalConfig.builder().build()),
-                new TransactionResult.Mutable());
+                TransactionResult.newWriter());
         Asserts.check(again != null, "Try Again re-activates the current Combination");
         Asserts.eq(AID_A, again.adfName, "Try Again keeps the same ADF Name");
         Asserts.eq(Outcome.START_B, again.start, "Try Again restarts at Start B");

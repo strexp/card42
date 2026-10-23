@@ -330,7 +330,7 @@ INSTALL 时由实例 AID 决定（`EmrtdInstallParameters.role()`）：
 齐全时为 true。`signedInfoTlv()` 保留卡上原始的 `73`/`71`/`5F2E` 编码（含原 length 字节），
 不会因重新编码 BER length 而误验失败。对旧版/不完整记录（例如只有 `5F44 || 5F37` 或裸 X.509）
 仍走容错路径并在报告中标 `[incomplete]`，不抛异常；`perso/emrtd/sample-*.perso` 已改为合规多记录。
-`PassportReport.lds2Text/Json` 同时输出原始 tag/hex、结构化字段和验签/证书 profile/信任状态。
+`PassportReport.lds2Text/Json` 同时输出原始 tag/hex、结构化字段和验签/证书 profile/信任状态；渲染使用 `lds2/Lds2VerificationView`，不直接依赖 `pa`。
 
 **结构化写入**：`TravelRecordBuilder`/`VisaRecordBuilder`/`BiometricsRecordBuilder` 按
 Table 86/90/93 的固定 DO 顺序编码，签名覆盖完整 `73`/`71`/`5F2E` DO（RSA 用 SHA256withRSA，
@@ -339,7 +339,7 @@ EC 用 SHA256withECDSA），`CertificateRecordBuilder` 生成 `5F3A + 72`，
 UPDATE BINARY + ACTIVATE（`writeBiometrics`）。`Lds2CertificateStore.findOrAppend` 先按
 Doc 9303-12 §7.1.2 校验 LDS2 Signer 证书（subject 仅 C/CN、CN≤9、仅 AKI + critical EKU、
 `.8.1/.8.2/.8.3`、≤900 B、有效期、CSCA 链），再按 X.509 字节复用已有证书；`5F3A` 的
-country/serial 从证书 subject C / serial 推导，不再接受调用方覆盖。`Lds2Verifier` 负责
+country/serial 从证书 subject C / serial 推导，不再接受调用方覆盖。`Lds2Verifier`（profile 检查在 `Lds2CertificateProfile`，记录验签在 `Lds2RecordVerifier`）负责
 `5F38` → EF.Certificates → X.509 → CSCA 链 → EKU/profile → `5F37` 验签；CLI `lds2 -csca`
 和报告输出 `valid/signatureValid/profileValid/trusted`。`Lds2Signature` 按 key 类型尝试
 ECDSA/RSA 的 SHA-256/384/512（及 RSA SHA-1）以兼容不带 AlgorithmIdentifier 的记录。

@@ -14,6 +14,7 @@ import card42.host.emv.kernel.data.Cvm;
 import card42.host.common.codec.TlvWriter;
 import card42.host.emv.kernel.core.PinProvider;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.cvm.OfflinePinCvm;
 import card42.host.emv.kernel.data.TerminalConfig;
 import card42.host.emv.kernel.data.TransactionRequest;
@@ -39,7 +40,7 @@ final class OfflinePinCvmTest {
         PinChannel ch = new PinChannel();
         ch.ptc = 0;
         TransactionRequest data = new TransactionRequest(TerminalConfig.forContact().build());
-        TransactionResult.Mutable result = new TransactionResult.Mutable().tvr(Tvr.blank());
+        TransactionResultWriter result = TransactionResult.newWriter().tvr(Tvr.blank());
         OfflinePinCvm cvm = new OfflinePinCvm(pin("1234"), new Terminal(ch), data,
                 result);
         Asserts.eq(Cvm.RESULT_FAILED, cvm.perform(Cvm.CVM_PLAINTEXT_PIN_ICC, 0),
@@ -53,7 +54,7 @@ final class OfflinePinCvmTest {
         ch.ptc = 3;
         ch.push(0x9000);
         data = new TransactionRequest(TerminalConfig.forContact().build());
-        result = new TransactionResult.Mutable().tvr(Tvr.blank());
+        result = TransactionResult.newWriter().tvr(Tvr.blank());
         cvm = new OfflinePinCvm(pin("1234"), new Terminal(ch), data, result);
         Asserts.eq(Cvm.RESULT_SUCCESSFUL, cvm.perform(Cvm.CVM_PLAINTEXT_PIN_ICC, 0),
                 "successful offline PIN");
@@ -66,7 +67,7 @@ final class OfflinePinCvmTest {
         ch.ptc = 3;
         ch.push(0x6984);
         data = new TransactionRequest(TerminalConfig.forContact().build());
-        result = new TransactionResult.Mutable().tvr(Tvr.blank());
+        result = TransactionResult.newWriter().tvr(Tvr.blank());
         cvm = new OfflinePinCvm(pin("1234"), new Terminal(ch), data, result);
         Asserts.eq(Cvm.RESULT_FAILED, cvm.perform(Cvm.CVM_PLAINTEXT_PIN_ICC, 0),
                 "6984 offline PIN fails");
@@ -78,7 +79,7 @@ final class OfflinePinCvmTest {
         ch.ptc = 1;
         ch.push(0x63C0);
         data = new TransactionRequest(TerminalConfig.forContact().build());
-        result = new TransactionResult.Mutable().tvr(Tvr.blank());
+        result = TransactionResult.newWriter().tvr(Tvr.blank());
         cvm = new OfflinePinCvm(pin("1234"), new Terminal(ch), data, result);
         Asserts.eq(Cvm.RESULT_FAILED, cvm.perform(Cvm.CVM_PLAINTEXT_PIN_ICC, 0),
                 "63C0 offline PIN fails");
@@ -90,7 +91,7 @@ final class OfflinePinCvmTest {
         ch.ptc = 2;
         ch.push(0x63C1);
         data = new TransactionRequest(TerminalConfig.forContact().build());
-        result = new TransactionResult.Mutable().tvr(Tvr.blank());
+        result = TransactionResult.newWriter().tvr(Tvr.blank());
         cvm = new OfflinePinCvm(pin("1234"), new Terminal(ch), data, result);
         Asserts.eq(Cvm.RESULT_FAILED, cvm.perform(Cvm.CVM_PLAINTEXT_PIN_ICC, 0),
                 "63C1 offline PIN fails");
@@ -101,7 +102,7 @@ final class OfflinePinCvmTest {
         ch = new PinChannel();
         ch.ptc = 3;
         data = new TransactionRequest(TerminalConfig.forContact().build());
-        result = new TransactionResult.Mutable().tvr(Tvr.blank());
+        result = TransactionResult.newWriter().tvr(Tvr.blank());
         cvm = new OfflinePinCvm(pin(null), new Terminal(ch), data, result);
         Asserts.eq(Cvm.RESULT_FAILED, cvm.perform(Cvm.CVM_PLAINTEXT_PIN_ICC, 0),
                 "bypassed PIN fails");

@@ -3,6 +3,7 @@ package card42.host.emv.cli;
 import java.util.Arrays;
 
 import card42.host.common.cli.CliSupport;
+import card42.host.common.cli.CommandRegistry;
 import card42.host.emv.cli.command.CardCommand;
 import card42.host.emv.cli.command.IssuerCommand;
 import card42.host.emv.cli.command.PersoCommand;
@@ -39,6 +40,24 @@ public final class Main {
     private Main() {
     }
 
+    private static final CommandRegistry COMMANDS = new CommandRegistry()
+            .register("perso", new CommandRegistry.Command() {
+                public int run(String[] a) throws Exception { return perso(a); }
+                public void usage(java.io.PrintStream out) { PersoCommand.usage(out); }
+            })
+            .register("terminal", new CommandRegistry.Command() {
+                public int run(String[] a) throws Exception { return terminal(a); }
+                public void usage(java.io.PrintStream out) { terminalUsage(out); }
+            })
+            .register("issuer", new CommandRegistry.Command() {
+                public int run(String[] a) throws Exception { return IssuerCommand.run(a); }
+                public void usage(java.io.PrintStream out) { IssuerCommand.usage(out); }
+            })
+            .register("card", new CommandRegistry.Command() {
+                public int run(String[] a) throws Exception { return CardCommand.run(a); }
+                public void usage(java.io.PrintStream out) { CardCommand.usage(out); }
+            });
+
     public static void main(String[] args) {
         int code = run(args);
         if (code != 0) {
@@ -68,14 +87,6 @@ public final class Main {
         String command = args[0];
         String[] rest = Arrays.copyOfRange(args, 1, args.length);
         switch (command) {
-        case "perso":
-            return perso(rest);
-        case "terminal":
-            return terminal(rest);
-        case "issuer":
-            return IssuerCommand.run(rest);
-        case "card":
-            return CardCommand.run(rest);
         case "version":
         case "-v":
         case "--version":
@@ -86,6 +97,10 @@ public final class Main {
         case "--help":
             return help(rest);
         default:
+            Integer code = COMMANDS.dispatch(command, rest);
+            if (code != null) {
+                return code;
+            }
             System.err.println("Unknown command: " + command);
             usage(System.err);
             return 2;

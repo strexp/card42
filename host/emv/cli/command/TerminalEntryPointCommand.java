@@ -5,6 +5,7 @@ import java.io.PrintStream;
 import card42.host.common.codec.Json;
 import card42.host.emv.kernel.core.EndApplicationException;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.data.TerminalConfig;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.kernel.entry.CombinationTable;
@@ -91,7 +92,7 @@ public final class TerminalEntryPointCommand {
         try (TerminalSession session = TerminalSession.open(
                 host, wait, args.has("trace"), System.err)) {
             PpseSelection selection = new PpseSelection(table, config);
-            TransactionResult.Mutable result = new TransactionResult.Mutable();
+            TransactionResultWriter result = TransactionResult.newWriter();
             try {
                 KernelActivation activation = selection.activate(new card42.host.emv.lib.Terminal(session.terminal), data, result);
                 if (args.has("json")) {

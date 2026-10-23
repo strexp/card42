@@ -14,7 +14,7 @@ import card42.host.emrtd.lds.lds1.Dg15;
 import card42.host.emrtd.lds.lds1.Dg2;
 import card42.host.emrtd.lds.lds2.Lds2Record;
 import card42.host.emrtd.lds.security.SecurityInfo;
-import card42.host.emrtd.pa.Lds2Verifier;
+import card42.host.emrtd.lds.lds2.Lds2VerificationView;
 
 /**
  * Text / JSON rendering of a read eMRTD (H1.5).  It deliberately depends only
@@ -133,13 +133,13 @@ public final class PassportReport {
      * signature/profile/trust status (Doc 9303-10 §5, Doc 9303-12 §7.1.2).
      */
     public static String lds2Text(CardAccess access, Map<String, List<byte[]>> groups,
-                                  Map<String, List<Lds2Verifier.Verification>> verification) {
+                                  Map<String, List<Lds2VerificationView>> verification) {
         StringBuilder b = new StringBuilder();
         appendAccess(b, access);
         if (groups != null) {
             for (Map.Entry<String, List<byte[]>> group : groups.entrySet()) {
                 List<byte[]> records = group.getValue();
-                List<Lds2Verifier.Verification> results =
+                List<Lds2VerificationView> results =
                         verification == null ? null : verification.get(group.getKey());
                 b.append(group.getKey()).append(": ").append(records.size())
                         .append(" record(s)\n");
@@ -158,8 +158,8 @@ public final class PassportReport {
         return b.toString();
     }
 
-    private static String verificationText(Lds2Verifier.Verification result) {
-        Lds2Verifier.CertificateCheck check = result.certificate;
+    private static String verificationText(Lds2VerificationView result) {
+        Lds2VerificationView.CertificateView check = result.certificate;
         boolean certificate = result.label != null
                 && Lds2Record.Kind.forLabel(result.label) == Lds2Record.Kind.CERTIFICATE;
         StringBuilder b = new StringBuilder("verification      : ");
@@ -230,7 +230,7 @@ public final class PassportReport {
     }
 
     public static String lds2Json(CardAccess access, Map<String, List<byte[]>> groups,
-                                  Map<String, List<Lds2Verifier.Verification>> verification) {
+                                  Map<String, List<Lds2VerificationView>> verification) {
         Json.Obj out = new Json.Obj();
         if (access != null) {
             Json.Arr infos = new Json.Arr();
@@ -245,11 +245,11 @@ public final class PassportReport {
         if (groups != null) {
             Json.Obj files = new Json.Obj();
             for (Map.Entry<String, List<byte[]>> group : groups.entrySet()) {
-                List<Lds2Verifier.Verification> results =
+                List<Lds2VerificationView> results =
                         verification == null ? null : verification.get(group.getKey());
                 Json.Arr recordArr = new Json.Arr();
                 for (int i = 0; i < group.getValue().size(); i++) {
-                    Lds2Verifier.Verification result =
+                    Lds2VerificationView result =
                             results != null && i < results.size() ? results.get(i) : null;
                     recordArr.raw(recordJson(group.getKey(), group.getValue().get(i), result)
                             .build());
@@ -266,14 +266,14 @@ public final class PassportReport {
     }
 
     private static Json.Obj recordJson(String label, byte[] record,
-                                       Lds2Verifier.Verification verification) {
+                                       Lds2VerificationView verification) {
         Json.Obj out = new Json.Obj()
                 .put("length", record.length)
                 .put("tags", outerTags(record))
                 .put("hex", Hex.format(record))
                 .raw("parsed", Lds2Record.parse(Lds2Record.Kind.forLabel(label), record).toJson());
         if (verification != null) {
-            Lds2Verifier.CertificateCheck check = verification.certificate;
+            Lds2VerificationView.CertificateView check = verification.certificate;
             Json.Arr problems = new Json.Arr();
             for (String problem : verification.problems) {
                 problems.add(problem);

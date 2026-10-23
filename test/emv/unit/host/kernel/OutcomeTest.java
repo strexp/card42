@@ -2,6 +2,7 @@ package card42.test;
 
 import card42.host.emv.kernel.core.Outcome;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.common.util.Hex;
 
 /**
@@ -17,7 +18,7 @@ final class OutcomeTest {
     static void run() {
         System.out.println("Outcome");
 
-        TransactionResult.Mutable result = new TransactionResult.Mutable();
+        TransactionResultWriter result = TransactionResult.newWriter();
         Outcome outcome = Outcome.from(result);
         Asserts.eq(Outcome.APPROVE, outcome.finalOutcome, "approved transaction");
         Asserts.check(!outcome.restart, "approve does not restart");
@@ -50,7 +51,7 @@ final class OutcomeTest {
         Asserts.check(next.restart, "selectNext requests a restart");
 
         // --- Table 6-2 fields derived from the transaction (C12) -------------
-        TransactionResult.Mutable full = new TransactionResult.Mutable();
+        TransactionResultWriter full = TransactionResult.newWriter();
         full.aidHex("43415244420102");
         full.putRecord((1 << 8) | 1, Hex.parse("7000"));
         full.fci(Hex.parse("6F 05 A5 03 BF0C 00")); // BF0C present
@@ -76,7 +77,7 @@ final class OutcomeTest {
         Asserts.eq(0x1C, againUi.messageIdentifier, "tryAgain UI request identifier");
 
         // --- Unified decision (contact Book 4 §6.3.2 / Book A Table 6-1) -----
-        TransactionResult.Mutable approve = new TransactionResult.Mutable();
+        TransactionResultWriter approve = TransactionResult.newWriter();
         Asserts.check(TransactionResult.Decision.APPROVE == approve.decision(),
                 "contact approval decision");
         approve.declined(true);

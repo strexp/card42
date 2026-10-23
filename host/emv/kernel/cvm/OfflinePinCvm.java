@@ -9,6 +9,7 @@ import card42.host.emv.kernel.core.CvmPerformer;
 import card42.host.emv.kernel.core.OdaVerifier;
 import card42.host.emv.kernel.core.PinProvider;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.kernel.data.Tvr;
 import card42.host.emv.lib.IssuerKey;
@@ -41,17 +42,17 @@ public final class OfflinePinCvm implements CvmPerformer {
     private final PinProvider pinProvider;
     private final Terminal terminal;
     private final TransactionRequest data;
-    private final TransactionResult.Mutable result;
+    private final TransactionResultWriter result;
     /** Injected ODA seam; null in legacy unit tests that only exercise plaintext PIN. */
     private final OdaVerifier oda;
 
     public OfflinePinCvm(PinProvider pinProvider, Terminal terminal, TransactionRequest data,
-                         TransactionResult.Mutable result) {
+                         TransactionResultWriter result) {
         this(pinProvider, terminal, data, result, null);
     }
 
     public OfflinePinCvm(PinProvider pinProvider, Terminal terminal, TransactionRequest data,
-                         TransactionResult.Mutable result, OdaVerifier oda) {
+                         TransactionResultWriter result, OdaVerifier oda) {
         this.pinProvider = pinProvider;
         this.terminal = terminal;
         this.data = data;

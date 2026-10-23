@@ -22,6 +22,7 @@ import card42.host.emv.kernel.core.Issuer;
 import card42.host.emv.kernel.core.KernelListener;
 import card42.host.emv.kernel.core.Selection;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.common.util.Bcd;
 import card42.host.emv.kernel.data.TerminalDol;
 import card42.host.emv.kernel.data.TransactionRequest;
@@ -83,7 +84,7 @@ final class TransactionFlow {
      * @return the same {@code result} instance
      */
     TransactionResult run(Terminal terminal, TransactionRequest data, Issuer issuer,
-            Selection selection, CvmPerformer cvmPerformer, TransactionResult.Mutable result)
+            Selection selection, CvmPerformer cvmPerformer, TransactionResultWriter result)
             throws Exception {
         beginTransaction(data, result);
 
@@ -100,7 +101,7 @@ final class TransactionFlow {
      * caller fixed one (EMV Contactless Book A v2.12 §8.1.1.8).  Called by the
      * Entry Point state machine before it activates the kernel.
      */
-    void beginTransaction(TransactionRequest data, TransactionResult.Mutable result) {
+    void beginTransaction(TransactionRequest data, TransactionResultWriter result) {
         // The Transaction Sequence Counter is drawn for this transaction and
         // advanced for the next (EMV v4.4 Book 4 §6.5.5).
         data.transactionSequenceCounter = data.config.state.nextTransactionSequenceCounter();
@@ -117,7 +118,7 @@ final class TransactionFlow {
      * OPTIONS '6985' candidate reselection and may be null.
      */
     TransactionResult runActivated(Terminal terminal, TransactionRequest data, Issuer issuer,
-            Selection selection, CvmPerformer cvmPerformer, TransactionResult.Mutable result)
+            Selection selection, CvmPerformer cvmPerformer, TransactionResultWriter result)
             throws Exception {
         // --- GET PROCESSING OPTIONS (EMV v4.4 Book 3 §6.5.8). ----------------
         // Only ICC-sourced data objects are read from the card (Book 3 §7.5).
@@ -235,7 +236,7 @@ final class TransactionFlow {
      * CVM bit stays clear.  Offline PIN is executed through {@code cvmPerformer}
      * when the kernel supplies one.
      */
-    private void cardholderVerification(TransactionRequest data, TransactionResult.Mutable result,
+    private void cardholderVerification(TransactionRequest data, TransactionResultWriter result,
             CvmPerformer cvmPerformer) {
         long amount = Bcd.bcdToLong(data.amountAuthorised);
         long amountOther = Bcd.bcdToLong(data.amountOther);
@@ -273,7 +274,7 @@ final class TransactionFlow {
 
     /** Terminal Risk Management (EMV v4.4 Book 3 §10.6): -&gt; TVR byte 4. */
     private void terminalRiskManagement(Terminal terminal, TransactionRequest data,
-            TransactionResult.Mutable result) throws Exception {
+            TransactionResultWriter result) throws Exception {
         // Exception file (EMV v4.4 Book 4 §6.3.5): a matching card sets the TVR
         // 'Card appears in exception file' bit regardless of the AIP.
         byte[] pan = result.firstValue(EmvTags.PAN);
@@ -308,7 +309,7 @@ final class TransactionFlow {
      * Terminal Action Analysis (EMV v4.4 Book 3 §10.7): the cryptogram to
      * request in the first GENERATE AC.
      */
-    private byte terminalActionAnalysis(TransactionRequest data, TransactionResult.Mutable result) {
+    private byte terminalActionAnalysis(TransactionRequest data, TransactionResultWriter result) {
         byte[] iacDenial = result.firstValue(EmvTags.IAC_DENIAL);
         byte[] iacOnline = result.firstValue(EmvTags.IAC_ONLINE);
         byte requestedFirstAc;
@@ -343,7 +344,7 @@ final class TransactionFlow {
      * @return true when a CDA verification failed
      */
     private boolean firstGenerateAc(Terminal terminal, TransactionRequest data,
-            TransactionResult.Mutable result, byte requestedFirstAc, boolean performCda)
+            TransactionResultWriter result, byte requestedFirstAc, boolean performCda)
             throws Exception {
         byte[] cdol1 = result.firstValue(EmvTags.CDOL1);
         if (cdol1 == null) {
@@ -373,8 +374,10 @@ final class TransactionFlow {
                 result.cdaPerformed(true);
                 if (result.firstAc().ac == null) {
                     // A CDA response carries the AC inside the SDAD (EMV v4.4 Book 2 §6.6),
-                    // so it is not returned as 9F26; use the recovered one.
-                    result.firstAc().ac = recovered;
+                    // so it is not returned as 9F26; replace the immutable response.
+                    Responses.AcResponse firstResponse = result.firstAc();
+                    result.firstAc(new Responses.AcResponse(firstResponse.cid,
+                            firstResponse.atc, recovered, firstResponse.iad));
                 }
             } else {
                 result.cdaFailed(true);
@@ -392,7 +395,7 @@ final class TransactionFlow {
      * (Book 3 §10.10).
      */
     private void onlineOrOffline(Terminal terminal, TransactionRequest data, Issuer issuer,
-            TransactionResult.Mutable result, boolean performCda, boolean firstCdaFailed)
+            TransactionResultWriter result, boolean performCda, boolean firstCdaFailed)
             throws Exception {
         Authorization auth = null;
         boolean approved = false;
@@ -478,7 +481,9 @@ final class TransactionFlow {
             if (recovered != null) {
                 result.cdaPerformed(true);
                 if (result.secondAc().ac == null) {
-                    result.secondAc().ac = recovered;
+                    Responses.AcResponse secondResponse = result.secondAc();
+                    result.secondAc(new Responses.AcResponse(secondResponse.cid,
+                            secondResponse.atc, recovered, secondResponse.iad));
                 }
             } else {
                 result.cdaFailed(true);
@@ -542,7 +547,7 @@ final class TransactionFlow {
      * Aggregates the '71' (before) and '72' (after) script outcomes into the
      * transaction result and the TVR/TSI (EMV v4.4 Book 3 §10.10).
      */
-    private void mergeScripts(TransactionResult.Mutable result,
+    private void mergeScripts(TransactionResultWriter result,
             IssuerScriptProcessor.Result before, IssuerScriptProcessor.Result after) {
         byte[] results = new byte[(before == null ? 0 : before.results.length)
                 + (after == null ? 0 : after.results.length)];
@@ -577,7 +582,7 @@ final class TransactionFlow {
      * terminal declines and does not send a second GENERATE AC
      * (EMV v4.4 Book 4 §6.3.2.1).
      */
-    private static void finishOffline(TransactionResult.Mutable result, boolean firstCdaFailed) {
+    private static void finishOffline(TransactionResultWriter result, boolean firstCdaFailed) {
         if (result.firstCid() == TerminalActionAnalysis.TC && firstCdaFailed) {
             result.secondCid(TerminalActionAnalysis.AAC).declined(true);
             result.arc(new byte[] { 0x5A, 0x31 }); // 'Z1'
@@ -628,7 +633,7 @@ final class TransactionFlow {
         EmvTags.SDA_TAG_LIST,                       // Static Data Authentication Tag List
     };
 
-    private void readAfl(Terminal terminal, TransactionResult.Mutable result) throws Exception {
+    private void readAfl(Terminal terminal, TransactionResultWriter result) throws Exception {
         // AFL syntax (EMV v4.4 Book 3 §7.5): an AFL with no entries, a
         // non-multiple-of-4 length, an SFI of 0 or 31, a starting record of 0,
         // an ending record before the starting record, or more ODA records
@@ -729,7 +734,7 @@ final class TransactionFlow {
      * the terminal requests an AAC (EMV v4.4 Book 4 §6.3.8).  The terminal never
      * modifies the ARC.
      */
-    private boolean issuerApproved(TransactionRequest data, TransactionResult.Mutable result,
+    private boolean issuerApproved(TransactionRequest data, TransactionResultWriter result,
             byte[] arc) {
         int code = ArcCodes.code(arc);
         if (code == 0) {
@@ -753,7 +758,7 @@ final class TransactionFlow {
     }
 
 
-    private static void noteAdvice(TransactionResult.Mutable result, byte cid) {
+    private static void noteAdvice(TransactionResultWriter result, byte cid) {
         if (Responses.adviceRequired(cid)) {
             result.adviceRequired(true);
             if (Responses.adviceReason(cid) == Responses.CID_SERVICE_NOT_ALLOWED) {

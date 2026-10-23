@@ -11,6 +11,7 @@ import card42.host.emv.kernel.core.KernelListener;
 import card42.host.emv.kernel.core.Outcome;
 import card42.host.emv.kernel.core.Selection;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.common.util.Bcd;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.lib.Terminal;
@@ -62,7 +63,7 @@ public final class PpseSelection implements Selection {
      * the activation data for the selected kernel.
      */
     public KernelActivation activate(Terminal terminal, TransactionRequest data,
-            TransactionResult.Mutable result) throws Exception {
+            TransactionResultWriter result) throws Exception {
         ResponseAPDU ppse = terminal.select(PPSE_AID);
         if (ppse.getSW() != 0x9000) {
             // Book B §3.3.2.3: a PPSE that cannot be selected adds no
@@ -135,7 +136,7 @@ public final class PpseSelection implements Selection {
 
     /** Resumes the Candidate List for a Restart (Start C), or null when exhausted. */
     public KernelActivation activateNext(Terminal terminal, TransactionRequest data,
-            TransactionResult.Mutable result) throws Exception {
+            TransactionResultWriter result) throws Exception {
         return selectNext(terminal, data, result);
     }
 
@@ -147,7 +148,7 @@ public final class PpseSelection implements Selection {
      * @return the new activation, or null when there is no current candidate
      */
     public KernelActivation restartStartB(Terminal terminal, TransactionRequest data,
-            TransactionResult.Mutable result) throws Exception {
+            TransactionResultWriter result) throws Exception {
         if (currentIndex < 0 || currentIndex >= candidates.size()) {
             return null;
         }
@@ -160,7 +161,7 @@ public final class PpseSelection implements Selection {
 
     @Override
     public String select(Terminal terminal, TransactionRequest data,
-            TransactionResult.Mutable result) throws Exception {
+            TransactionResultWriter result) throws Exception {
         KernelActivation selected = activate(terminal, data, result);
         if (selected == null) {
             throw new EndApplicationException("SELECT of every Entry Point candidate failed");
@@ -170,7 +171,7 @@ public final class PpseSelection implements Selection {
 
     @Override
     public String reselect(Terminal terminal, TransactionRequest data,
-            TransactionResult.Mutable result) throws Exception {
+            TransactionResultWriter result) throws Exception {
         KernelActivation selected = activateNext(terminal, data, result);
         return selected == null ? null : selected.adfName;
     }
@@ -195,7 +196,7 @@ public final class PpseSelection implements Selection {
      * or null when the Candidate List is exhausted.
      */
     private KernelActivation selectNext(Terminal terminal, TransactionRequest data,
-            TransactionResult.Mutable result) throws Exception {
+            TransactionResultWriter result) throws Exception {
         while (nextIndex < candidates.size()) {
             EntryPoint.Candidate candidate = candidates.get(nextIndex++);
             // Extended Selection (Book B §3.3.3.3): append the Combination's

@@ -1,6 +1,7 @@
 package card42.host.emv.kernel.core;
 
 import card42.host.emv.lib.IssuerKey;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.lib.Terminal;
 import card42.host.emv.kernel.data.TransactionRequest;
 
@@ -19,7 +20,7 @@ public interface OdaVerifier {
      * Runs offline data authentication and writes the outcome to {@code result}
      * (TVR/TSI bits and the recovered issuer/ICC keys).
      */
-    void verify(Terminal terminal, TransactionRequest data, TransactionResult.Mutable result)
+    void verify(Terminal terminal, TransactionRequest data, TransactionResultWriter result)
             throws Exception;
 
     /**
@@ -30,7 +31,7 @@ public interface OdaVerifier {
      */
     byte[] verifyCda(byte[] responseData, byte[] cdol1Data, byte[] cdol2Data,
                      byte[] pdolData, byte[] unpredictableNumber, IssuerKey iccKey,
-                     int expectedCid, TransactionResult.Mutable result);
+                     int expectedCid, TransactionResultWriter result);
 
     /** Recovers the PIN-encipherment ICC key, or null when the data is absent. */
     IssuerKey recoverPinKey(Terminal terminal, IssuerKey issuer, byte[] transactionDate)

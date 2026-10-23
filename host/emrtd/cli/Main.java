@@ -3,6 +3,7 @@ package card42.host.emrtd.cli;
 import java.util.Arrays;
 
 import card42.host.common.cli.CliSupport;
+import card42.host.common.cli.CommandRegistry;
 import card42.host.emrtd.cli.command.EmrtdCommand;
 
 /**
@@ -25,6 +26,12 @@ public final class Main {
 
     private Main() {
     }
+
+    private static final CommandRegistry COMMANDS = new CommandRegistry()
+            .register("terminal", new CommandRegistry.Command() {
+                public int run(String[] a) throws Exception { return terminal(a); }
+                public void usage(java.io.PrintStream out) { EmrtdCommand.usage(out); }
+            });
 
     public static void main(String[] args) {
         int code = run(args);
@@ -60,29 +67,35 @@ public final class Main {
         case "-h":
         case "--help":
             return help(rest);
-        case "terminal":
-            if (rest.length == 0) {
-                EmrtdCommand.usage(System.err);
-                return CliSupport.EXIT_USAGE;
-            }
-            if ("-h".equals(rest[0]) || "--help".equals(rest[0])) {
-                EmrtdCommand.usage(System.out);
-                return CliSupport.EXIT_OK;
-            }
-            if ("emrtd".equals(rest[0])) {
-                if (rest.length == 1) {
-                    EmrtdCommand.usage(System.err);
-                    return CliSupport.EXIT_USAGE;
-                }
-                return EmrtdCommand.run(rest[1], Arrays.copyOfRange(rest, 2, rest.length));
-            }
-            System.err.println("usage: Main terminal emrtd <read|inspect|lds2|apdu|ta-export>");
-            return CliSupport.EXIT_USAGE;
         default:
+            Integer code = COMMANDS.dispatch(command, rest);
+            if (code != null) {
+                return code;
+            }
             System.err.println("Unknown command: " + command);
             usage(System.err);
             return CliSupport.EXIT_USAGE;
         }
+    }
+
+    private static int terminal(String[] rest) throws Exception {
+        if (rest.length == 0) {
+            EmrtdCommand.usage(System.err);
+            return CliSupport.EXIT_USAGE;
+        }
+        if ("-h".equals(rest[0]) || "--help".equals(rest[0])) {
+            EmrtdCommand.usage(System.out);
+            return CliSupport.EXIT_OK;
+        }
+        if ("emrtd".equals(rest[0])) {
+            if (rest.length == 1) {
+                EmrtdCommand.usage(System.err);
+                return CliSupport.EXIT_USAGE;
+            }
+            return EmrtdCommand.run(rest[1], Arrays.copyOfRange(rest, 2, rest.length));
+        }
+        System.err.println("usage: Main terminal emrtd <read|inspect|lds2|apdu|ta-export>");
+        return CliSupport.EXIT_USAGE;
     }
 
     /** {@code help [terminal] [emrtd] <read|inspect|lds2|apdu|ta-export>}. */

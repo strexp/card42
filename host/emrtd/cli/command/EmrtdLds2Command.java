@@ -19,6 +19,7 @@ import card42.host.emrtd.access.Pace;
 import card42.host.emrtd.lds.common.CardAccess;
 import card42.host.emrtd.lds.lds2.CertificateRecord;
 import card42.host.emrtd.lds.lds2.Lds2Record;
+import card42.host.emrtd.lds.lds2.Lds2VerificationView;
 import card42.host.emrtd.access.lds2.Lds2RecordWriter;
 import card42.host.emrtd.lds.common.LdsFileUtil;
 import card42.host.emrtd.pa.CscaKeyStore;
@@ -247,8 +248,19 @@ final class EmrtdLds2Command {
             Map<String, List<byte[]>> groups = readGroups(terminal, app, record);
             Map<String, List<Lds2Verifier.Verification>> verification =
                     Lds2Verifier.verifyGroups(terminal, groups, app, trust);
-            System.out.print(json ? PassportReport.lds2Json(cardAccess, groups, verification)
-                    : PassportReport.lds2Text(cardAccess, groups, verification));
+            Map<String, List<Lds2VerificationView>> views =
+                    new LinkedHashMap<String, List<Lds2VerificationView>>();
+            for (Map.Entry<String, List<Lds2Verifier.Verification>> group
+                    : verification.entrySet()) {
+                List<Lds2VerificationView> groupViews =
+                        new java.util.ArrayList<Lds2VerificationView>();
+                for (Lds2Verifier.Verification result : group.getValue()) {
+                    groupViews.add(result.view());
+                }
+                views.put(group.getKey(), groupViews);
+            }
+            System.out.print(json ? PassportReport.lds2Json(cardAccess, groups, views)
+                    : PassportReport.lds2Text(cardAccess, groups, views));
             return CliSupport.EXIT_OK;
         }
     }

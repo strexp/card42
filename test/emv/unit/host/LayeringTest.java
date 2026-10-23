@@ -74,6 +74,18 @@ final class LayeringTest {
                 }
             });
         }
+        Path report = host.resolve("emrtd/report");
+        try (Stream<Path> files = Files.walk(report)) {
+            files.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
+                try {
+                    if (Files.readString(p).contains("card42.host.emrtd.pa")) {
+                        violations.add(p + ": report must not depend on pa");
+                    }
+                } catch (Exception e) {
+                    violations.add(p + " (unreadable)");
+                }
+            });
+        }
         Asserts.check(violations.isEmpty(), "module layering violations: " + violations);
     }
 

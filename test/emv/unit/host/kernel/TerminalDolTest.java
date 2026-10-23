@@ -3,6 +3,7 @@ package card42.test;
 import java.util.Arrays;
 import card42.host.common.util.Hex;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.data.TerminalConfig;
 import card42.host.emv.kernel.data.TerminalDol;
 import card42.host.emv.kernel.data.TransactionRequest;
@@ -24,7 +25,7 @@ final class TerminalDolTest {
                 .terminalType(0x22)
                 .build();
         TransactionRequest data = new TransactionRequest(config);
-        TransactionResult.Mutable result = new TransactionResult.Mutable();
+        TransactionResultWriter result = TransactionResult.newWriter();
         byte[] dol = Hex.parse("9F66 04 9F35 01 9F02 06 9F37 04");
         Asserts.eq(15, TerminalDol.dolDataLength(dol), "DOL data length");
         byte[] built = TerminalDol.buildDolData(data, result, dol);

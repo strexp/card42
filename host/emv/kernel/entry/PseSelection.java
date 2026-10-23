@@ -9,6 +9,7 @@ import card42.host.common.codec.Tags;
 import card42.host.emv.kernel.core.ConfirmationProvider;
 import card42.host.emv.kernel.core.Selection;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.lib.Terminal;
 import card42.host.common.util.Hex;
@@ -51,7 +52,7 @@ public final class PseSelection implements Selection {
     }
 
     @Override
-    public String select(Terminal terminal, TransactionRequest data, TransactionResult.Mutable result)
+    public String select(Terminal terminal, TransactionRequest data, TransactionResultWriter result)
             throws Exception {
         remaining.clear();
         ResponseAPDU pse = terminal.select(PSE_AID);
@@ -94,13 +95,13 @@ public final class PseSelection implements Selection {
     }
 
     @Override
-    public String reselect(Terminal terminal, TransactionRequest data, TransactionResult.Mutable result)
+    public String reselect(Terminal terminal, TransactionRequest data, TransactionResultWriter result)
             throws Exception {
         return selectNext(terminal, data, result);
     }
 
     /** Tries the next candidate and returns its DF Name, or null when none remains. */
-    private String selectNext(Terminal terminal, TransactionRequest data, TransactionResult.Mutable result)
+    private String selectNext(Terminal terminal, TransactionRequest data, TransactionResultWriter result)
             throws Exception {
         while (!remaining.isEmpty()) {
             String aid = remaining.remove(0);

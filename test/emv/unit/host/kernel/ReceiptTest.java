@@ -3,6 +3,7 @@ package card42.test;
 import java.nio.charset.StandardCharsets;
 
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.data.TerminalConfig;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.report.Receipt;
@@ -33,7 +34,7 @@ final class ReceiptTest {
         data.transactionDate = Hex.parse("260925");
         data.transactionTime = Hex.parse("120000");
 
-        TransactionResult.Mutable result = new TransactionResult.Mutable();
+        TransactionResultWriter result = TransactionResult.newWriter();
         result.aidHex("43415244420101");
         result.putRecord((1 << 8) | 1, Hex.parse("70 07 5A 05 12 34 56 78 90"));
         result.cvmResults(Hex.parse("010002"));

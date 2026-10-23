@@ -12,6 +12,7 @@ import card42.host.emv.lib.TagPolicy;
 import card42.host.common.codec.Tags;
 import card42.host.emv.cli.command.TlvDump;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.data.TerminalConfig;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.kernel.data.TerminalDol;
@@ -128,7 +129,7 @@ public final class TerminalInspectCommand {
                 TerminalConfig config = contact
                         ? TerminalConfig.forContact().build() : TerminalConfig.builder().build();
                 TransactionRequest data = new TransactionRequest(config);
-                TransactionResult.Mutable result = new TransactionResult.Mutable();
+                TransactionResultWriter result = TransactionResult.newWriter();
                 // ODA writes the TVR/TSI through the result; the kernel
                 // initializes them in TransactionFlow.beginTransaction.
                 result.tvr(Tvr.blank()).tsi(Tsi.blank());

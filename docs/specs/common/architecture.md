@@ -145,7 +145,7 @@ host/emv/       card42.host.emv：
                 CaKeyProfile（CA 公钥环）（离线 SDA 生成器 Sda/SdaKeys 见 app/perso）
   kernel/       TerminalKernel / ContactKernel / ContactlessKernel 共享 TransactionFlow /
                 AflSyntax（AFL 语法校验）/ ArcCodes（CID/ARC 解码）
-    core/       TransactionResult（只读，内核经 Mutable 写）/ Outcome / Decision / Selection /
+    core/       TransactionResult（读视图；内核经 TransactionResultWriter 写）/ Outcome / Selection /
                 OdaVerifier（ODA 抽象，注入 TransactionFlow）/ CvmPerformer（CVM 抽象，
                 注入 TransactionFlow）/ Issuer / Authorization /
                 KernelListener / KernelException +
@@ -180,11 +180,13 @@ host/emrtd/     card42.host.emrtd：transport/EmrtdTerminal；
                 access/（LdsReader（LDS 读文件 I/O）/ MrzKeySeed / Bac / Iso7816Sm /
                 Iso7816SmAes / SecureMessaging / ChipAuth / Pace）；
                 access/lds2/（Lds2RecordWriter / Lds2CertificateStore）；
-                pa/（CscaKeyStore / DscVerifier / PassiveAuthentication / Lds2Verifier）；
+                pa/（CscaKeyStore / DscVerifier / PassiveAuthentication / Lds2Verifier /
+                Lds2CertificateProfile / Lds2RecordVerifier）；
                 aa/ActiveAuthentication；perso/（SodBuilder / Dg2Builder /
                 CardSecurityBuilder / LdsScript）；tools/（EmrtdPersoExporter /
                 SampleData（样例 DG/密钥数据）/ TaChain（demo CVCA 链））；
-                report/PassportReport；cli/（Main / EmrtdCommand）
+                report/PassportReport（渲染使用 lds2/Lds2VerificationView，不依赖 pa）；
+                cli/（Main / EmrtdCommand；公共 CommandRegistry 注册命令）
 test/           测试（package card42.test，目录为功能分组而非包）
   common/       fixtures/TestKeys（示例 CA/SDA 密钥 + SdaKeys 档案 + CaKeyStore）；
                 stubs/（javacard.framework / javacard.security / javacardx.crypto 极小桩）
@@ -251,7 +253,7 @@ GET RESPONSE（SunPCSC 会沿用触发命令的 CLA，严格卡以 `6E00` 拒绝
 - **输入**：`TerminalConfig`（不可变，终端常驻：身份/能力/TAC/限额/CVM 支持/exception file，
   `forContact()`/`builder()` 构造）由 `TransactionRequest` 引用；`TransactionRequest` 承载每笔
   金额/币种/日期时间/类型/UN、选中的 `9F06` 与 `9F41`，是唯一被内核改写的输入对象。
-- **输出**：`TransactionResult` 字段只读（getter）；内核经 `TransactionResult.Mutable` 写入。该嵌套类目前是 public（kernel SPI），第三方调用方应只读，见 HOST-09。
+- **输出**：`TransactionResult` 由 `TransactionData`/`TransactionOda`/`TransactionCvm`/`TransactionCryptogram`/`TransactionOnline` 读视图组成；内核经 `TransactionResultWriter` 写入，具体实现 `MutableTransactionResult` 为 package-private，第三方调用方只依赖读接口。`Responses.AcResponse` 为不可变值对象。
   提供 `decision()`（`Decision`：APPROVE/DECLINE/ONLINE/END_APPLICATION，综合接触 Book 4
   §6.3.2 终端决策与非接触 Book A Table 6-1 Outcome）与 `record()`/`firstValue(tag)`。交易态
   一律从结果读，不写回 `TransactionRequest`。

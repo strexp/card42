@@ -17,12 +17,19 @@ public final class Responses {
     private Responses() {
     }
 
-    /** The parsed fields of a format 1 or format 2 GENERATE AC response. */
+    /** Immutable parsed fields of a format 1 or format 2 GENERATE AC response. */
     public static final class AcResponse {
-        public byte cid;
-        public int atc;
-        public byte[] ac;
-        public byte[] iad;
+        public final byte cid;
+        public final int atc;
+        public final byte[] ac;
+        public final byte[] iad;
+
+        public AcResponse(byte cid, int atc, byte[] ac, byte[] iad) {
+            this.cid = cid;
+            this.atc = atc;
+            this.ac = ac == null ? null : ac.clone();
+            this.iad = iad == null ? null : iad.clone();
+        }
     }
 
     /**
@@ -32,22 +39,19 @@ public final class Responses {
      */
     public static AcResponse parseAc(ResponseAPDU r) {
         byte[] data = r.getData();
-        AcResponse out = new AcResponse();
         if (data.length > 0 && (data[0] & 0xFF) == 0x77) {
             byte[] cid = Tags.find(data, 0x9F27);
             byte[] atc = Tags.find(data, 0x9F36);
-            out.ac = Tags.find(data, 0x9F26);
-            out.iad = Tags.find(data, 0x9F10);
-            out.cid = cid != null ? cid[0] : 0;
-            out.atc = atc != null ? (((atc[0] & 0xFF) << 8) | (atc[1] & 0xFF)) : 0;
-        } else {
-            // Format 1: 80 LL CID ATC AC IAD.
-            out.cid = data[2];
-            out.atc = ((data[3] & 0xFF) << 8) | (data[4] & 0xFF);
-            out.ac = Arrays.copyOfRange(data, 5, Math.min(13, data.length));
-            out.iad = Arrays.copyOfRange(data, 13, data.length);
+            byte cidValue = cid != null ? cid[0] : 0;
+            int atcValue = atc != null
+                    ? (((atc[0] & 0xFF) << 8) | (atc[1] & 0xFF)) : 0;
+            return new AcResponse(cidValue, atcValue,
+                    Tags.find(data, 0x9F26), Tags.find(data, 0x9F10));
         }
-        return out;
+        // Format 1: 80 LL CID ATC AC IAD.
+        return new AcResponse(data[2], ((data[3] & 0xFF) << 8) | (data[4] & 0xFF),
+                Arrays.copyOfRange(data, 5, Math.min(13, data.length)),
+                Arrays.copyOfRange(data, 13, data.length));
     }
 
     /** The CID of a format 1 or format 2 GENERATE AC response. */

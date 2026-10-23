@@ -14,6 +14,7 @@ import card42.host.emv.kernel.core.PinProvider;
 import card42.host.emv.kernel.core.SignatureProvider;
 import card42.host.emv.kernel.core.TransactionException;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.core.TransportException;
 import card42.host.emv.kernel.cvm.CombinedPinSignatureCvm;
 import card42.host.emv.kernel.cvm.CompositeCvmPerformer;
@@ -115,7 +116,7 @@ public final class ContactKernel implements TerminalKernel {
             OfflineDataAuthentication oda =
                     new OfflineDataAuthentication(reporter, caKeyStore);
             TransactionFlow flow = new TransactionFlow(reporter, random, oda, listener);
-            TransactionResult.Mutable result = new TransactionResult.Mutable();
+            TransactionResultWriter result = TransactionResult.newWriter();
             OfflinePinCvm offline = new OfflinePinCvm(pinProvider, terminal, request,
                     result, oda);
             SignatureCvm signature = signatureProvider == null

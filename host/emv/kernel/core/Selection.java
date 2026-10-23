@@ -1,6 +1,7 @@
 package card42.host.emv.kernel.core;
 
 import card42.host.emv.kernel.data.TransactionRequest;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.lib.Terminal;
 
 /**
@@ -17,7 +18,7 @@ public interface Selection {
      *
      * @throws Exception when no supported application can be selected
      */
-    String select(Terminal terminal, TransactionRequest data, TransactionResult.Mutable result)
+    String select(Terminal terminal, TransactionRequest data, TransactionResultWriter result)
             throws Exception;
 
     /**
@@ -30,6 +31,6 @@ public interface Selection {
      *
      * @return the next ADF Name in hex, or null when no candidate remains
      */
-    String reselect(Terminal terminal, TransactionRequest data, TransactionResult.Mutable result)
+    String reselect(Terminal terminal, TransactionRequest data, TransactionResultWriter result)
             throws Exception;
 }

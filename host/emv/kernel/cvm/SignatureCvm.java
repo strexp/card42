@@ -4,6 +4,7 @@ import card42.host.emv.kernel.data.Cvm;
 import card42.host.emv.kernel.core.CvmPerformer;
 import card42.host.emv.kernel.core.SignatureProvider;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 
 /**
  * Signature CVM performer (EMV v4.4 Book 3 §10.5, Book 4 Table 2).
@@ -17,9 +18,9 @@ import card42.host.emv.kernel.core.TransactionResult;
 public final class SignatureCvm implements CvmPerformer {
 
     private final SignatureProvider provider;
-    private final TransactionResult.Mutable result;
+    private final TransactionResultWriter result;
 
-    public SignatureCvm(SignatureProvider provider, TransactionResult.Mutable result) {
+    public SignatureCvm(SignatureProvider provider, TransactionResultWriter result) {
         this.provider = provider;
         this.result = result;
     }

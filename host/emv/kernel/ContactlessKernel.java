@@ -10,6 +10,7 @@ import card42.host.emv.kernel.core.KernelListener;
 import card42.host.emv.kernel.core.Outcome;
 import card42.host.emv.kernel.core.TransactionException;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.core.TransportException;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.kernel.entry.CombinationTable;
@@ -103,7 +104,7 @@ public final class ContactlessKernel implements TerminalKernel {
         try {
             TransactionFlow flow = new TransactionFlow(reporter, random,
                     new OfflineDataAuthentication(reporter, caKeyStore), listener);
-            TransactionResult.Mutable result = new TransactionResult.Mutable();
+            TransactionResultWriter result = TransactionResult.newWriter();
             EntryPointConfiguration effective = config != null
                     ? config : EntryPointConfiguration.from(request.config);
             PpseSelection selection = new PpseSelection(table, effective, listener);

@@ -7,6 +7,7 @@ import card42.host.emv.kernel.core.CvmPerformer;
 import card42.host.emv.kernel.core.OnlinePinProvider;
 import card42.host.emv.kernel.core.SignatureProvider;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.cvm.CombinedPinSignatureCvm;
 import card42.host.emv.kernel.cvm.CompositeCvmPerformer;
 import card42.host.emv.kernel.cvm.OnlinePinCvm;
@@ -39,7 +40,7 @@ final class OnlinePinSignatureCvmTest {
         // Online PIN: the performer captures and encrypts, stores the block and
         // sets 'Online PIN entered' with an 'unknown' result.
         TransactionRequest data = contact();
-        TransactionResult.Mutable result = withPan("1234567890123456");
+        TransactionResultWriter result = withPan("1234567890123456");
         final byte[][] encrypted = new byte[1][];
         OnlinePinProvider provider = new OnlinePinProvider() {
             @Override
@@ -77,7 +78,7 @@ final class OnlinePinSignatureCvmTest {
 
         // Without a PAN the format 0 block cannot be built.
         data = contact();
-        result = new TransactionResult.Mutable().tvr(Tvr.blank());
+        result = TransactionResult.newWriter().tvr(Tvr.blank());
         online = new OnlinePinCvm(pinProvider("1234", Hex.parse("0011223344556677")),
                 data, result);
         Asserts.eq(Cvm.RESULT_FAILED, online.perform(Cvm.CVM_ONLINE_PIN, 0),
@@ -95,7 +96,7 @@ final class OnlinePinSignatureCvmTest {
                 "online PIN without a key sets PIN pad not present");
 
         // Signature: a captured signature reports 'unknown'; a refusal fails.
-        result = new TransactionResult.Mutable();
+        result = TransactionResult.newWriter();
         SignatureCvm signature = new SignatureCvm(signatureProvider(Hex.parse("AABB")),
                 result);
         Asserts.check(signature.supports(Cvm.CVM_SIGNATURE), "signature supported");
@@ -103,13 +104,13 @@ final class OnlinePinSignatureCvmTest {
                 "signature result is unknown");
         Asserts.bytes(Hex.parse("AABB"), result.signature(), "captured signature exposed");
         Asserts.eq(Cvm.RESULT_FAILED,
-                new SignatureCvm(signatureProvider(null), new TransactionResult.Mutable())
+                new SignatureCvm(signatureProvider(null), TransactionResult.newWriter())
                         .perform(Cvm.CVM_SIGNATURE, 0),
                 "refused signature fails");
 
         // Combined '03': the PIN runs first and the signature only on success.
         SignatureCvm signatureOk = new SignatureCvm(signatureProvider(Hex.parse("AABB")),
-                new TransactionResult.Mutable());
+                TransactionResult.newWriter());
         CvmPerformer pinOk = pinStub(Cvm.CVM_PLAINTEXT_PIN_ICC,
                 Cvm.RESULT_SUCCESSFUL);
         CombinedPinSignatureCvm combined = new CombinedPinSignatureCvm(pinOk, signatureOk);
@@ -127,7 +128,7 @@ final class OnlinePinSignatureCvmTest {
                 "combined fails when the PIN fails");
         Asserts.eq(Cvm.RESULT_FAILED,
                 new CombinedPinSignatureCvm(pinOk,
-                        new SignatureCvm(signatureProvider(null), new TransactionResult.Mutable()))
+                        new SignatureCvm(signatureProvider(null), TransactionResult.newWriter()))
                         .perform(Cvm.CVM_PLAINTEXT_PIN_SIGNATURE, 0),
                 "combined fails when the signature is refused");
 
@@ -167,8 +168,8 @@ final class OnlinePinSignatureCvmTest {
     }
 
     /** A mutable result carrying record 1 with a PAN (tag 5A) and a blank TVR. */
-    private static TransactionResult.Mutable withPan(String panHex) {
-        TransactionResult.Mutable result = new TransactionResult.Mutable();
+    private static TransactionResultWriter withPan(String panHex) {
+        TransactionResultWriter result = TransactionResult.newWriter();
         result.putRecord(1, concat(Hex.parse("700A5A08"), Hex.parse(panHex)));
         result.tvr(Tvr.blank()).tsi(new byte[2]);
         return result;

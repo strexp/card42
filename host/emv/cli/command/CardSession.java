@@ -13,6 +13,7 @@ import card42.host.emv.crypto.AcCrypto;
 import card42.host.emv.kernel.data.TerminalDol;
 import card42.host.emv.crypto.ScriptSession;
 import card42.host.emv.kernel.core.TransactionResult;
+import card42.host.emv.kernel.core.TransactionResultWriter;
 import card42.host.emv.kernel.data.TerminalConfig;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.lib.Responses;
@@ -68,7 +69,7 @@ final class CardSession {
         ResponseAPDU sel = terminal.select(aid);
         if (sel.getSW() == 0x9000) {
             TransactionRequest data = new TransactionRequest(TerminalConfig.forContact().build());
-            TransactionResult.Mutable result = new TransactionResult.Mutable();
+            TransactionResultWriter result = TransactionResult.newWriter();
             data.applicationIdentifier = Hex.parse(aid);
             byte[] pdol = TagPolicy.findIcc(sel.getData(), 0x9F38);
             byte[] pdolData = TerminalDol.buildDolData(data, result,
