@@ -44,6 +44,23 @@ public final class LdsReader {
     }
 
     /**
+     * READ RECORD(S) in the "all records from P1 up to the last" form
+     * (P2 b2b1 = 01, Doc 9303-10 §3.7.2 Table 13) and returns the concatenated
+     * response.  The extended Le asks the card for the whole sequence; a
+     * response that ends on a record boundary contains complete records, while
+     * the last record may be truncated at the card's response-buffer limit.
+     */
+    public static byte[] readRecordSequence(EmrtdTerminal terminal, int sfi, int first)
+            throws Exception {
+        ResponseAPDU r = terminal.readRecord(sfi, first, true, RECORD_LE);
+        if (r.getSW() != 0x9000) {
+            throw new IllegalStateException("READ RECORD(S) from " + first + " failed: "
+                    + Sw.format(r.getSW()));
+        }
+        return r.getData();
+    }
+
+    /**
      * Reads every record of the selected LDS2 record EF from {@code first},
      * one record at a time, until the card reports 6A83 (record not found).
      */

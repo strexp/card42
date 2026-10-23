@@ -294,9 +294,12 @@ eMRTD 真卡：`card-emrtd-install` 创建的 LDS1 实例带 GP `CardReset` 权�
   - eMRTD `test/emrtd/integration/`：`EmrtdBacTest`（SELECT + AA + BAC + SM 读 DG1/DG2/COM/DG15/SOD
     + PA）、`EmrtdLds2IntegrationTest`（LDS2 Travel 记录 + CardAccess）、
     `EmrtdLds2AppsIntegrationTest`（LDS2 Visa/Additional Biometrics）、
-    `EmrtdLds2CliIntegrationTest`（`lds2` PACE→CA→TA + 多记录 EF）、
-    `EmrtdLds2WriteIntegrationTest`（结构化签名 + APPEND + 验签）、`EmrtdPaceIntegrationTest`
-    （PACE 3DES/AES-128）、`EmrtdChipAuthIntegrationTest`（Chip Authentication ECDH）。
+    `EmrtdLds2WriteIntegrationTest`（结构化签名 + APPEND + 验签）、
+    `EmrtdLds2OpsIntegrationTest`（FMM / SEARCH / READ all / UPDATE+ACTIVATE / Exit/Visa/Cert 写入）、
+    `EmrtdLds2AlgorithmsIntegrationTest`（LDS2 PACE/CA AES-128、PACE-CAN、TA RSA-PSS）、
+    `EmrtdLds2CliIntegrationTest`（`lds2` PACE→CA→TA + 多记录 EF + `-append`）、
+    `EmrtdPaceIntegrationTest`（PACE 3DES/AES-128）、`EmrtdChipAuthIntegrationTest`
+    （Chip Authentication ECDH）。
   - suite 与介质无关：`-host=socket:...` 打模拟器（`make test-emv-sim` / `test-emv-sim-run` /
     `test-emrtd-sim` / `test-both-sim`），`-host=pcsc` 打 PC/SC 真卡（`make test-emv-card S=<Suite>`）；
     eMRTD 真卡用 `make test-emrtd-card`（全部 `EMRTD_SUITES`）或

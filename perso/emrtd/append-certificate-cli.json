@@ -1,0 +1,5 @@
+{
+  "type": "certificate",
+  "country": "US",
+  "certificateFile": "perso/emrtd/lds2-cli.crt"
+}

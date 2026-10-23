@@ -111,10 +111,16 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
     public final short unwrap(byte[] ksEnc, byte[] ksMac, byte[] ssc,
                               byte[] apdu, short dataOff, short dataLen,
                               byte[] out, short outOff) {
+        return unwrap(ksEnc, ksMac, ssc, apdu, dataOff, dataLen, out, outOff,
+                SmScratch.get());
+    }
+
+    public final short unwrap(byte[] ksEnc, byte[] ksMac, byte[] ssc,
+                              byte[] apdu, short dataOff, short dataLen,
+                              byte[] out, short outOff, byte[] scratch) {
         increment(ssc);
         prepareSsc(ssc);
         leState[0] = -1;
-        byte[] scratch = SmScratch.get();
 
         short do87Start = -1;
         short do87Val = -1;

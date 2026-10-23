@@ -51,6 +51,7 @@ final class EmrtdCommandTest {
         searchRecordFileReference();
         searchRecordErrors();
         fileMemoryManagement();
+        readRecordAll();
         updateBinary();
         activate();
         paceRequired();
@@ -285,6 +286,41 @@ final class EmrtdCommandTest {
                 () -> Lds2Record.fileMemoryManagement(applet, (byte) 0x01, (byte) 0x04,
                         unknown, (short) 0, (short) unknown.length),
                 "FMM unknown file reference -> 6A82");
+    }
+
+    // --- READ RECORD all (Doc 9303-10 §3.7.2) -------------------------------
+
+    /**
+     * P2 b2b1 = '01' reads all records from P1 up to the last (Table 13); the
+     * response starts at P1 and is not bounded by the first record's length.
+     * P1 = '00' then references the current record, which read-all advances to
+     * the last record returned.
+     */
+    private static void readRecordAll() throws Exception {
+        EmrtdApplet applet = travelApplet();
+        append(applet, "5F440101");
+        append(applet, "5F44020203");
+
+        byte[] both = Hex.parse("5F4401015F44020203");
+        short n = Lds2Record.readRecord(applet, (byte) 0x01, (byte) 0x05, (short) 20);
+        Asserts.eq(both.length, n, "READ RECORD all returns the whole sequence");
+        Asserts.bytes(both, java.util.Arrays.copyOf(response(applet), n),
+                "READ RECORD all from record 1");
+
+        n = Lds2Record.readRecord(applet, (byte) 0x02, (byte) 0x05, (short) 20);
+        Asserts.bytes(Hex.parse("5F44020203"),
+                java.util.Arrays.copyOf(response(applet), n),
+                "READ RECORD all from record 2 returns the last record");
+
+        n = Lds2Record.readRecord(applet, (byte) 0x00, (byte) 0x04, (short) 20);
+        Asserts.eq(5, n, "READ RECORD P1=00 returns the current record");
+        Asserts.bytes(Hex.parse("5F44020203"),
+                java.util.Arrays.copyOf(response(applet), n),
+                "read-all advanced the current record to the last one");
+
+        Asserts.sw((short) 0x6A83,
+                () -> Lds2Record.readRecord(applet, (byte) 0x03, (byte) 0x05, (short) 20),
+                "READ RECORD all beyond the last record -> 6A83");
     }
 
     // --- UPDATE BINARY (Doc 9303-10 §3.8.1) ---------------------------------

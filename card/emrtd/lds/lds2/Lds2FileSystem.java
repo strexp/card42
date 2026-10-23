@@ -13,8 +13,9 @@ import javacard.framework.ISOException;
  * record EF.  EF.CardAccess/EF.CardSecurity are master-file files, not part of
  * a DF: they live in {@link LdsMfStore} and are shared by every application.
  *
- * The files carry no fixed per-file budget: each grows on demand up to the
- * protocol maximum {@link EmrtdTags#MAX_EF_BYTES}, so a write past that is
+ * Transparent EFs grow on demand up to the protocol maximum
+ * {@link EmrtdTags#MAX_EF_BYTES}; record EFs use a fixed pool (per-record and
+ * total capacities from Doc 9303-10 §5), so an APPEND past either limit is
  * refused with 6A84.
  *
  * @author card42
@@ -42,7 +43,7 @@ public final class Lds2FileSystem {
         return new Lds2FileSystem(
                 new Lds2TransparentFile[0],
                 new Lds2RecordFile[] {
-                    new Lds2RecordFile(EmrtdTags.FID_CERTIFICATES, (short) 1024, (short) 254, (short) 900),
+                    new Lds2RecordFile(EmrtdTags.FID_CERTIFICATES, (short) 2048, (short) 254, (short) 900),
                     new Lds2RecordFile(EmrtdTags.FID_RECORDS, (short) 2048, (short) 254, (short) 640),
                     new Lds2RecordFile(EmrtdTags.FID_EXIT_RECORDS, (short) 2048, (short) 254, (short) 640) });
     }
@@ -52,7 +53,7 @@ public final class Lds2FileSystem {
         return new Lds2FileSystem(
                 new Lds2TransparentFile[0],
                 new Lds2RecordFile[] {
-                    new Lds2RecordFile(EmrtdTags.FID_CERTIFICATES, (short) 1024, (short) 254, (short) 900),
+                    new Lds2RecordFile(EmrtdTags.FID_CERTIFICATES, (short) 2048, (short) 254, (short) 900),
                     new Lds2RecordFile(EmrtdTags.FID_VISA_RECORDS, (short) 2048, (short) 254, (short) 640) });
     }
 

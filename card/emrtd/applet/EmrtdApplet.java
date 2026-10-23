@@ -312,9 +312,9 @@ public final class EmrtdApplet extends AppletBase
         // complete there, exactly as before extended-command support, so no RAM
         // scratch is touched per chunk.  Only an extended-length command whose
         // secure-messaging envelope exceeds the JCRE buffer is assembled in
-        // several chunks into EmrtdScratch.raw; the 4 header bytes stay at
-        // offset 0 (the SM unwrap reads CLA/INS/P1/P2 there) and the data
-        // starts at offset 4.
+        // several chunks into EmrtdScratch.raw (or the LDS2 record buffer for a
+        // near-900-byte APPEND); the 4 header bytes stay at offset 0 (the SM
+        // unwrap reads CLA/INS/P1/P2 there) and the data starts at offset 4.
         // (APDU.waitExtension must come after the last receiveBytes: the J3R180
         // rejects receiveBytes once a wait-extension has been requested.)
         byte[] cmd;
@@ -333,9 +333,27 @@ public final class EmrtdApplet extends AppletBase
         short dataLen;
         short le;
         if (smActive) {
-            data = plain;
+            // The 512-byte io buffer is enough for every short command and the
+            // RSA-1024 Terminal Authentication PSO.  An LDS2 APPEND of a nearly
+            // 900-byte EF.Certificates record needs both a matching plaintext
+            // buffer and a matching MAC-input scratch; recordEnvelope (LDS2
+            // roles only) is free between the unwrap and the response wrap.
+            byte[] commandPlain = plain;
+            byte[] commandScratch = null;
+            if (EmrtdScratch.recordEnvelope != null
+                    && rawLen > (short) (SmScratch.capacity() - 32)) {
+                commandScratch = EmrtdScratch.recordEnvelope;
+                if (rawLen > (short) plain.length) {
+                    commandPlain = commandScratch;
+                }
+            }
+            data = commandPlain;
             dataOff = 0;
-            dataLen = sm.unwrap(ksEnc, ksMac, ssc, cmd, cmdOff, rawLen, plain, (short) 0);
+            dataLen = commandScratch == null
+                    ? sm.unwrap(ksEnc, ksMac, ssc, cmd, cmdOff, rawLen,
+                            commandPlain, (short) 0)
+                    : sm.unwrap(ksEnc, ksMac, ssc, cmd, cmdOff, rawLen,
+                            commandPlain, (short) 0, commandScratch);
             le = sm.getLe();
         } else {
             data = cmd;
@@ -441,15 +459,26 @@ public final class EmrtdApplet extends AppletBase
 
     /**
      * Receives an extended-length command into the shared scratch
-     * ({@link EmrtdScratch#raw}) and returns it.  The first
+     * ({@link EmrtdScratch#raw}, or the LDS2 large-record buffer when the
+     * command is too large for it) and returns it.  The first
      * {@code getIncomingLength()} bytes after the 4 header bytes are the data.
      * Called only when the command does not fit the JCRE buffer (e.g. a command
      * whose secure-messaging envelope exceeds it); the remainder is pulled with
      * {@code receiveBytes}.
+     *
+     * <p>The 512-byte {@code raw} buffer covers the Terminal Authentication
+     * PSO body (an RSA-1024 chain).  An LDS2 APPEND of a nearly 900-byte
+     * EF.Certificates record wraps to ~930 bytes, so LDS2 roles fall back to
+     * {@link EmrtdScratch#record}; the two uses never overlap (the command is
+     * unwrapped into {@code recordEnvelope} or {@code io} before a handler can
+     * select the large response buffer).
      */
     private static byte[] receiveExtended(APDU apdu, byte[] apduBuffer, short cdataOff,
                                           short firstChunk, short lc) {
         byte[] target = EmrtdScratch.raw;
+        if (target == null || lc < 0 || (short) (lc + 4) > (short) target.length) {
+            target = EmrtdScratch.record;
+        }
         if (target == null || lc < 0 || (short) (lc + 4) > (short) target.length) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }

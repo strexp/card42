@@ -63,12 +63,30 @@ public final class EmrtdTerminal {
     }
 
     /**
+     * SEARCH RECORD (A2): P1='00', P2='F8' (search through multiple EFs); the
+     * data field is the Record handling DO'7F76' (Doc 9303-10 §3.7.3 Table 14/
+     * 16/17).
+     */
+    public ResponseAPDU searchRecord(byte[] data) throws Exception {
+        return transmit(0x00, 0xA2, 0x00, 0xF8, data, 0);
+    }
+
+    /**
      * UPDATE BINARY for an LDS2 Additional Biometrics transparent EF
      * (Doc 9303-10 §3.8): the command data is {@code 54 offset || 53 data
      * [|| C0 size]}.  The caller selects the EF first.
      */
     public ResponseAPDU updateBinary(byte[] data) throws Exception {
         return transmit(0x00, 0xD7, 0x00, 0x00, data, 0);
+    }
+
+    /**
+     * UPDATE BINARY with the proprietary File Size DO'C0'.  Doc 9303-10
+     * §3.8.1 Table 18 requires CLA bit 8 set ('8C') when DO'C0' is present;
+     * the secure-messaging layer ORs its own bits into the class byte.
+     */
+    public ResponseAPDU updateBinaryWithSize(byte[] data) throws Exception {
+        return transmit(0x80, 0xD7, 0x00, 0x00, data, 0);
     }
 
     /** ACTIVATE (44) an LDS2 Additional Biometrics transparent EF. */
@@ -184,7 +202,11 @@ public final class EmrtdTerminal {
             return base.transmit(command);
         }
         byte[] wrapped = sm.wrapCommand(cla, ins, p1, p2, data, le);
-        CommandAPDU command = new CommandAPDU(0x0C, ins, p1, p2, wrapped, outerLe);
+        // The card recomputes the MAC over CLA | 0x0C.  The outer header must
+        // carry the same class byte, including the proprietary bit 8 used by
+        // UPDATE BINARY with DO'C0' (Doc 9303-10 §3.8.1 Table 18: CLA '8C').
+        int smCla = (cla | 0x0C) & 0xFF;
+        CommandAPDU command = new CommandAPDU(smCla, ins, p1, p2, wrapped, outerLe);
         ResponseAPDU raw = base.transmit(command);
         short[] sw = new short[1];
         byte[] plain;

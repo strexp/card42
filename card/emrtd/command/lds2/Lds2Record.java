@@ -83,17 +83,36 @@ public final class Lds2Record {
         // part of the record rather than an error.
         short requested = le;
         boolean extended = requested == EXTENDED_LE || requested < 0;
-        if (extended) {
-            requested = EmrtdScratch.record != null
-                    ? (short) EmrtdScratch.record.length : RESPONSE_MAX;
-        }
-        short recordLength = file.recordLength(number);
-        short max = requested < recordLength ? requested : recordLength;
+        boolean all = (p2 & 0x03) == 0x01;
         short shortCap = applet.sm.maxResponseData();
+        short max;
+        if (all) {
+            // Read all records from P1 up to the last (Doc 9303-10 §3.7.2
+            // Table 13, P2 b2b1 = 01).  Extended Le asks for the whole
+            // sequence, so it is bounded by the large-record buffer and not by
+            // the first record's length.  A legacy short Le keeps the old
+            // short-APDU window.
+            if (extended) {
+                max = EmrtdScratch.record != null
+                        ? (short) EmrtdScratch.record.length : RESPONSE_MAX;
+            } else {
+                max = requested > RESPONSE_MAX ? RESPONSE_MAX : requested;
+                if (max > shortCap) {
+                    max = shortCap;
+                }
+            }
+        } else {
+            if (extended) {
+                requested = EmrtdScratch.record != null
+                        ? (short) EmrtdScratch.record.length : RESPONSE_MAX;
+            }
+            short recordLength = file.recordLength(number);
+            max = requested < recordLength ? requested : recordLength;
+        }
         if (max > shortCap && EmrtdScratch.record != null
                 && max <= (short) EmrtdScratch.record.length) {
             applet.activeResponse = EmrtdScratch.record;
-            if ((p2 & 0x03) == 0x01) {
+            if (all) {
                 return file.readRecords(number, EmrtdScratch.record, (short) 0, max);
             }
             return file.readRecord(number, EmrtdScratch.record, (short) 0, max);
@@ -107,7 +126,7 @@ public final class Lds2Record {
         if (max > shortCap) {
             max = shortCap;
         }
-        if ((p2 & 0x03) == 0x01) {
+        if (all) {
             return file.readRecords(number, applet.response, (short) 0, max);
         }
         return file.readRecord(number, applet.response, (short) 0, max);

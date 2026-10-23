@@ -95,6 +95,11 @@ final class SmScratch {
         }
     }
 
+    /** The capacity of the shared framing scratch in bytes. */
+    static short capacity() {
+        return SIZE;
+    }
+
     /** The shared framing scratch array, allocated on first use. */
     static byte[] get() {
         byte[] b = buffer;

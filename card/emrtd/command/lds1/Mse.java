@@ -84,6 +84,16 @@ public final class Mse {
                     applet.caEnc, (short) 0, applet.caMac, (short) 0);
             applet.caPending = true;
             applet.caAes = applet.chipAuth.isAes();
+            if (applet.ta != null) {
+                // CA v1 with AES carries the terminal ephemeral key in DO'80'
+                // of GENERAL AUTHENTICATE; record Comp(PKDH,IFD) for the TA
+                // EXTERNAL AUTHENTICATE signature input, exactly as the 3DES
+                // MSE:Set KAT path does.
+                short[] result = FIND;
+                if (Tlv.find(data, off, len, EmrtdTags.DO_PACE_NONCE, result)) {
+                    applet.ta.noteTerminalEphemeral(data, result[0], result[1]);
+                }
+            }
             return 0;
         }
         return applet.pace.generalAuthenticate(applet, data, off, len, applet.response);

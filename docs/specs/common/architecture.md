@@ -199,12 +199,14 @@ test/           测试（package card42.test，目录为功能分组而非包）
   emrtd/unit/   card/（EmrtdCryptoTest / EmrtdLds2Test）、host/（EmrtdHostTest /
                 EmrtdCardAccessTest）
   emrtd/integration/ EmrtdBacTest / EmrtdLds2IntegrationTest / EmrtdLds2AppsIntegrationTest /
-                EmrtdLds2CliIntegrationTest / EmrtdLds2WriteIntegrationTest / EmrtdPaceIntegrationTest /
-                EmrtdChipAuthIntegrationTest
+                EmrtdLds2WriteIntegrationTest / EmrtdLds2OpsIntegrationTest /
+                EmrtdLds2AlgorithmsIntegrationTest / EmrtdLds2CliIntegrationTest /
+                EmrtdPaceIntegrationTest / EmrtdChipAuthIntegrationTest
 deploy/         deploy.conf（both）/ deploy-emv.conf / deploy-emv-test.conf / deploy-emrtd.conf
 perso/emv/      sample.perso / sample-test.perso / sample-j3r180.perso（真卡示例）/
                 sample-j3r180-test.perso / sample.perso.sda.keys / sample.ca.keys
-perso/emrtd/    csca.crt/key, dsc.crt/key, lds2.crt/key, portrait.png, sample-*.perso
+perso/emrtd/    csca.crt/key, dsc.crt/key, lds2.crt/key, lds2-alt.crt/key,
+                lds2-cli.crt/key, append-*.json, portrait.png, sample-*.perso
                 （样例护照与 PA 夹具）
 ```
 

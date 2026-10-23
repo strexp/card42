@@ -276,7 +276,7 @@ host/emrtd/
 │              ChipAuthenticationPublicKeyInfo, ActiveAuthenticationInfo
 ├── access/    LdsReader, MrzKeySeed, Bac, Iso7816Sm, Iso7816SmAes,
 │              SecureMessaging, ChipAuth, Pace
-├── access/lds2/ Lds2RecordWriter, Lds2CertificateStore
+├── access/lds2/ Lds2RecordWriter, Lds2CertificateStore, Lds2Search, Lds2Fmm
 ├── pa/        CscaKeyStore, DscVerifier, PassiveAuthentication
 ├── aa/        ActiveAuthentication
 ├── perso/     SodBuilder, Dg2Builder, CardSecurityBuilder, LdsScript
@@ -293,9 +293,13 @@ host/emrtd/
   （跨页读写、更新 gap、容量/激活拒绝）、DGI 流式帧解析（头/值跨块、空值、截断、超长）与
   LDS1/LDS2 逐块（1–13 B）个性化，含 5000 B DG2。
 - `make test-emrtd-sim` — 模拟器端到端：SELECT LDS1、AA、BAC、SM 读 DG1/DG2/COM/DG15/SOD、
-  PA（DSC 链 + 签名 + DG 哈希）、LDS2 Travel Records DF（CardAccess + READ/APPEND RECORD）、
+  PA（DSC 链 + 签名 + DG 哈希）、LDS2 Travel/Visa/Biometrics 三应用（CardAccess、PACE/CA/TA、
+  READ/APPEND/SEARCH RECORD、FMM、READ BINARY、UPDATE BINARY + ACTIVATE）、
   PACE（3DES/AES-128，MRZ 与 CAN）、LDS1 Chip Authentication（PACE → 主文件 EF.CardSecurity → CA →
   新 SM 下读 DG1）；样例 DG2 约 8 KB（>4096），覆盖流式个性化 + 分页 EF + 大 DG 读回。
+  新增 `EmrtdLds2OpsIntegrationTest`（Doc 9303-10 §3.7/§3.8 全部文件命令）、
+  `EmrtdLds2AlgorithmsIntegrationTest`（LDS2 的 PACE/CA AES-128、PACE-CAN、TA RSA-PSS）与
+  扩展后的 `EmrtdLds2CliIntegrationTest`（`-csca` 报告校验、entry/visa/certificate `-append`）。
 - `make test-both-sim` — both 矩阵（EMV 生产 + eMRTD LDS1/LDS2 共存）。
 - `EmrtdTaAlgorithmsIntegrationTest`（在 `test-emrtd-{sim,card}` 内）— 同一 LDS1 实例上分别用
   ECDSA 与 RSA-PSS 链做 PACE→CA→TA，并读 CHAT 门控的 DG3/DG4。
@@ -319,7 +323,8 @@ INSTALL 时由实例 AID 决定（`EmrtdInstallParameters.role()`）：
 每个 LDS2 DF 拥有一个 `Lds2FileSystem`：少量 `Lds2TransparentFile`（无固定预算，按 DGI 声明
 长度或 UPDATE BINARY 的 File Size DO `'C0'` 增长、上限 32767；内容为 256 B 分页，按需分配、
 跨写复用，可选 ACTIVATE 锁）与 `Lds2RecordFile`（受规范记录数/记录长约束的扁平池：Certificates
-254/64、记录 900/640 字节，池容量仍是预留的内存预算（Travel Entry/Exit 与 Visa 各 2 KB）；记录由 `beginRecord/appendChunk/endRecord`
+254/64、记录 900/640 字节，池容量仍是预留的内存预算（Travel Entry/Exit 与 Visa 各 2 KB，
+Travel/Visa 的 EF.Certificates 各 2 KB，Biometrics 的 EF.Certificates 1 KB）；记录由 `beginRecord/appendChunk/endRecord`
 逐块写入，池字节先写、`used`/`count` 到 `endRecord` 才提交）。LDS2 文件的短 EF 标识为其 FID
 的低字节（`0x01 || SFI`，Doc 9303-10 §5.1）。
 
@@ -345,15 +350,23 @@ country/serial 从证书 subject C / serial 推导，不再接受调用方覆盖
 ECDSA/RSA 的 SHA-256/384/512（及 RSA SHA-1）以兼容不带 AlgorithmIdentifier 的记录。
 CLI `-append=<json>` 支持 `entry`/`exit`/`visa`/`biometrics`/`certificate`；证书 append 必须
 带 `-csca`，签名 append 会在 APPEND 前校验 `-ts-key` 与 `5F38` 证书公钥匹配，并在写入后读回验签。
-Travel/Visa 记录上限 **640 B**、池 2 KB（Certificates 900 B/1 KB）；`EmrtdLds2WriteIntegrationTest`
-用 `perso/emrtd/lds2.crt/key` 签名、APPEND、读回结构化字段并用 EF.Certificates 验签。
-注意这会增加每包约 3 KB 持久占用，真卡需复测 6F00 余量。
+Travel/Visa 记录上限 **640 B**、记录池 2 KB；EF.Certificates 记录上限 900 B，Travel/Visa 的
+记录池 2 KB（可容纳两条接近上限的证书），Biometrics 为 1 KB。`EmrtdLds2WriteIntegrationTest`
+用 `perso/emrtd/lds2.crt/key` 签名、APPEND、读回结构化字段并用 EF.Certificates 验签；
+`EmrtdLds2OpsIntegrationTest` 另用 `perso/emrtd/lds2-alt.crt/key` 验证实际的新证书追加与 `5F38` 引用。
+注意这会增加每包约 5 KB 持久占用，真卡需复测 6F00 余量。
 
 `READ RECORD` 按 Doc 9303-10 §3.7.2 Table 11 使用扩展 Le `00 00 00`（整个记录）；记录长度超过
 短 APDU 的 SM 窗口（231/223 B）时，卡侧以 `EmrtdScratch.record`/`recordEnvelope`（各 1 KB，
 仅 LDS2 角色分配的持久缓冲）走 `wrapLarge()` 一次返回，覆盖最大 900 B 的 EF.Certificates。短 Le
 仍只返回窗口。主机 `LdsReader.RECORD_LE = 65536`，SM DO'97' 的 Le 按 1/2 字节编解码；这一路径
 同时保证记录签名所需的完整 `EF.Certificates` 可被读回（见 §2 的 SM 窗口段）。
+
+`READ RECORD(S)` 的 P2 b2b1=01（从 P1 读到末条）由 `LdsReader.readRecordSequence` 驱动，并按
+§3.7.2 Table 13 返回整段序列；`EmrtdLds2OpsIntegrationTest` 与单测 `EmrtdCommandTest.readRecordAll`
+覆盖该边界。`APPEND RECORD`/`UPDATE BINARY` 的扩展命令数据可接近 900 B：SM 解包在 `raw`（512 B）
+不足时回退到仅 LDS2 角色分配的 `recordEnvelope`（1 KB），因此单条证书的 MAC 输入与明文都不需要
+额外持久缓冲。
 
 EF.CardAccess `011C` 与 EF.CardSecurity `011D` 属**主文件**（`LdsMfStore`，包内静态、跨
 实例共享），不在任何 LDS2 DF 内（Doc 9303-10 §3.11.3/§3.11.4）。EF.CardAccess 恒可
@@ -562,3 +575,7 @@ DER 转换。完整决策、APDU 序列与开放点见 [terminal-authentication.
   TA 前 `6982`）；`EmrtdLds2*`/`EmrtdChipAuthIntegrationTest` 均加 CA+TA；`EmrtdTaAlgorithmsIntegrationTest`
   在 LDS1 上分别以 ECDSA 与 RSA-PSS 链认证并读 CHAT 门控的 DG3/DG4。TA 的
   `PSO:Verify Certificate`（SM 封装 >255 B，RSA-1024 链可达 ~450 B）走卡侧扩展长度命令接收路径。
+  `EmrtdLds2AlgorithmsIntegrationTest` 在 LDS2 上进一步覆盖 PACE/CA AES-128、PACE-CAN 与 RSA-PSS TA；
+  `EmrtdLds2OpsIntegrationTest` 用仅含 Travel b1 的终端链验证 b2/b3/b4 均被拒绝（Doc 9303-10 §5.4.2
+  Table 96）。CA v1 AES 在 GENERAL AUTHENTICATE 中记录 `Comp(PKDH,IFD)`，否则 TA 的
+  `EXTERNAL AUTHENTICATE` 会以全零 key hash 验签失败（6300）。

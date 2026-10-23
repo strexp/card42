@@ -1,0 +1,17 @@
+{
+  "type": "visa",
+  "issuingState": "SGP",
+  "documentType": "VS",
+  "placeOfIssue": "SINGAPORE",
+  "effectiveDate": "20261001",
+  "expirationDate": "20281001",
+  "documentNumber": "S9988776",
+  "name": "TAN WEI",
+  "surname": "TAN",
+  "givenNames": "WEI",
+  "sex": "F",
+  "dateOfBirth": "19930303",
+  "nationality": "SGP",
+  "mrz": "V<SGPS9988776<<TAN<<WEI<<<<<<<<<<<<<<<<<<<<<<<<<",
+  "certificateReference": 1
+}

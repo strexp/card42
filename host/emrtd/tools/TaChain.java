@@ -114,6 +114,11 @@ public final class TaChain {
         return create(DEMO_CVCA, DEMO_DV, DEMO_IS, random);
     }
 
+    /** Demo chain with a restricted Travel Records authorization byte (Table 96). */
+    public static Chain demo(SecureRandom random, byte travelAuth) {
+        return create(DEMO_CVCA, DEMO_DV, DEMO_IS, random, travelAuth);
+    }
+
     /** The RSA demo CVCA public modulus (DGI FF0B trust point). */
     public static byte[] demoRsaModulus() {
         return unsigned(DEMO_RSA_MODULUS);
@@ -172,20 +177,22 @@ public final class TaChain {
     /** Issues a chain from explicit CVCA/DV/IS private scalars. */
     public static Chain create(BigInteger cvcaScalar, BigInteger dvScalar,
                                BigInteger isScalar, SecureRandom random) {
-        Map<String, byte[]> cvcaAuth = new LinkedHashMap<String, byte[]>();
-        cvcaAuth.put(CvCertificate.OID_LDS2_TRAVEL, new byte[] { (byte) 0x0F });
-        cvcaAuth.put(CvCertificate.OID_LDS2_VISA, new byte[] { (byte) 0x0F });
-        cvcaAuth.put(CvCertificate.OID_LDS2_BIOMETRICS, new byte[] { (byte) 0x0F });
+        return create(cvcaScalar, dvScalar, isScalar, random, (byte) 0x0F);
+    }
 
-        Map<String, byte[]> dvAuth = new LinkedHashMap<String, byte[]>();
-        dvAuth.put(CvCertificate.OID_LDS2_TRAVEL, new byte[] { (byte) 0x0F });
-        dvAuth.put(CvCertificate.OID_LDS2_VISA, new byte[] { (byte) 0x0F });
-        dvAuth.put(CvCertificate.OID_LDS2_BIOMETRICS, new byte[] { (byte) 0x0F });
-
-        Map<String, byte[]> isAuth = new LinkedHashMap<String, byte[]>();
-        isAuth.put(CvCertificate.OID_LDS2_TRAVEL, new byte[] { (byte) 0x0F });
-        isAuth.put(CvCertificate.OID_LDS2_VISA, new byte[] { (byte) 0x0F });
-        isAuth.put(CvCertificate.OID_LDS2_BIOMETRICS, new byte[] { (byte) 0x0F });
+    /**
+     * Issues a chain whose Travel Records application authorization byte is
+     * {@code travelAuth} (Doc 9303-10 §5.4.2 Table 96).  The trust point keeps
+     * all bits; the card computes the effective authorization as the bitwise
+     * AND of the trust point and every certificate extension, so this models a
+     * terminal certificate restricted to read-only (0x01), certificate-read
+     * only (0x04) or any other subset.
+     */
+    public static Chain create(BigInteger cvcaScalar, BigInteger dvScalar,
+                               BigInteger isScalar, SecureRandom random, byte travelAuth) {
+        Map<String, byte[]> cvcaAuth = lds2Auth(travelAuth);
+        Map<String, byte[]> dvAuth = lds2Auth(travelAuth);
+        Map<String, byte[]> isAuth = lds2Auth(travelAuth);
 
         CvcPrincipal cvcaRef = CvcPrincipal.of("UTCVCA0000000001");
         CvcPrincipal dvRef = CvcPrincipal.of("UTDV000000000002");
@@ -204,5 +211,14 @@ public final class TaChain {
                 new byte[] { (byte) 0x03 }, terminalW, DATE_FROM, DATE_TO, isAuth, dvScalar, random);
 
         return new Chain(cvca, dv, terminal, isScalar, terminalW);
+    }
+
+    /** Table 96 authorization: Travel restricted, Visa/Biometrics full. */
+    private static Map<String, byte[]> lds2Auth(byte travelAuth) {
+        Map<String, byte[]> auth = new LinkedHashMap<String, byte[]>();
+        auth.put(CvCertificate.OID_LDS2_TRAVEL, new byte[] { travelAuth });
+        auth.put(CvCertificate.OID_LDS2_VISA, new byte[] { (byte) 0x0F });
+        auth.put(CvCertificate.OID_LDS2_BIOMETRICS, new byte[] { (byte) 0x0F });
+        return auth;
     }
 }

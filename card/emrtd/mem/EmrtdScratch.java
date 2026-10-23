@@ -91,6 +91,12 @@ final class EmrtdScratch {
      * and is then reused for the MAC input (SSC || DO87 || DO99).  1024 bytes
      * cover a 900-byte record with M2 padding (912), its 3DES/AES SM envelope
      * (~930) and the padded MAC input (~944).
+     *
+     * <p>The pair also serves an APPEND RECORD of a near-900-byte
+     * EF.Certificates record: {@link #record} receives the extended SM command
+     * when it does not fit the 512-byte {@link #raw}, and {@link #recordEnvelope}
+     * holds the unwrapped plaintext / MAC input for that command.  The command
+     * receive phase ends before the response phase can reuse either buffer.
      */
     static byte[] record;
 

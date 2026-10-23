@@ -367,6 +367,7 @@ public final class EmrtdPersoExporter {
         sb.append("@doc ").append(SampleData.DOCUMENT_NUMBER).append('\n');
         sb.append("@dob ").append(SampleData.DATE_OF_BIRTH).append('\n');
         sb.append("@doe ").append(SampleData.DATE_OF_EXPIRY).append('\n');
+        sb.append("@can ").append(SampleData.CARD_ACCESS_NUMBER).append('\n');
         sb.append("@cardaccess ").append(Hex.format(cardAccess)).append('\n');
         sb.append("@cardsecurity ").append(Hex.format(cardSecurity)).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
@@ -382,6 +383,7 @@ public final class EmrtdPersoExporter {
         sb.append("@doc ").append(SampleData.DOCUMENT_NUMBER).append('\n');
         sb.append("@dob ").append(SampleData.DATE_OF_BIRTH).append('\n');
         sb.append("@doe ").append(SampleData.DATE_OF_EXPIRY).append('\n');
+        sb.append("@can ").append(SampleData.CARD_ACCESS_NUMBER).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@record 0103 ").append(Hex.format(visa1)).append('\n');
         sb.append("@record 0103 ").append(Hex.format(visa2)).append('\n');
@@ -394,6 +396,7 @@ public final class EmrtdPersoExporter {
         sb.append("@doc ").append(SampleData.DOCUMENT_NUMBER).append('\n');
         sb.append("@dob ").append(SampleData.DATE_OF_BIRTH).append('\n');
         sb.append("@doe ").append(SampleData.DATE_OF_EXPIRY).append('\n');
+        sb.append("@can ").append(SampleData.CARD_ACCESS_NUMBER).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@transparent 0201 ").append(Hex.format(biometrics)).append('\n');
         sb.append("@record 011A ").append(Hex.format(certRecord)).append('\n');

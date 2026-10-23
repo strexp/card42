@@ -96,7 +96,20 @@
     certificate。样例 `perso/emrtd/sample-*.perso` 已改为 Table 86/90/93/83 的多条记录
     （Travel 3 Entry + 1 Exit、Visa 2、Biometrics 1、每个 LDS2 应用 1 个包装证书），
     `Lds2SampleTest` 解析并验签。Travel/Visa 记录上限 256→**640 B**、Entry/Exit/Visa 池
-    1→**2 KB**（每包约 +3 KB 持久；真卡需复测余量）。
+    1→**2 KB**（每包约 +5 KB 持久，含 Travel/Visa 的 EF.Certificates 2 KB；真卡需复测余量）。
+  - **LDS2 全命令集成测试（2026-10-23）**：新增 `EmrtdLds2OpsIntegrationTest` 端到端覆盖
+    FMM（P1=00/01、DO'51' 短 EF 标识、current-EF 规则）、SEARCH RECORD（Appendix I.1/J.1 的
+    FID/raw SFI、窗口、stop-after-first、6282）、READ RECORD P2=05 全序列与 P1=00、SFI READ BINARY、
+    UPDATE BINARY + ACTIVATE（DO'54'/DO'53'/DO'C0'、激活后 6982、多 chunk 读回）、Travel Exit /
+    Visa / 新 EF.Certificates 记录的实际 APPEND 与 `5F38`/b4 路径、641 B 超长记录 6700、以及
+    Travel b1-only 终端链对 b2/b3/b4 的拒绝。新增 `EmrtdLds2AlgorithmsIntegrationTest` 覆盖 LDS2 上
+    的 PACE/CA AES-128、PACE-CAN 与 TA RSA-PSS。扩展 `EmrtdLds2CliIntegrationTest`：`-csca`
+    报告必须 `signatureValid/trusted`，并实际跑 entry/visa/certificate `-append`。宿主新增
+    `Lds2Search`/`Lds2Fmm`/`LdsReader.readRecordSequence`。期间修复：READ RECORD all 模式只按首条
+    长度截断；CA v1 AES 的 GENERAL AUTHENTICATE 未记录 `Comp(PKDH,IFD)` 导致 TA 6300；
+    APPEND 证书（~650 B）在 SM 解包时超过 512 B `raw`/`SmScratch`；UPDATE BINARY 的 CLA `8C`
+    被 SM 层丢掉；Travel/Visa EF.Certificates 池 1→2 KB。模拟器 15 suite 全绿；真卡需复测
+    新增 +2 KB 证书池与近 900 B APPEND 后的持久/瞬态余量。
   - **LDS2 签名 PKI / P0 修复（2026-10-23）**：`EmrtdPersoExporter.loadPrivateKey` 同时支持
     EC/RSA PKCS#8；`SodBuilder`/`CardSecurityBuilder` 支持 ECDSA-SHA-256 DSC。新增
     `Lds2Verifier`：`5F38`→EF.Certificates→X.509→CSCA 链→LDS2 Signer EKU/profile→`5F37` 验签；

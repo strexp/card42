@@ -27,7 +27,7 @@ grepped during development.
 | EMV Contactless Book C-8 | **v1.2** — conceptual only | Kernel flow structure reference; its ECC/Book E parts are out of scope | EMVCo specification library |
 | EMV Book 1–4 | v4.3 / v4.1 | Historical comparison only | EMVCo archive / older mirrors |
 | EMV CPS | v1.1 | Historical comparison only (pre-AES) | EMVCo archive |
-| ICAO Doc 9303 | Parts 3, 9, 10, 11, 12 | eMRTD LDS1/LDS2, BAC, secure messaging, PA/AA, PACE | ICAO e-publications (free) |
+| ICAO Doc 9303 | Parts 3, 9, 10, 11, 12 | eMRTD LDS1/LDS2, BAC, secure messaging, PA/AA, PACE | ICAO e-publications (free); expected as `9303_p{3,9,10,11,12}_cons_en.pdf` in this directory |
 | BSI TR-03110 | Parts 1–4, v2.2 | PACE, Chip Authentication, EAC profiles and KDFs | BSI publications (free) |
 | GlobalPlatform Card API | v1.7.1 (contains 1.5/1.6/1.7) and v1.8 | `org.globalplatform` API jar + converter export files | GlobalPlatform specifications library (account required) |
 

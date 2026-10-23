@@ -56,6 +56,11 @@
   `receiveBytes` 把命令装配进 `EmrtdScratch.raw`，保留 4 字节头给 SM 解包；主机 `CommandAPDU`
   按需扩展）。**TA 端到端在 jcsl 通过**：`EmrtdTerminalAuthIntegrationTest` 演示
   PACE→CA→TA 后 LDS2 Travel 记录的读/追加放行、TA 前 `6982`；LDS2 套件均加入 CA+TA。
+  **（2026-10-23）** `EmrtdLds2OpsIntegrationTest` 用仅含 Travel b1 的终端链验证 b2/b3/b4 均被
+  拒绝；`EmrtdLds2AlgorithmsIntegrationTest` 覆盖 LDS2 的 PACE/CA AES-128、PACE-CAN 与 TA RSA-PSS；
+  CA v1 AES 的 `Comp(PKDH,IFD)` 记录修复后，AES CA + TA 在 jcsl 全绿。近 900 B 的 LDS2 APPEND
+  命令在 SM 解包时回退到 `EmrtdScratch.recordEnvelope`（1 KB），不需要扩大 512 B 的
+  `EmrtdScratch.raw`。
 - **时间递进机制已实现（BSI TR-03110-3 §2.5/§2.6）**：`TaContext.currentDate`（6 octet 未打包
   BCD YYMMDD）由个性化 DGI `FF08` 注入；`PSO:Verify Certificate` 对**非 CVCA Link** 证书做
   过期判断（`Expiration < current` → `6A80`），并把 `Effective Date` 前移当前日期（CVCA/DV，
@@ -108,7 +113,7 @@
 | **B** | TA 必须**跟在 Chip Authentication 之后**（本项目 PACE 是通用映射而非 CAM），授权绑定到 CA 会话的终端临时公钥 | Doc 9303-11 §7.1.2/§7.1.3 |
 | **C** | 使用 **EF.CVCA**（LDS1 DF，默认 FID `011C`/SFI `1C`，36 B，≤2 CAR，PACE 读，Doc 9303-11 Annex K.2）；EF.CardAccess 归 MF（同 FID 不同 DF）。卡侧按上下文解析 `011C`：未建立安全报文（PACE 前）为 MF `EF.CardAccess`（明文可读，真实读卡器如 ReadID 在选应用后直接读 `011C` 取 PACE 参数），建立安全报文后为 DF `EF.CVCA`；`SELECT MF` 亦强制取 MF `EF.CardAccess`。信任点（CVCA 公钥/引用/Effective Date/相对授权）由个性化注入，`TerminalAuthenticationInfo` 宣告 version 1（默认 FID，`efCVCA` 省略） | Doc 9303-11 §7.1.4.3.1 + Annex K.2；Doc 9303-10 §3.11.3/§3.11.4 |
 | **D** | LDS2 访问 = `PACE`（或 CA）+ **有效授权**：对 IS/DV/CVCA 的 CHAT/扩展逐位 AND，按 Doc 9303-10 §5.4 Table 96/97/98 门控读/写/追加 | Doc 9303-10 §5.4.1/§5.4.2 |
-| **E** | **Chip Authentication 仅 `id-CA-ECDH-3DES-CBC-CBC`**（CA v1，CA 后 SM 为 3DES+SHA-1）；`id-CA-ECDH-AES-CBC-CMAC-128` 等 AES 变体**未宣告、未实现**（ICAO 可选）。影响：拒绝 3DES 的终端无法完成 CA；未使用 AES-CMAC CA。 | Doc 9303-11 §9.2.5；延后见 [`TODO.emrtd.md`](../../../TODO.emrtd.md) |
+| **E** | **Chip Authentication `id-CA-ECDH-3DES-CBC-CBC` 与 `id-CA-ECDH-AES-CBC-CMAC-128`**（CA v1）；AES 变体走 `MSE:Set AT` + `GENERAL AUTHENTICATE`，CA 后 SM 为 AES-CMAC（BSI TR-03110-3 B.2/B.14.3）。`EmrtdLds2AlgorithmsIntegrationTest` 在 LDS2 上端到端覆盖 AES CA + TA；`GENERAL AUTHENTICATE` 路径必须像 MSE:Set KAT 一样记录 `Comp(PKDH,IFD)`，否则 TA 的 `EXTERNAL AUTHENTICATE` 会以全零 key hash 返回 `6300`。 | Doc 9303-11 §9.2.5；算法矩阵 [`algorithm-support.md`](algorithm-support.md) |
 
 ## 4. 协议与 APDU（Doc 9303-11 §7.1.5）
 

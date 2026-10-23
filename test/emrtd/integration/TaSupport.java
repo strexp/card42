@@ -31,11 +31,16 @@ final class TaSupport {
     private TaSupport() {
     }
 
-    /** Runs Chip Authentication and returns its result (terminal ephemeral key). */
+    /** Runs Chip Authentication with the first advertised CA profile. */
     static ChipAuth.Result chipAuthentication(EmrtdTerminal terminal) throws Exception {
         CardAccess cardAccess = CardAccess.parse(
                 LdsReader.readMf(terminal, LdsFileUtil.FID_CARD_ACCESS));
-        ChipAuthenticationInfo caInfo = cardAccess.chipAuthenticationInfos().get(0);
+        return chipAuthentication(terminal, cardAccess.chipAuthenticationInfos().get(0));
+    }
+
+    /** Runs Chip Authentication with an explicit CA profile (3DES or AES-128). */
+    static ChipAuth.Result chipAuthentication(EmrtdTerminal terminal,
+                                              ChipAuthenticationInfo caInfo) throws Exception {
         CardSecurity cardSecurity = CardSecurity.parse(
                 LdsReader.readMf(terminal, LdsFileUtil.FID_CARD_SECURITY));
         byte[] chipPublicKeyW = cardSecurity.publicKeyInfos().get(0).rawPoint();
@@ -56,7 +61,14 @@ final class TaSupport {
     static void terminalAuthentication(EmrtdTerminal terminal, Pace.Session pace,
                                        byte[] caKeyHash, SecureRandom random, boolean rsa)
             throws Exception {
-        TaChain.Chain chain = rsa ? TaChain.demoRsa() : TaChain.demo(random);
+        terminalAuthentication(terminal, pace, caKeyHash,
+                rsa ? TaChain.demoRsa() : TaChain.demo(random), random);
+    }
+
+    /** Runs Terminal Authentication with an explicitly issued chain. */
+    static void terminalAuthentication(EmrtdTerminal terminal, Pace.Session pace,
+                                       byte[] caKeyHash, TaChain.Chain chain,
+                                       SecureRandom random) throws Exception {
         List<CvCertificate> parsed = new ArrayList<CvCertificate>();
         for (byte[] encoded : chain.toSend()) {
             parsed.add(CvCertificateCodec.parse(encoded));
@@ -66,11 +78,17 @@ final class TaSupport {
                 caKeyHash, random);
     }
 
-    /** Runs Chip + Terminal Authentication. */
+    /** Runs Chip + Terminal Authentication with the demo chain. */
     static void authenticate(EmrtdTerminal terminal, Pace.Session pace, SecureRandom random)
             throws Exception {
+        authenticate(terminal, pace, random, TaChain.demo(random));
+    }
+
+    /** Runs Chip + Terminal Authentication with an explicitly issued chain. */
+    static void authenticate(EmrtdTerminal terminal, Pace.Session pace, SecureRandom random,
+                             TaChain.Chain chain) throws Exception {
         ChipAuth.Result ca = chipAuthentication(terminal);
         terminalAuthentication(terminal, pace,
-                TerminalAuth.chipAuthenticationKeyHash(ca.terminalPublicKeyW), random);
+                TerminalAuth.chipAuthenticationKeyHash(ca.terminalPublicKeyW), chain, random);
     }
 }

@@ -54,7 +54,9 @@ public final class Lds2RecordWriter {
             if (offset == 0) {
                 data.write(DerWriter.tlv(0xC0, unsigned(record.length)));
             }
-            ResponseAPDU response = terminal.updateBinary(data.toByteArray());
+            ResponseAPDU response = offset == 0
+                    ? terminal.updateBinaryWithSize(data.toByteArray())
+                    : terminal.updateBinary(data.toByteArray());
             if (response.getSW() != 0x9000) {
                 throw new IllegalStateException("UPDATE BINARY " + String.format("%04X", fid)
                         + " @" + offset + " failed: " + Sw.format(response.getSW()));

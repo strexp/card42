@@ -48,6 +48,17 @@ public interface SecureMessaging {
                  byte[] out, short outOff);
 
     /**
+     * Unwraps a command whose secure-messaging envelope exceeds the shared
+     * 512-byte {@code SmScratch}.  The caller supplies a larger framing scratch
+     * (an LDS2 APPEND of a near-900-byte EF.Certificates record wraps to about
+     * 930 bytes).  {@code scratch} may be the same array as {@code out}: the
+     * MAC input is consumed before the ciphertext is decrypted over it.
+     */
+    short unwrap(byte[] ksEnc, byte[] ksMac, byte[] ssc,
+                 byte[] apdu, short dataOff, short dataLen,
+                 byte[] out, short outOff, byte[] scratch);
+
+    /**
      * Wraps the response data {@code response[0..respLen)} and status word
      * {@code sw} into {@code out}, returning the response data-field length.
      * The shared {@code SmScratch} 512-byte framing area bounds the plaintext
