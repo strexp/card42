@@ -32,6 +32,20 @@ public final class Bcd {
 
     /** Encodes a long in minor units as a BCD amount of the given byte length. */
     public static byte[] longToBcd(long value, int length) {
+        if (value < 0) {
+            throw new IllegalArgumentException("BCD value must not be negative: " + value);
+        }
+        if (length <= 0 || length > 9) {
+            throw new IllegalArgumentException("BCD length must be 1..9 bytes: " + length);
+        }
+        long max = 1;
+        for (int i = 0; i < length; i++) {
+            max *= 100;
+        }
+        if (value >= max) {
+            throw new IllegalArgumentException(
+                    "BCD value " + value + " does not fit " + length + " bytes");
+        }
         byte[] out = new byte[length];
         for (int i = length - 1; i >= 0 && value > 0; i--) {
             out[i] = (byte) (((value % 100) / 10 << 4) | (value % 10));

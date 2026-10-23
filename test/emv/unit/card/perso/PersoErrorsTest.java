@@ -2,7 +2,7 @@ package card42.test;
 
 import javacard.framework.ISOException;
 
-import card42.emv.PersoErrors;
+import card42.common.PersoErrors;
 
 /**
  * Pure-JVM tests for the personalization failure mapping

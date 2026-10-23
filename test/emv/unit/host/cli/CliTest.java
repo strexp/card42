@@ -7,6 +7,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 import card42.host.emv.lib.Amounts;
 import card42.host.common.cli.Args;
+import card42.host.common.cli.CliSupport;
 import card42.host.common.codec.Json;
 import card42.host.emv.report.TransactionReport;
 import card42.host.emv.cli.command.TlvDump;
@@ -39,6 +40,7 @@ final class CliTest {
         caKeyRing();
         reportDecoders();
         issuerCommands();
+        payOptionsAccepted();
     }
 
     private static void argsParser() {
@@ -61,6 +63,16 @@ final class CliTest {
                 new String[] { "amount" }, new String[] {})), "missing value rejected");
         Asserts.check(throwsIllegal(() -> new Args(new String[] { "-json=1" },
                 new String[] {}, new String[] { "json" })), "value on flag rejected");
+
+        Args bareJson = new Args(new String[] { "-json" },
+                new String[] {}, new String[] {}, new String[] { "json" });
+        Asserts.check(CliSupport.json(bareJson), "bare -json enables JSON");
+        Args valuedJson = new Args(new String[] { "-json=0" },
+                new String[] {}, new String[] {}, new String[] { "json" });
+        Asserts.check(!CliSupport.json(valuedJson), "-json=0 disables JSON");
+        Asserts.check(throwsIllegal(() -> CliSupport.json(new Args(
+                        new String[] { "-json=2" }, new String[] {}, new String[] {},
+                        new String[] { "json" }))), "invalid -json value rejected");
     }
 
     private static void amounts() {
@@ -68,6 +80,12 @@ final class CliTest {
         Asserts.eq(5L, Amounts.amount("0.05", 2), "amount 0.05 @2");
         Asserts.eq(5L, Amounts.amount("5", 0), "amount 5 @0");
         Asserts.eq(12345L, Amounts.amount("12.345", 3), "amount 12.345 @3");
+        Asserts.check(throwsIllegal(() -> Amounts.amount("-5", 2)),
+                "negative amount rejected");
+        Asserts.check(throwsIllegal(() -> Amounts.amount("10000000000.00", 2)),
+                "amount beyond 6-byte BCD rejected");
+        Asserts.check(throwsIllegal(() -> Amounts.amount("1.234", 2)),
+                "too many decimals rejected");
         Asserts.bytes(Hex.parse("0978"), Amounts.numeric("978", 2),
                 "numeric currency 978 -> 0978");
         Asserts.bytes(Hex.parse("260924"), Amounts.numeric("260924", 3),
@@ -210,6 +228,38 @@ final class CliTest {
         }
         Asserts.eq(0, code, "cli exit " + String.join(" ", args));
         return out.toString(java.nio.charset.StandardCharsets.UTF_8).trim();
+    }
+
+    /**
+     * Options documented for {@code terminal pay} must be accepted by its
+     * registry.  A bogus transport keeps the test card-free: reaching the
+     * transport error (rather than "Unknown option") proves parsing succeeded.
+     */
+    private static void payOptionsAccepted() {
+        String reportErr = runCliErr("terminal", "pay", "-host=bogus",
+                "-report=/tmp/card42-report.txt", "-amount=0");
+        Asserts.check(!reportErr.contains("Unknown option: -report"),
+                "terminal pay accepts -report");
+        String pinErr = runCliErr("terminal", "pay", "-host=bogus",
+                "-online-pin", "-pin-key=00");
+        Asserts.check(!pinErr.contains("Unknown option: -pin-key"),
+                "terminal pay accepts -pin-key");
+        Asserts.check(pinErr.contains("-pin-key must be 16 bytes"),
+                "terminal pay validates the -pin-key length");
+    }
+
+    /** Runs the CLI and returns stderr, without asserting an exit code. */
+    private static String runCliErr(String... args) {
+        java.io.PrintStream oldErr = System.err;
+        java.io.ByteArrayOutputStream err = new java.io.ByteArrayOutputStream();
+        try {
+            System.setErr(new java.io.PrintStream(err, true,
+                    java.nio.charset.StandardCharsets.UTF_8));
+            card42.host.emv.cli.Main.run(args);
+        } finally {
+            System.setErr(oldErr);
+        }
+        return err.toString(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     private static boolean throwsIllegal(Runnable action) {

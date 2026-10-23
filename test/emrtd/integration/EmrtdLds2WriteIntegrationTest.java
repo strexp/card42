@@ -22,7 +22,7 @@ import card42.host.emrtd.lds.LdsFileUtil;
 import card42.host.emrtd.lds.TravelRecord;
 import card42.host.emrtd.lds.TravelRecordBuilder;
 import card42.host.emrtd.pa.CscaKeyStore;
-import card42.host.emrtd.perso.EmrtdPersoExporter;
+import card42.host.emrtd.tools.EmrtdPersoExporter;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**

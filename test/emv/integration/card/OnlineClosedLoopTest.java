@@ -137,7 +137,7 @@ public class OnlineClosedLoopTest {
             return new ResponseAPDU(new byte[] { 0x6F, 0x00 });
         }
         byte[] cdol2 = new byte[TerminalDol.dolDataLength(cdol2Def)];
-        int off = AcCrypto.dolValueOffset(cdol2Def, 0x91);
+        int off = TerminalDol.dolValueOffset(cdol2Def, 0x91);
         if (off < 0) {
             Checks.fail("second AC: CDOL2 has no inline issuer auth data (91)");
             return new ResponseAPDU(new byte[] { 0x6F, 0x00 });

@@ -40,16 +40,14 @@ public class PaymentPerso {
      * are assembled once both are present (EMV CPS v2.0 §A.2).  Only one
      * instance is personalized at a time, so one set of buffers per package
      * replaces ~1.5 KB per payment instance (docs/specs/common/risks.md §2).
-     * {@link #scratchOwner} guards an interleaved personalization: a new
-     * sequence claims the buffers and drops any half-assembled key of another
-     * instance.
+     * Interleaved personalization is rejected by {@link PersoHandler};
+     * this class only clears its own completion markers.
      */
     private static byte[] ddaModulus;
     private static byte[] ddaExponent;
     private static byte[] pinModulus;
     private static byte[] pinExponent;
     private static byte[] keyContainer;
-    private static PaymentPerso scratchOwner;
 
     private short ddaModulusLength;
     private short ddaExponentLength;
@@ -373,7 +371,6 @@ public class PaymentPerso {
      * stale marker set and an incomplete retry could be judged complete.
      */
     public void resetState() {
-        scratchOwner = this;
         sawKeys = false;
         sawFci = false;
         sawOfflinePin = false;

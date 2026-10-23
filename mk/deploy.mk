@@ -30,7 +30,7 @@ EMRTD_AA_VARIANTS := sha1 sha256 ecdsa
 perso-emrtd-emit: $(HOST_STAMP)
 	@for aa in $(EMRTD_AA_VARIANTS); do \
 	  echo ">>> emit sample-$$aa.perso"; \
-	  $(JAVA) -cp $(abspath $(HOST_CLASSES)) card42.host.emrtd.perso.EmrtdPersoExporter \
+	  $(JAVA) -cp $(abspath $(HOST_CLASSES)) card42.host.emrtd.tools.EmrtdPersoExporter \
 	    -emit -aa=$$aa > perso/emrtd/sample-$$aa.perso; \
 	done
 
@@ -102,7 +102,7 @@ sim-emv-perso: $(HOST_STAMP)
 
 sim-emrtd-perso: $(HOST_STAMP)
 	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_SH="$(GP_SH)" GP_TRANSPORT="$(GP_SIM)" \
-	  $(PERSO_SH) $(JAVA) -cp $(HOST_CLASSES) card42.host.emrtd.perso.EmrtdPersoExporter \
+	  $(PERSO_SH) $(JAVA) -cp $(HOST_CLASSES) card42.host.emrtd.tools.EmrtdPersoExporter \
 	    -script=$(abspath $(EMRTD_PERSO_SCRIPT))
 
 sim-both-perso: $(HOST_STAMP)
@@ -110,7 +110,7 @@ sim-both-perso: $(HOST_STAMP)
 	  $(PERSO_SH) $(JAVA) -cp $(HOST_CLASSES) card42.host.emv.cli.Main perso export \
 	    -script=$(abspath $(SIM_BOTH_EMV_PERSO_SCRIPT)) -keys=$(abspath $(EMV_PERSO_KEYS))
 	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_SH="$(GP_SH)" GP_TRANSPORT="$(GP_SIM)" \
-	  $(PERSO_SH) $(JAVA) -cp $(HOST_CLASSES) card42.host.emrtd.perso.EmrtdPersoExporter \
+	  $(PERSO_SH) $(JAVA) -cp $(HOST_CLASSES) card42.host.emrtd.tools.EmrtdPersoExporter \
 	    -script=$(abspath $(EMRTD_PERSO_SCRIPT))
 
 card-emv-perso: $(HOST_STAMP)
@@ -120,7 +120,7 @@ card-emv-perso: $(HOST_STAMP)
 
 card-emrtd-perso: $(HOST_STAMP)
 	@GP_JAVA="$(JAVA)" GP_JAR="$(GP_JAR)" GP_SH="$(GP_SH)" GP_TRANSPORT="$(GP_ARGS)" \
-	  $(PERSO_SH) $(JAVA) -cp $(HOST_CLASSES) card42.host.emrtd.perso.EmrtdPersoExporter \
+	  $(PERSO_SH) $(JAVA) -cp $(HOST_CLASSES) card42.host.emrtd.tools.EmrtdPersoExporter \
 	    -script=$(abspath $(EMRTD_PERSO_SCRIPT))
 
 card-both-perso: card-emv-perso card-emrtd-perso

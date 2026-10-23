@@ -42,6 +42,22 @@ public final class OfflineDataAuthentication implements OdaVerifier {
      * the result in {@code result}.
      */
     @Override
+    public IssuerKey recoverPinKey(Terminal terminal, IssuerKey issuer,
+            byte[] transactionDate) throws Exception {
+        SdaVerifier.Result result = SdaVerifier.recoverPinKey(terminal, issuer,
+                transactionDate);
+        return result.ok ? result.key : null;
+    }
+
+    @Override
+    public IssuerKey recoverIccKey(Terminal terminal, IssuerKey issuer,
+            byte[] transactionDate) throws Exception {
+        SdaVerifier.Result result = SdaVerifier.recoverIccKey(terminal, issuer,
+                transactionDate);
+        return result.ok ? result.key : null;
+    }
+
+    @Override
     public void verify(Terminal terminal, TransactionRequest data,
             TransactionResult.Mutable result) throws Exception {
         boolean cardSda = (result.aip() & 0x4000) != 0;

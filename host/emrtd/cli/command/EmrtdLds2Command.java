@@ -45,17 +45,27 @@ import card42.host.emrtd.transport.EmrtdTerminal;
 final class EmrtdLds2Command {
 
     private static final String[] RECORD_OPTIONS = {
-            "host", "app", "json", "record", "doc", "dob", "doe", "can",
+            "host", "wait", "app", "record", "doc", "dob", "doe", "can",
             "ta-chain", "ta-key", "append", "ts-key", "cert-ref", "csca" };
-    private static final String[] RECORD_FLAGS = { "pace", "ca", "ta" };
+    private static final String[] RECORD_FLAGS = { "pace", "ca", "ta", "trace", "yes" };
+    private static final String[] RECORD_HYBRID = { "json" };
 
     private EmrtdLds2Command() {
     }
 
     static int run(String[] args) throws Exception {
-        Args parsed = new Args(args, RECORD_OPTIONS, RECORD_FLAGS);
+        Args parsed = new Args(args, RECORD_OPTIONS, RECORD_FLAGS, RECORD_HYBRID);
+        if (parsed.help()) {
+            usage(System.out);
+            return CliSupport.EXIT_OK;
+        }
+        parsed.requireNoPositionals();
         String host = parsed.get("host", "socket:localhost:9025");
-        boolean json = "1".equals(parsed.get("json", "0"));
+        int wait = Integer.parseInt(parsed.get("wait", "10"));
+        if (wait < 0) {
+            throw new IllegalArgumentException("-wait must be >= 0 seconds: " + wait);
+        }
+        boolean json = CliSupport.json(parsed);
         String app = parsed.get("app", "travel");
         String doc = parsed.get("doc", null);
         String dob = parsed.get("dob", null);
@@ -71,6 +81,9 @@ final class EmrtdLds2Command {
         CscaKeyStore trust = csca == null ? null
                 : CscaKeyStore.fromPath(new java.io.File(csca));
 
+        if (append != null && !parsed.has("yes")) {
+            return CliSupport.fail("lds2 -append writes to the card; pass -yes to confirm");
+        }
         Lds2AppendSpec appendSpec = null;
         if (append != null) {
             try {
@@ -103,11 +116,11 @@ final class EmrtdLds2Command {
             return CliSupport.fail(validation);
         }
 
-        try (TerminalSession session = TerminalSession.open(host, 10, false, System.out)) {
+        try (TerminalSession session = TerminalSession.open(host, wait, parsed.has("trace"), System.err)) {
             EmrtdTerminal terminal = new EmrtdTerminal(session.terminal);
             ResponseAPDU selected = terminal.selectApplication(aid);
             if (selected.getSW() != 0x9000) {
-                return CliSupport.fail("SELECT " + aid + " -> " + sw(selected.getSW()));
+                return CliSupport.failDeclined("SELECT " + aid + " -> " + sw(selected.getSW()));
             }
 
             // EF.CardAccess is public and readable before PACE; it carries the
@@ -126,21 +139,21 @@ final class EmrtdLds2Command {
                     ? Pace.authenticateCan(terminal, can)
                     : Pace.authenticate(terminal, doc, dob, doe);
             terminal.setSecureMessaging(paceSession.secureMessaging());
-            System.out.println("PACE: OK (" + (can != null ? "CAN" : "MRZ") + ")");
+            status(json, "PACE: OK (" + (can != null ? "CAN" : "MRZ") + ")");
 
             ChipAuth.Result caResult = null;
             if (parsed.has("ca")) {
                 caResult = EmrtdReadCommand.chipAuthentication(terminal, trust);
-                System.out.println("Chip Authentication: "
+                status(json, "Chip Authentication: "
                         + (caResult != null ? "OK" : "not available"));
                 if (caResult != null && trust == null) {
-                    System.out.println("EF.CardSecurity signature: not verified (no -csca)");
+                    status(json, "EF.CardSecurity signature: not verified (no -csca)");
                 }
             }
 
             if (parsed.has("ta")) {
                 if (caResult == null) {
-                    return CliSupport.fail("ta needs a usable Chip Authentication profile");
+                    return CliSupport.failDeclined("ta needs a usable Chip Authentication profile");
                 }
                 // The TA signature binds the PACE key (ID_IC) to the CA terminal
                 // key (Comp(PKDH,IFD)); EF.Certificates read access is b3 for
@@ -151,7 +164,7 @@ final class EmrtdLds2Command {
                         TerminalAuth.chipIdentifier(paceSession.piccPublicKey),
                         TerminalAuth.chipAuthenticationKeyHash(caResult.terminalPublicKeyW),
                         new SecureRandom());
-                System.out.println("Terminal Authentication: OK");
+                status(json, "Terminal Authentication: OK");
             }
 
             if (appendSpec != null) {
@@ -171,10 +184,10 @@ final class EmrtdLds2Command {
                             Lds2Verifier.x509(certificateRecord.certificate),
                             certificateRecord, app, trust);
                     if (!check.profileValid || !check.trusted) {
-                        return CliSupport.fail("written LDS2 certificate is not conformant: "
+                        return CliSupport.failDeclined("written LDS2 certificate is not conformant: "
                                 + String.join("; ", check.problems));
                     }
-                    System.out.println((reference > before ? "Appended" : "Reused")
+                    status(json, (reference > before ? "Appended" : "Reused")
                             + " certificate record #" + reference + " ("
                             + certificateRecord.raw().length + " B) in 011A; signer "
                             + check.subject + " (profile OK, trust OK)");
@@ -182,21 +195,21 @@ final class EmrtdLds2Command {
                     CertificateRecord signerRecord = Lds2Verifier.loadCertificateRecord(
                             terminal, appendSpec.certificateReference);
                     if (signerRecord == null) {
-                        return CliSupport.fail("5F38 references missing EF.Certificates record "
+                        return CliSupport.failDeclined("5F38 references missing EF.Certificates record "
                                 + appendSpec.certificateReference);
                     }
                     X509Certificate signer = Lds2Verifier.x509(signerRecord.certificate);
                     Lds2Verifier.CertificateCheck check = Lds2Verifier.checkCertificate(
                             signer, signerRecord, app, trust);
                     if (!check.profileValid || (trust != null && !check.trusted)) {
-                        return CliSupport.fail("LDS2 signer certificate rejected: "
+                        return CliSupport.failDeclined("LDS2 signer certificate rejected: "
                                 + String.join("; ", check.problems));
                     }
                     if (!appendSpec.keyMatches(signer)) {
-                        return CliSupport.fail("the -ts-key does not match EF.Certificates record "
+                        return CliSupport.failDeclined("the -ts-key does not match EF.Certificates record "
                                 + appendSpec.certificateReference);
                     }
-                    System.out.println("Signer certificate: " + check.subject
+                    status(json, "Signer certificate: " + check.subject
                             + " (profile OK, trust=" + check.trusted + ")");
                     int before = 0;
                     if ("biometrics".equals(appendSpec.type)) {
@@ -216,13 +229,13 @@ final class EmrtdLds2Command {
                     if (!verification.signatureValid || verification.certificate == null
                             || !verification.certificate.profileValid
                             || (trust != null && !verification.certificate.trusted)) {
-                        return CliSupport.fail("written record failed LDS2 verification: "
+                        return CliSupport.failDeclined("written record failed LDS2 verification: "
                                 + String.join("; ", verification.problems));
                     }
-                    System.out.println("Written record signature: valid (signer "
+                    status(json, "Written record signature: valid (signer "
                             + verification.certificate.subject + ", trust="
                             + verification.certificate.trusted + ")");
-                    System.out.println("Appended " + appendSpec.type + " record ("
+                    status(json, "Appended " + appendSpec.type + " record ("
                             + appendSpec.record.length + " B) to "
                             + String.format("%04X", appendSpec.fid));
                 }
@@ -376,5 +389,22 @@ final class EmrtdLds2Command {
 
     private static String sw(int sw) {
         return String.format("%04X", sw & 0xFFFF);
+    }
+
+    /** Progress/verification lines: stderr in JSON mode so stdout stays a valid document. */
+    private static void status(boolean json, String message) {
+        (json ? System.err : System.out).println(message);
+    }
+
+    static void usage(java.io.PrintStream out) {
+        out.println("usage: Main terminal emrtd lds2 [options]");
+        out.println("  transport: -host=pcsc[:i]|socket:host:port -wait=<s> -trace");
+        out.println("  app      : -app=travel|visa|biometrics (default travel)");
+        out.println("  auth     : -pace -doc=<no> -dob=YYMMDD -doe=YYMMDD");
+        out.println("             -can=<CAN> (PACE-CAN), -ca, -ta -ta-chain=<file> -ta-key=<hex>");
+        out.println("             -csca=<cert|dir>");
+        out.println("  records  : -record=entry|exit|visa|cert|all (travel default entry, visa default visa)");
+        out.println("  append   : -append=<json> -ts-key=<PKCS#8 PEM> [-cert-ref=n] -yes");
+        out.println("  output   : -json=1  structured JSON on stdout, diagnostics on stderr");
     }
 }

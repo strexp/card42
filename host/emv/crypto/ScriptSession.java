@@ -34,6 +34,9 @@ public final class ScriptSession {
 
     /** Sets the transmitted MAC length (EMV v4.4 Book 2 section 9.2.1: 4..8 bytes). */
     public void setMacLength(int macLength) {
+        if (macLength < 4 || macLength > 8) {
+            throw new IllegalArgumentException("-mac-length must be 4..8 bytes: " + macLength);
+        }
         this.macLength = macLength;
     }
 

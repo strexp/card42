@@ -2,6 +2,8 @@ package card42.emrtd;
 
 import card42.common.ApduIo;
 import card42.common.AppletBase;
+import card42.common.PersoErrors;
+import card42.common.Tlv;
 
 import javacard.framework.APDU;
 import javacard.framework.APDUException;
@@ -210,12 +212,8 @@ public final class EmrtdApplet extends AppletBase
 
     /** Writes {@code 6F { 84 <DF name> }} into buf[off..); returns the new offset. */
     private short writeFci(byte[] buf, short off) {
-        buf[off++] = (byte) 0x6F;
-        buf[off++] = (byte) (dfNameLength + 2);
-        buf[off++] = (byte) 0x84;
-        buf[off++] = (byte) dfNameLength;
-        Util.arrayCopyNonAtomic(dfName, (short) 0, buf, off, dfNameLength);
-        return (short) (off + dfNameLength);
+        return Tlv.appendFci(dfName, (short) 0, dfNameLength,
+                null, (short) 0, (short) 0, buf, off);
     }
 
     /** eMRTD uses INS=A4 for SELECT FILE, so it must reach processCommand. */
@@ -647,41 +645,55 @@ public final class EmrtdApplet extends AppletBase
 
     public short processData(byte[] inBuf, short inOff, short inLen,
                              byte[] outBuf, short outOff) {
+        if (inLen < (short) (ISO7816.OFFSET_LC + 1)) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
         short p1 = (short) (inBuf[(short) (inOff + ISO7816.OFFSET_P1)] & 0xFF);
         short p2 = (short) (inBuf[(short) (inOff + ISO7816.OFFSET_P2)] & 0xFF);
-        short lc = (short) (inBuf[(short) (inOff + ISO7816.OFFSET_LC)] & 0xFF);
-        short dataOff = (short) (inOff + ISO7816.OFFSET_CDATA);
+        short lcOffset = (short) (inOff + ISO7816.OFFSET_LC);
+        short lcField = ApduIo.storeDataLcFieldLength(inBuf, lcOffset,
+                (short) (inOff + inLen));
+        if (lcField == 0) {
+            ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        short lc = ApduIo.storeDataLc(inBuf, lcOffset, lcField);
+        short dataOff = (short) (lcOffset + lcField);
         if (inLen < (short) (dataOff - inOff + lc)) {
             ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
         }
-        if (p2 == 0) {
-            expectedBlock = 0;
-            if (role == EmrtdInstallParameters.ROLE_LDS1) {
-                perso.reset();
-            } else {
-                lds2Perso.reset();
+        try {
+            if (p2 == 0) {
+                expectedBlock = 0;
+                if (role == EmrtdInstallParameters.ROLE_LDS1) {
+                    perso.reset();
+                } else {
+                    lds2Perso.reset();
+                }
             }
-        }
-        if (p2 != expectedBlock) {
-            ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
-        }
-        // Apply the block straight away: a DGI value (a DG2 face image in
-        // particular) may span many STORE DATA blocks, and streaming it into
-        // its target file keeps memory bounded by the block instead of the
-        // whole sequence (see LdsPerso / Lds2Perso / DgiStream).
-        if (role == EmrtdInstallParameters.ROLE_LDS1) {
-            perso.feed(inBuf, dataOff, lc);
-        } else {
-            lds2Perso.feed(inBuf, dataOff, lc);
-        }
-        if ((p1 & 0x80) == 0) {
-            expectedBlock++;
-            return 0;
-        }
-        if (role == EmrtdInstallParameters.ROLE_LDS1) {
-            perso.finish();
-        } else {
-            lds2Perso.finish();
+            if (p2 != expectedBlock) {
+                ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
+            }
+            // Apply the block straight away: a DGI value (a DG2 face image in
+            // particular) may span many STORE DATA blocks, and streaming it into
+            // its target file keeps memory bounded by the block instead of the
+            // whole sequence (see LdsPerso / Lds2Perso / DgiStream).
+            if (role == EmrtdInstallParameters.ROLE_LDS1) {
+                perso.feed(inBuf, dataOff, lc);
+            } else {
+                lds2Perso.feed(inBuf, dataOff, lc);
+            }
+            if ((p1 & 0x80) == 0) {
+                expectedBlock++;
+                return 0;
+            }
+            if (role == EmrtdInstallParameters.ROLE_LDS1) {
+                perso.finish();
+            } else {
+                lds2Perso.finish();
+            }
+        } catch (RuntimeException e) {
+            PersoErrors.throwMapped(e);
+            return 0; // unreachable
         }
         return 0;
     }

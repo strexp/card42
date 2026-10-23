@@ -38,6 +38,7 @@ public final class PersoCommand {
             usage(System.out);
             return 0;
         }
+        args.requireNoPositionals();
         String scriptPath = args.get("script", "perso/emv/sample.perso");
         String keysPath = args.get("keys", null);
         SdaKeys sdaKeys = keysPath == null ? null : SdaKeyProfile.load(keysPath);

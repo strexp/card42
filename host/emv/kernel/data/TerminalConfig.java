@@ -134,20 +134,20 @@ public final class TerminalConfig {
 
     private TerminalConfig(Builder b) {
         this.terminalType = b.terminalType;
-        this.terminalCapabilities = b.terminalCapabilities;
-        this.additionalTerminalCapabilities = b.additionalTerminalCapabilities;
-        this.ttq = b.ttq;
-        this.terminalId = b.terminalId;
-        this.ifdSerialNumber = b.ifdSerialNumber;
-        this.merchantCategoryCode = b.merchantCategoryCode;
-        this.merchantName = b.merchantName;
-        this.acquirerIdentifier = b.acquirerIdentifier;
-        this.terminalCountryCode = b.terminalCountryCode;
-        this.applicationVersionNumber = b.applicationVersionNumber;
-        this.terminalCategory = b.terminalCategory;
-        this.tacDenial = b.tacDenial;
-        this.tacOnline = b.tacOnline;
-        this.tacDefault = b.tacDefault;
+        this.terminalCapabilities = copy(b.terminalCapabilities);
+        this.additionalTerminalCapabilities = copy(b.additionalTerminalCapabilities);
+        this.ttq = copy(b.ttq);
+        this.terminalId = copy(b.terminalId);
+        this.ifdSerialNumber = copy(b.ifdSerialNumber);
+        this.merchantCategoryCode = copy(b.merchantCategoryCode);
+        this.merchantName = copy(b.merchantName);
+        this.acquirerIdentifier = copy(b.acquirerIdentifier);
+        this.terminalCountryCode = copy(b.terminalCountryCode);
+        this.applicationVersionNumber = copy(b.applicationVersionNumber);
+        this.terminalCategory = copy(b.terminalCategory);
+        this.tacDenial = copy(b.tacDenial);
+        this.tacOnline = copy(b.tacOnline);
+        this.tacDefault = copy(b.tacDefault);
         this.floorLimit = b.floorLimit;
         this.targetPercentage = b.targetPercentage;
         this.biasedRandomThreshold = b.biasedRandomThreshold;
@@ -159,6 +159,11 @@ public final class TerminalConfig {
         this.signatureSupported = b.signatureSupported;
         this.cvmRequiredLimit = b.cvmRequiredLimit;
         this.state = b.state != null ? b.state : new TerminalState();
+    }
+
+    /** Defensive copy so a Builder reused after build() cannot mutate this config. */
+    private static byte[] copy(byte[] value) {
+        return value == null ? null : value.clone();
     }
 
     /** A builder pre-filled with the kernel defaults (EMV v4.4 Book 4 §A1). */

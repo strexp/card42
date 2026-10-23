@@ -2,13 +2,17 @@ package card42.emrtd;
 
 import card42.common.InstallParams;
 
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
+
 /* Install parameters of an eMRTD applet instance (Java Card 3.0.5 JCRE §11.2.1).
  *
  * The instance AID selects the role: the ICAO LDS1 DF name
  * (A0 00 00 02 47 10 01) is the LDS1 application; the LDS2 DF names
  * (A0 00 00 02 47 20 xx) are the Travel Records, Visa Records and Additional
- * Biometrics applications (Doc 9303-10 §5).  The applet data in the install
- * parameters may override the role, mirroring the EMV install path.
+ * Biometrics applications (Doc 9303-10 §5).  An AID outside this set is
+ * rejected at install time instead of silently falling back to a role; a
+ * mistyped AID must not create a Biometrics application.
  *
  * The shared (L,V) parsing and AID fallback live in
  * {@link card42.common.InstallParams}.
@@ -34,6 +38,10 @@ public final class EmrtdInstallParameters extends InstallParams {
         if (instanceAidEquals(EmrtdTags.DF_NAME_VISA)) {
             return ROLE_LDS2_VISA;
         }
-        return ROLE_LDS2_BIOMETRICS;
+        if (instanceAidEquals(EmrtdTags.DF_NAME_BIOMETRICS)) {
+            return ROLE_LDS2_BIOMETRICS;
+        }
+        ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+        return 0; // unreachable
     }
 }

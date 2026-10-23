@@ -228,26 +228,14 @@ public class DynamicAuth {
             ISOException.throwIt(SW_CONDITIONS_NOT_SATISFIED);
         }
 
-        short p = 0;
-        response[p++] = (byte) 0x77;
-        p = Tlv.appendLength(bodyLength, response, p);
-        p = Tlv.appendTag(TlvTags.TAG_CID, response, p);
-        response[p++] = 0x01;
-        response[p++] = cid;
-        p = Tlv.appendTag(TlvTags.TAG_ATC, response, p);
-        response[p++] = 0x02;
-        Util.setShort(response, p, atc);
-        p += 2;
+        short p = AcResponseBuilder.format2Start(cid, atc, bodyLength, response, (short) 0);
         p = Tlv.appendTag(TlvTags.TAG_SIGNED_DYNAMIC_APPLICATION_DATA, response, p);
         p = Tlv.appendLength(nic, response, p);
         if (ddaCrypto.sign(authMessage, (short) 0, msgLength, response, p) != nic) {
             ISOException.throwIt(SW_CONDITIONS_NOT_SATISFIED);
         }
         p += nic;
-        p = Tlv.appendTag(TlvTags.TAG_IAD, response, p);
-        p = Tlv.appendLength(iadLength, response, p);
-        Util.arrayCopyNonAtomic(iad, (short) 0, response, p, iadLength);
-        p += iadLength;
+        p = AcResponseBuilder.appendIad(iad, iadLength, response, p);
 
         ApduIo.send(apdu, response, (short) 0, p);
     }

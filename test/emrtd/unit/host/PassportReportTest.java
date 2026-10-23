@@ -20,7 +20,7 @@ import card42.host.emrtd.lds.TravelRecord;
 import card42.host.emrtd.lds.TravelRecordBuilder;
 import card42.host.emrtd.lds.VisaRecord;
 import card42.host.emrtd.lds.VisaRecordBuilder;
-import card42.host.emrtd.perso.EmrtdPersoExporter;
+import card42.host.emrtd.tools.EmrtdPersoExporter;
 import card42.host.emrtd.report.PassportReport;
 
 /**

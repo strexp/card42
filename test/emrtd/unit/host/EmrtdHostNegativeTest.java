@@ -72,6 +72,33 @@ final class EmrtdHostNegativeTest {
         hostChipAuthRejection();
         rsaActiveAuthentication();
         cliExitCodes();
+        installRoleValidation();
+    }
+
+    /** An unknown instance AID must not silently become a Biometrics app. */
+    private static void installRoleValidation() {
+        card42.emrtd.EmrtdInstallParameters params =
+                new card42.emrtd.EmrtdInstallParameters();
+        byte[] lds1 = Hex.parse("07A0000002471001");
+        params.capture(lds1, (short) 0, (short) lds1.length);
+        Asserts.eq(card42.emrtd.EmrtdInstallParameters.ROLE_LDS1, params.role(),
+                "LDS1 DF name resolves to LDS1");
+
+        card42.emrtd.EmrtdInstallParameters unknown =
+                new card42.emrtd.EmrtdInstallParameters();
+        byte[] bogus = Hex.parse("07A0000002479999");
+        unknown.capture(bogus, (short) 0, (short) bogus.length);
+        Asserts.sw((short) 0x6A80, unknown::role,
+                "unknown eMRTD AID is rejected with 6A80");
+    }
+
+    private static boolean throwsIllegal(Runnable action) {
+        try {
+            action.run();
+            return false;
+        } catch (IllegalArgumentException e) {
+            return true;
+        }
     }
 
     /** BAC must reject a wrong M_IC and a wrong recovered random (§9.7.3). */

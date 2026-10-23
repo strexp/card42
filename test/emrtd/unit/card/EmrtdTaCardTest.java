@@ -27,7 +27,7 @@ import card42.host.emrtd.ta.CvCertificate;
 import card42.host.emrtd.ta.CvCertificateBuilder;
 import card42.host.emrtd.ta.CvCertificateCodec;
 import card42.host.emrtd.ta.CvcPrincipal;
-import card42.host.emrtd.ta.TaChain;
+import card42.host.emrtd.tools.TaChain;
 
 /**
  * Card-side Terminal Authentication: P3 certificate-chain verification and P4

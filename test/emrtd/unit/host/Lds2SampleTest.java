@@ -10,7 +10,7 @@ import card42.host.emrtd.lds.CertificateRecord;
 import card42.host.emrtd.lds.Lds2Record;
 import card42.host.emrtd.lds.TravelRecord;
 import card42.host.emrtd.lds.VisaRecord;
-import card42.host.emrtd.perso.EmrtdPersoExporter;
+import card42.host.emrtd.tools.EmrtdPersoExporter;
 import card42.host.emrtd.perso.LdsScript;
 
 /**

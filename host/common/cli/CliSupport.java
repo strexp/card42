@@ -27,6 +27,25 @@ public final class CliSupport {
         return arg.equals("-h") || arg.equals("--help") || arg.equals("help");
     }
 
+    /**
+     * Reads the shared {@code -json} switch: bare {@code -json} means enabled,
+     * {@code -json=1}/{@code -json=0} select explicitly; any other value is a
+     * usage error so a typo cannot silently select text output.
+     */
+    public static boolean json(Args args) {
+        String value = args.get("json", null);
+        if (value == null) {
+            return args.has("json");
+        }
+        if ("1".equals(value) || "true".equalsIgnoreCase(value)) {
+            return true;
+        }
+        if ("0".equals(value) || "false".equalsIgnoreCase(value)) {
+            return false;
+        }
+        throw new IllegalArgumentException("-json must be 1 or 0 (bare -json means 1)");
+    }
+
     /** Prints {@code error: <message>} to stderr and returns {@link #EXIT_USAGE}. */
     public static int fail(String message) {
         return fail(message, System.err);
@@ -36,6 +55,16 @@ public final class CliSupport {
     public static int fail(String message, PrintStream err) {
         err.println("error: " + message);
         return EXIT_USAGE;
+    }
+
+    /**
+     * Prints {@code error: <message>} to stderr and returns
+     * {@link #EXIT_DECLINED}: the command was well-formed but the card or a
+     * verification check refused/failed.
+     */
+    public static int failDeclined(String message) {
+        System.err.println("error: " + message);
+        return EXIT_DECLINED;
     }
 
     /** Prints an unknown-command diagnostic and returns {@link #EXIT_USAGE}. */

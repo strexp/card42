@@ -1,4 +1,4 @@
-package card42.host.emv.lib;
+package card42.host.common.crypto;
 
 import java.math.BigInteger;
 import java.util.Arrays;
@@ -9,10 +9,9 @@ import java.util.Arrays;
  * offline SDA generator ({@code card42.host.emv.app.perso}) (EMV v4.4 Book 2
  * Annex A2.1).
  *
- * <p>It lives in {@code emv.lib} because it is a low-level primitive that both
- * the verification and the personalization modules depend on; keeping it out of
- * {@code emv.oda} lets the generator move to {@code emv.app.perso} without
- * making {@code emv.oda} depend on {@code emv.app} (docs/specs/common/architecture.md §2).
+ * <p>It is a generic crypto primitive, so it lives in {@code common}; both the
+ * verification ({@code emv.oda}) and personalization ({@code emv.app.perso})
+ * modules can depend on it without creating an {@code oda -> app} edge.
  */
 public final class RsaRecovery {
 

@@ -297,12 +297,7 @@ public class SecureMessaging {
                 (short) 4);
         short p = (short) (outOff + icvLength + 4);
         // ISO/IEC 7816-4 padding of the header to the block size.
-        out[p] = (byte) 0x80;
-        p++;
-        while ((short) (p - outOff) % blockSize != 0) {
-            out[p] = (byte) 0x00;
-            p++;
-        }
+        p = Iso7816Padding.padFrom(out, outOff, p, blockSize);
 
         short pos = dataOff;
         short end = (short) (dataOff + dataLen);
@@ -338,12 +333,7 @@ public class SecureMessaging {
                 p += copyLen;
                 // ISO/IEC 7816-4 padding: a mandatory 80 then 00 to the next
                 // multiple of the block size (EMV v4.4 Book 2 Annex D2.3.1).
-                out[p] = (byte) 0x80;
-                p++;
-                while ((short) (p - outOff) % blockSize != 0) {
-                    out[p] = (byte) 0x00;
-                    p++;
-                }
+                p = Iso7816Padding.padFrom(out, outOff, p, blockSize);
             }
             pos = objectEnd;
         }
@@ -495,14 +485,7 @@ public class SecureMessaging {
                     out, outOff);
             // Strip the ISO 7816-4 padding: the last non-zero byte must be the
             // 0x80 marker added before encipherment.
-            short i = (short) (outOff + n);
-            while (i > outOff && out[(short) (i - 1)] == 0) {
-                i--;
-            }
-            if (i <= outOff || out[(short) (i - 1)] != (byte) 0x80) {
-                ISOException.throwIt(SW_WRONG_DATA);
-            }
-            return (short) (i - 1 - outOff);
+            return Iso7816Padding.unpadInPlace(out, outOff, n);
         } catch (ISOException e) {
             throw e;
         } catch (Exception e) {

@@ -6,7 +6,7 @@ import java.util.Arrays;
 import card42.host.common.util.Bytes;
 import card42.host.common.util.Digests;
 import card42.host.common.util.Hex;
-import card42.host.emv.lib.RsaRecovery;
+import card42.host.common.crypto.RsaRecovery;
 import card42.host.emv.app.perso.Sda;
 import card42.host.common.codec.Tags;
 import card42.host.common.codec.TlvWriter;

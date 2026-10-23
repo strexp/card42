@@ -3,7 +3,6 @@ package card42.host.emrtd.access;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.security.interfaces.ECPublicKey;
 import java.util.Arrays;
@@ -11,6 +10,7 @@ import java.util.Arrays;
 import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.codec.DerWriter;
+import card42.host.common.crypto.Kdf;
 import card42.host.common.crypto.P256;
 import card42.host.common.util.Sw;
 import card42.host.emrtd.lds.security.ChipAuthenticationInfo;
@@ -155,20 +155,8 @@ public final class ChipAuth {
     }
 
     /** As {@link #deriveKey(byte[], int)} with an explicit AES/3DES profile. */
-    public static byte[] deriveKey(byte[] z, int counter, boolean aes) throws Exception {
-        byte[] in = new byte[z.length + 4];
-        System.arraycopy(z, 0, in, 0, z.length);
-        in[z.length + 3] = (byte) counter;
-        byte[] key = java.util.Arrays.copyOf(
-                MessageDigest.getInstance("SHA-1").digest(in), 16);
-        if (!aes) {
-            for (int i = 0; i < key.length; i++) {
-                if ((Integer.bitCount(key[i] & 0xFF) & 1) == 0) {
-                    key[i] ^= 0x01;
-                }
-            }
-        }
-        return key;
+    public static byte[] deriveKey(byte[] z, int counter, boolean aes) {
+        return Kdf.sha1Counter(z, counter, !aes);
     }
 
     /** The uncompressed EC point W = 0x04 || X || Y. */

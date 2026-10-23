@@ -5,6 +5,7 @@ import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
 import card42.host.emv.crypto.AcCrypto;
+import card42.host.common.util.Bytes;
 import card42.host.common.util.Hex;
 import card42.host.common.codec.TlvWriter;
 
@@ -63,7 +64,7 @@ public final class IssuerHost {
     public byte[] inlineIssuerAuthData(int byte2, int pinTryCounter)
             throws GeneralSecurityException {
         byte[] csu = csu(byte2, pinTryCounter);
-        return concat(arpcMethod2(csu, new byte[0]), csu);
+        return Bytes.concat(arpcMethod2(csu, new byte[0]), csu);
     }
 
     /**
@@ -84,10 +85,5 @@ public final class IssuerHost {
         return out.toByteArray();
     }
 
-    private static byte[] concat(byte[] a, byte[] b) {
-        byte[] out = new byte[a.length + b.length];
-        System.arraycopy(a, 0, out, 0, a.length);
-        System.arraycopy(b, 0, out, a.length, b.length);
-        return out;
-    }
+
 }

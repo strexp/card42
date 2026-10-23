@@ -314,21 +314,11 @@ public final class Lds2Verifier {
         if (trust == null) {
             problems.add("no CSCA trust store (trust not verified)");
         } else {
-            for (X509Certificate csca : trust.certificates()) {
-                if (!certificate.getIssuerX500Principal().equals(
-                        csca.getSubjectX500Principal())) {
-                    continue;
-                }
-                try {
-                    csca.checkValidity(at);
-                    certificate.verify(csca.getPublicKey());
-                    trust.checkRevocation(certificate, at);
-                    trusted = true;
-                    break;
-                } catch (Exception e) {
-                    trustError = e.getMessage();
-                    // Try the next CSCA; the signature/date is not valid.
-                }
+            try {
+                CertificateTrust.verify(certificate, trust, at);
+                trusted = true;
+            } catch (Exception e) {
+                trustError = e.getMessage();
             }
             if (!trusted) {
                 problems.add("not signed by a trusted CSCA"

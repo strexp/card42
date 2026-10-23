@@ -607,7 +607,7 @@ public class IssuerScriptTest {
             return;
         }
         byte[] cdol2 = new byte[TerminalDol.dolDataLength(cdol2Def)];
-        int authOff = AcCrypto.dolValueOffset(cdol2Def, 0x91);
+        int authOff = TerminalDol.dolValueOffset(cdol2Def, 0x91);
         byte[] csu = { 0x00, (byte) 0xA0, 0x00, 0x00 }; // Approve + Application Block
         byte[] arpc = AcCrypto.computeArpcMethod2(sk, firstAc, csu, new byte[0]);
         System.arraycopy(arpc, 0, cdol2, authOff, 4);
@@ -676,7 +676,7 @@ public class IssuerScriptTest {
         ResponseAPDU rec1 = terminal.readRecord(1, 1);
         byte[] cdol2Def = Tags.find(rec1.getData(), 0x8D);
         byte[] cdol2 = new byte[TerminalDol.dolDataLength(cdol2Def)];
-        int authOff = AcCrypto.dolValueOffset(cdol2Def, 0x91);
+        int authOff = TerminalDol.dolValueOffset(cdol2Def, 0x91);
         byte[] arpc = AcCrypto.computeArpcMethod2(sk, firstAc, csu, new byte[0]);
         System.arraycopy(arpc, 0, cdol2, authOff, 4);
         System.arraycopy(csu, 0, cdol2, authOff + 4, 4);

@@ -31,4 +31,12 @@ public interface OdaVerifier {
     byte[] verifyCda(byte[] responseData, byte[] cdol1Data, byte[] cdol2Data,
                      byte[] pdolData, byte[] unpredictableNumber, IssuerKey iccKey,
                      int expectedCid, TransactionResult.Mutable result);
+
+    /** Recovers the PIN-encipherment ICC key, or null when the data is absent. */
+    IssuerKey recoverPinKey(Terminal terminal, IssuerKey issuer, byte[] transactionDate)
+            throws Exception;
+
+    /** Recovers the DDA/CDA ICC key, or null when the data is absent. */
+    IssuerKey recoverIccKey(Terminal terminal, IssuerKey issuer, byte[] transactionDate)
+            throws Exception;
 }

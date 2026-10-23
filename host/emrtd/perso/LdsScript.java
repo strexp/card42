@@ -107,7 +107,7 @@ public final class LdsScript {
         public final byte[] authorization;
         public final boolean secondary;
 
-        TrustPoint(byte[] publicKey, String car, String effective, byte[] authorization,
+        public TrustPoint(byte[] publicKey, String car, String effective, byte[] authorization,
                    boolean secondary) {
             this.rsa = false;
             this.publicKey = publicKey;
@@ -119,7 +119,7 @@ public final class LdsScript {
             this.secondary = secondary;
         }
 
-        TrustPoint(byte[] modulus, byte[] exponent, String car, String effective,
+        public TrustPoint(byte[] modulus, byte[] exponent, String car, String effective,
                    byte[] authorization, boolean secondary) {
             this.rsa = true;
             this.publicKey = null;

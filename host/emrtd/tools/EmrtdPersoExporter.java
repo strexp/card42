@@ -1,4 +1,4 @@
-package card42.host.emrtd.perso;
+package card42.host.emrtd.tools;
 
 
 import java.io.ByteArrayOutputStream;
@@ -18,13 +18,16 @@ import card42.host.common.codec.DerWriter;
 import card42.host.common.codec.TlvWriter;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.access.MrzKeySeed;
+import card42.host.emrtd.perso.CardSecurityBuilder;
+import card42.host.emrtd.perso.Dg2Builder;
+import card42.host.emrtd.perso.LdsScript;
+import card42.host.emrtd.perso.SodBuilder;
 import card42.host.emrtd.lds.BiometricsRecordBuilder;
 import card42.host.emrtd.lds.CertificateRecordBuilder;
 import card42.host.emrtd.lds.LdsFileUtil;
 import card42.host.emrtd.lds.TravelRecordBuilder;
 import card42.host.emrtd.lds.VisaRecordBuilder;
 import card42.host.emrtd.lds.security.SecurityInfo;
-import card42.host.emrtd.ta.TaChain;
 
 /**
  * Builds the GP STORE DATA DGI sequence that personalizes a card42-emrtd LDS1

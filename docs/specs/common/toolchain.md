@@ -411,15 +411,15 @@ version / help [command]
 
 # card42-emrtd
 terminal emrtd read    -host=... -doc=... -dob=YYMMDD -doe=YYMMDD [-pace] [-can=<6 digits>] [-ca] \
-                       [-ta -ta-chain=<file> -ta-key=<hex>] [-csca=<cert>] [-json=1]  BAC/PACE+SM+CA+TA+PA+AA
-terminal emrtd inspect -host=... [-json=1]                                    只读（COM/DG15）
-terminal emrtd lds2    -host=... [-app=travel|visa|biometrics] \
+                       [-ta -ta-chain=<file> -ta-key=<hex>] [-csca=<cert>] [-json[=1]]  BAC/PACE+SM+CA+TA+PA+AA
+terminal emrtd inspect -host=... -wait=<s> -trace [-json[=1]]                                    只读（COM/DG15）
+terminal emrtd lds2    -host=... -wait=<s> -trace [-app=travel|visa|biometrics] \
                        (-pace -doc=... -dob=YYMMDD -doe=YYMMDD | -can=<CAN>) \
                        [-ca] [-ta -ta-chain=<file> -ta-key=<hex>] \
-                       [-record=entry|exit|visa|cert|all] [-json=1] \
-                       [-append=<json> -ts-key=<pem> [-cert-ref=n]]      LDS2 CardAccess/记录/追加
+                       [-record=entry|exit|visa|cert|all] [-json[=1]] \
+                       [-append=<json> -ts-key=<pem> [-cert-ref=n] -yes]  LDS2 CardAccess/记录/追加
 terminal emrtd ta-export -dir=<path>                                          生成 demo CV 证书链 + 终端私钥
-terminal emrtd apdu    -host=... -apdu=<hex>                                  原始 APDU
+terminal emrtd apdu    -host=... -wait=<s> -trace -apdu=<hex>                                  原始 APDU
 version / help
 ```
 
@@ -442,7 +442,7 @@ java -p tools/java_card_devkit_simulator-linux-bin-*/client/COMService \
 
 `card` 族把卡侧后发行命令与 GET DATA 暴露给运维/调试：`block-app`/`unblock-app`/`block`
 与 `pin-change`/`pin-unblock` 走 Format 1 安全报文（`-mac-key=`，PIN 改密另需 `-enc-key=`），
-`get-data`/`atc`/`last-online-atc` 为普通 GET DATA。`card block` 不可逆，需 `-yes` 确认。
+`get-data`/`atc`/`last-online-atc` 为普通 GET DATA。`card block`、`pin-change`、`pin-unblock` 均改变卡状态，需 `-yes` 确认。
 退出码：`0` 成功（SW=9000）、`1` 卡拒绝（非 9000）、`2` 用法或连接错误。
 
 `terminal pay` 的传输描述符支持 `pcsc[:<idx>]`（真卡）与 `socket:<host>:<port>`（模拟器）。
@@ -458,7 +458,7 @@ java -cp build/deliverables/card42-emv-cli.jar:build/deliverables/card42-emv.jar
 报告写 stdout，诊断写 stderr；`-report=<path>` 写文件。`-trace` 打印每个 APDU。在线授权支持
 闭环（`-icc-key=`/`-csu=`/`-arc=`）、外部子进程一行 JSON（`-issuer-cmd=`）与静态回放
 （`-auth=`）；`-online=auto|always|never|decline` 覆盖策略。详细选项见
-`Main help "terminal pay"`。
+`java -jar build/deliverables/card42-emv-cli.jar help "terminal pay"`。
 
 ## 8. 备注
 

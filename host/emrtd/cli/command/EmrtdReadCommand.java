@@ -45,16 +45,27 @@ final class EmrtdReadCommand {
     /** {@code read} (full) or {@code inspect} (DG15/COM without BAC). */
     static int run(String[] args, boolean inspectOnly) throws Exception {
         Args parsed = new Args(args,
-                new String[] { "host", "doc", "dob", "doe", "can", "csca", "json",
+                new String[] { "host", "wait", "doc", "dob", "doe", "can", "csca",
                         "ta-chain", "ta-key" },
-                new String[] { "pace", "ca", "ta" });
+                new String[] { "pace", "ca", "ta", "trace" },
+                new String[] { "json" });
+        if (parsed.help()) {
+            usage(System.out);
+            return CliSupport.EXIT_OK;
+        }
+        parsed.requireNoPositionals();
         String host = parsed.get("host", "socket:localhost:9025");
-        boolean json = "1".equals(parsed.get("json", "0"));
-        try (TerminalSession session = TerminalSession.open(host, 10, false, System.out)) {
+        int wait = Integer.parseInt(parsed.get("wait", "10"));
+        if (wait < 0) {
+            throw new IllegalArgumentException("-wait must be >= 0 seconds: " + wait);
+        }
+        boolean json = CliSupport.json(parsed);
+        try (TerminalSession session = TerminalSession.open(
+                host, wait, parsed.has("trace"), System.err)) {
             EmrtdTerminal terminal = new EmrtdTerminal(session.terminal);
             ResponseAPDU selected = terminal.selectLds1();
             if (selected.getSW() != 0x9000) {
-                return CliSupport.fail("SELECT LDS1 -> " + sw(selected.getSW()));
+                return CliSupport.failDeclined("SELECT LDS1 -> " + sw(selected.getSW()));
             }
             if (inspectOnly) {
                 Com com = Com.parse(LdsReader.read(terminal, LdsFileUtil.FID_COM));
@@ -62,7 +73,7 @@ final class EmrtdReadCommand {
                 boolean aa = activeAuthentication(terminal, dg15);
                 System.out.print(json ? PassportReport.json(null, com, dg15, null)
                         : PassportReport.text(null, com, dg15, null));
-                System.out.println("Active Authentication: " + (aa ? "OK" : "not verified"));
+                status(json, "Active Authentication: " + (aa ? "OK" : "not verified"));
                 return CliSupport.EXIT_OK;
             }
             String doc = parsed.get("doc", null);
@@ -120,7 +131,7 @@ final class EmrtdReadCommand {
             ChipAuth.Result caResult = ca ? chipAuthentication(terminal, trust) : null;
             boolean caOk = caResult != null;
             if (ca && trust == null) {
-                System.out.println("EF.CardSecurity signature: not verified (no -csca)");
+                status(json, "EF.CardSecurity signature: not verified (no -csca)");
             }
 
             // Optional Terminal Authentication (Doc 9303-11 §7.1): on top of CA,
@@ -141,7 +152,7 @@ final class EmrtdReadCommand {
                 TerminalAuth.authenticate(terminal, chain,
                         new java.math.BigInteger(keyHex, 16), identifier, keyHash,
                         new java.security.SecureRandom());
-                System.out.println("Terminal Authentication: OK");
+                status(json, "Terminal Authentication: OK");
             }
             byte[] dg1Bytes = LdsReader.read(terminal, LdsFileUtil.FID_DG1);
             Dg1 dg1 = Dg1.parse(dg1Bytes);
@@ -150,16 +161,19 @@ final class EmrtdReadCommand {
             Dg2 dg2 = Dg2.parse(dg2Bytes);
             System.out.print(json ? PassportReport.json(dg1, com, clearDg15, dg2)
                     : PassportReport.text(dg1, com, clearDg15, dg2));
-            System.out.println("Active Authentication: " + (aa ? "OK" : "not verified"));
+            status(json, "Active Authentication: " + (aa ? "OK" : "not verified"));
             if (ca) {
-                System.out.println("Chip Authentication: " + (caOk ? "OK" : "not available"));
+                status(json, "Chip Authentication: " + (caOk ? "OK" : "not available"));
             }
             if (trust == null) {
-                System.out.println("Passive Authentication: not verified (no -csca)");
+                status(json, "Passive Authentication: not verified (no -csca)");
             } else {
                 boolean pa = passiveAuthentication(terminal, trust, dg1Bytes, dg2Bytes,
                         clearDg15Bytes);
-                System.out.println("Passive Authentication: " + (pa ? "OK" : "FAILED"));
+                status(json, "Passive Authentication: " + (pa ? "OK" : "FAILED"));
+                if (!pa) {
+                    return CliSupport.EXIT_DECLINED;
+                }
             }
             return CliSupport.EXIT_OK;
         }
@@ -180,7 +194,7 @@ final class EmrtdReadCommand {
         try {
             PassiveAuthentication.verifyDocumentType(result.dsc, Dg1.parse(dg1));
         } catch (IllegalStateException e) {
-            System.out.println("DocumentType check: " + e.getMessage());
+            System.err.println("DocumentType check: " + e.getMessage());
             return false;
         }
         boolean ok = PassiveAuthentication.verifyDataGroup(securityObject, 1, dg1)
@@ -252,5 +266,21 @@ final class EmrtdReadCommand {
 
     private static String sw(int sw) {
         return String.format("%04X", sw & 0xFFFF);
+    }
+
+    /** Progress/verification lines: stderr in JSON mode so stdout stays a valid document. */
+    private static void status(boolean json, String message) {
+        (json ? System.err : System.out).println(message);
+    }
+
+    static void usage(java.io.PrintStream out) {
+        out.println("usage: Main terminal emrtd <read|inspect> [options]");
+        out.println("  read     SELECT LDS1, run BAC/PACE + CA/TA, read the DGs, verify PA/AA");
+        out.println("  inspect  read COM/DG15 without BAC (public data only)");
+        out.println("  transport: -host=pcsc[:i]|socket:host:port -wait=<s> -trace");
+        out.println("  read     : -doc=<no> -dob=YYMMDD -doe=YYMMDD  (or -can=<CAN> for PACE-CAN)");
+        out.println("             -pace -ca -ta -ta-chain=<file> -ta-key=<hex> -csca=<cert|dir>");
+        out.println("  output   : -json=1  structured JSON on stdout, diagnostics on stderr");
+        out.println("  note     : -json=0 (default) prints the text report");
     }
 }

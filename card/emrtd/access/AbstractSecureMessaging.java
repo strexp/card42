@@ -1,6 +1,7 @@
 package card42.emrtd;
 
 import card42.common.ConstantTime;
+import card42.common.Iso7816Padding;
 import card42.common.Tlv;
 
 import javacard.framework.ISO7816;
@@ -187,7 +188,7 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         scratch[n++] = apdu[ISO7816.OFFSET_INS];
         scratch[n++] = apdu[ISO7816.OFFSET_P1];
         scratch[n++] = apdu[ISO7816.OFFSET_P2];
-        n = pad(scratch, n);
+        n = Iso7816Padding.pad(scratch, n, blockSize());
         if (do87Start >= 0) {
             n = append(scratch, n, apdu, do87Start, do87Total);
         } else if (do85Start >= 0) {
@@ -196,7 +197,7 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         if (do97Start >= 0) {
             n = append(scratch, n, apdu, do97Start, do97Total);
         }
-        n = pad(scratch, n);
+        n = Iso7816Padding.pad(scratch, n, blockSize());
 
         // N is already M2-padded, so the MAC runs without a second padding
         // block (Doc 9303-11 Appendix D.4).
@@ -234,7 +235,7 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         // scratch round-trip (decrypt to scratch, then copy to out) is dropped.
         short cipherLen = (short) (do87Len - 1);
         decryptBlock(ksEnc, apdu, (short) (do87Val + 1), cipherLen, out, outOff);
-        return unpadInPlace(out, outOff, cipherLen);
+        return Iso7816Padding.unpadInPlace(out, outOff, cipherLen);
     }
 
     public final short wrap(byte[] ksEnc, byte[] ksMac, byte[] ssc,
@@ -268,7 +269,7 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
 
         short do87Len = 0;
         if (respLen > 0) {
-            short padLen = paddedLength(respLen);
+            short padLen = Iso7816Padding.paddedLength(respLen, blockSize());
             out[n++] = (byte) 0x87;
             n = Tlv.appendLength((short) (padLen + 1), out, n);
             out[n++] = (byte) 0x01;
@@ -293,7 +294,7 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         // instead of an ArrayIndexOutOfBoundsException.
         short sscLen = copySscLength();
         short macLen = (short) (sscLen + do87Len + 4);
-        short paddedMac = paddedLength(macLen);
+        short paddedMac = Iso7816Padding.paddedLength(macLen, blockSize());
         if (paddedMac > scratch.length) {
             ISOException.throwIt(ISO7816.SW_FILE_FULL);
         }
@@ -303,7 +304,7 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
             m = append(scratch, m, out, outOff, do87Len);
         }
         m = append(scratch, m, out, do99Off, (short) 4);
-        m = pad(scratch, m);
+        m = Iso7816Padding.pad(scratch, m, blockSize());
         mac(ksMac, scratch, m, macBuffer);
 
         out[n++] = (byte) 0x8E;
@@ -366,36 +367,15 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
      */
     private void encrypt(byte[] k, byte[] in, short inOff, short inLen,
                          byte[] out, short outOff, byte[] scratch) {
-        short padded = paddedLength(inLen);
+        short padded = Iso7816Padding.paddedLength(inLen, blockSize());
         if (padded > scratch.length) {
             ISOException.throwIt(ISO7816.SW_FILE_FULL);
         }
         if (scratch != in || inOff != 0) {
             Util.arrayCopyNonAtomic(in, inOff, scratch, (short) 0, inLen);
         }
-        scratch[inLen] = (byte) 0x80;
-        for (short i = (short) (inLen + 1); i < padded; i++) {
-            scratch[i] = 0;
-        }
+        Iso7816Padding.pad(scratch, inLen, blockSize());
         encryptBlock(k, scratch, (short) 0, padded, out, outOff);
-    }
-
-    /** Length after M2 padding: append 0x80 and zeros to a block multiple. */
-    private short paddedLength(short len) {
-        short b = blockSize();
-        return (short) ((len + b) - (len % b));
-    }
-
-    /** Appends 0x80 then zeros until the length is a block multiple. */
-    private short pad(byte[] buf, short len) {
-        short b = blockSize();
-        buf[len] = (byte) 0x80;
-        len++;
-        while ((len % b) != 0) {
-            buf[len] = 0;
-            len++;
-        }
-        return len;
     }
 
     private static short append(byte[] dst, short dstOff, byte[] src, short srcOff, short len) {
@@ -403,16 +383,5 @@ public abstract class AbstractSecureMessaging implements SecureMessaging {
         return (short) (dstOff + len);
     }
 
-    /** Strips the 0x80 00.. M2 padding written by the peer, in place
-     * (ISO/IEC 7816-4 §5.6.3; ICAO Doc 9303-11 §9.8.4). */
-    private static short unpadInPlace(byte[] buf, short off, short len) {
-        short i = (short) (off + len);
-        while (i > off && buf[(short) (i - 1)] == 0) {
-            i--;
-        }
-        if (i <= off || buf[(short) (i - 1)] != (byte) 0x80) {
-            ISOException.throwIt(ISO7816.SW_WRONG_DATA);
-        }
-        return (short) (i - 1 - off);
-    }
+
 }

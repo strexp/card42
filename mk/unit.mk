@@ -31,10 +31,12 @@ UNIT_SRC      := $(shell find test/emv/unit -name '*.java') \
 UNIT_CARD_SRC := \
   $(CARD_COMMON_DIR)/applet/ApduIo.java $(CARD_COMMON_DIR)/applet/AppletBase.java \
   $(CARD_COMMON_DIR)/applet/InstallParams.java $(CARD_COMMON_DIR)/applet/IsoStatus.java \
+  $(CARD_COMMON_DIR)/applet/PersoErrors.java \
   $(CARD_COMMON_DIR)/crypto/AesCmac.java $(CARD_COMMON_DIR)/crypto/ConstantTime.java \
   $(CARD_COMMON_DIR)/crypto/MacAlgorithm.java $(CARD_COMMON_DIR)/crypto/RetailMac.java \
   $(CARD_COMMON_DIR)/mem/TransientBuffers.java \
-  $(CARD_COMMON_DIR)/tlv/Tlv.java $(CARD_COMMON_DIR)/tlv/TlvReader.java \
+  $(CARD_COMMON_DIR)/tlv/Iso7816Padding.java $(CARD_COMMON_DIR)/tlv/Tlv.java \
+  $(CARD_COMMON_DIR)/tlv/TlvReader.java \
   \
   $(CARD_EMV_DIR)/applet/InstallParameters.java \
   $(CARD_EMV_DIR)/builder/AcResponseBuilder.java $(CARD_EMV_DIR)/builder/DirectoryBuilder.java \
@@ -44,21 +46,21 @@ UNIT_CARD_SRC := \
   $(CARD_EMV_DIR)/constants/EMVCommands.java $(CARD_EMV_DIR)/constants/EMVRoles.java \
   $(CARD_EMV_DIR)/constants/EMVStatus.java \
   $(CARD_EMV_DIR)/crypto/CryptoProfile.java $(CARD_EMV_DIR)/crypto/EMVCrypto.java \
-  $(CARD_EMV_DIR)/crypto/SecureMessaging.java $(CARD_EMV_DIR)/crypto/SessionKey.java \
+  $(CARD_EMV_DIR)/sm/SecureMessaging.java $(CARD_EMV_DIR)/crypto/SessionKey.java \
   $(CARD_EMV_DIR)/data/DirectoryRecords.java $(CARD_EMV_DIR)/data/EMVStaticData.java \
   $(CARD_EMV_DIR)/data/Iad.java $(CARD_EMV_DIR)/data/PaymentData.java \
   $(CARD_EMV_DIR)/data/RecordStore.java $(CARD_EMV_DIR)/data/SdaCertificateData.java \
   $(CARD_EMV_DIR)/data/TransactionLog.java \
   $(CARD_EMV_DIR)/mem/EmvEngines.java $(CARD_EMV_DIR)/mem/EmvScratch.java \
-  $(CARD_EMV_DIR)/perso/PersoErrors.java $(CARD_EMV_DIR)/perso/PersoRules.java \
+  $(CARD_EMV_DIR)/perso/PersoRules.java \
   $(CARD_EMV_DIR)/risk/CardRiskManagement.java $(CARD_EMV_DIR)/risk/OfflineRisk.java \
   $(CARD_EMV_DIR)/state/EMVProtocolState.java \
   $(CARD_EMV_DIR)/tlv/Dgi.java $(CARD_EMV_DIR)/tlv/DgiReader.java \
-  $(CARD_EMV_DIR)/tlv/DolReader.java $(CARD_EMV_DIR)/tlv/TlvTags.java \
+  $(CARD_EMV_DIR)/tlv/DolReader.java $(CARD_EMV_DIR)/constants/TlvTags.java \
   \
   $(CARD_EMRTD_DIR)/access/AbstractSecureMessaging.java $(CARD_EMRTD_DIR)/access/BacCrypto.java \
   $(CARD_EMRTD_DIR)/access/ChipAuth.java $(CARD_EMRTD_DIR)/access/Iso7816Sm.java \
-  $(CARD_EMRTD_DIR)/access/Iso7816SmAes.java $(CARD_EMRTD_DIR)/access/MrzKeySeed.java \
+  $(CARD_EMRTD_DIR)/access/Iso7816SmAes.java \
   $(CARD_EMRTD_DIR)/access/PaceSeedSink.java $(CARD_EMRTD_DIR)/access/SecureMessaging.java \
   $(CARD_EMRTD_DIR)/applet/EmrtdApplet.java $(CARD_EMRTD_DIR)/applet/EmrtdInstallParameters.java \
   $(CARD_EMRTD_DIR)/command/ExternalAuthenticate.java $(CARD_EMRTD_DIR)/command/GetChallenge.java \
@@ -69,6 +71,7 @@ UNIT_CARD_SRC := \
   $(CARD_EMRTD_DIR)/crypto/AaCrypto.java $(CARD_EMRTD_DIR)/crypto/P256.java \
   $(CARD_EMRTD_DIR)/crypto/Sha1Kdf.java \
   $(CARD_EMRTD_DIR)/lds/Lds2FileSystem.java $(CARD_EMRTD_DIR)/lds/Lds2RecordFile.java \
+  $(CARD_EMRTD_DIR)/lds/PagedFile.java \
   $(CARD_EMRTD_DIR)/lds/Lds2TransparentFile.java $(CARD_EMRTD_DIR)/lds/LdsCatalog.java \
   $(CARD_EMRTD_DIR)/lds/LdsFile.java $(CARD_EMRTD_DIR)/lds/LdsFileSystem.java \
   $(CARD_EMRTD_DIR)/lds/LdsMfStore.java \
@@ -78,7 +81,7 @@ UNIT_CARD_SRC := \
   $(CARD_EMRTD_DIR)/perso/LdsPerso.java \
   $(CARD_EMRTD_DIR)/ta/TaContext.java \
   $(CARD_EMRTD_DIR)/ta/TaKeys.java $(CARD_EMRTD_DIR)/ta/TaTrustStore.java \
-  $(CARD_EMRTD_DIR)/tlv/EmrtdTags.java
+  $(CARD_EMRTD_DIR)/constants/EmrtdTags.java
 
 UNIT_HOST_SRC := $(HOST_COMMON_SRC) $(HOST_EMV_SRC) $(HOST_EMRTD_SRC)
 

@@ -6,6 +6,8 @@ import java.util.Arrays;
 import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.crypto.Iso9797;
+import card42.host.common.crypto.Kdf;
+import card42.host.common.util.Bytes;
 import card42.host.common.util.Sw;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
@@ -41,12 +43,7 @@ public final class Bac {
 
     /** Derives K_enc (marker 1) or K_mac (marker 2) from the 16-byte seed. */
     public static byte[] deriveKey(byte[] seed, int marker) {
-        byte[] in = new byte[20];
-        System.arraycopy(seed, 0, in, 0, 16);
-        in[19] = (byte) marker;
-        byte[] key = Arrays.copyOf(sha1(in), 16);
-        adjustParity(key);
-        return key;
+        return Kdf.sha1Counter(seed, 0, 16, marker, true);
     }
 
     /** Runs BAC against the terminal and returns the session keys/SSC. */
@@ -58,10 +55,10 @@ public final class Bac {
         byte[] rndIfd = random(8);
         byte[] kifd = random(16);
 
-        byte[] s = concat(rndIfd, rndIcc, kifd);
+        byte[] s = Bytes.concat(rndIfd, rndIcc, kifd);
         byte[] eifd = Iso9797.des3CbcEncrypt(kenc, s);
         byte[] mifd = Iso9797.mac(kmac, eifd);
-        ResponseAPDU r = terminal.externalAuthenticate(concat(eifd, mifd));
+        ResponseAPDU r = terminal.externalAuthenticate(Bytes.concat(eifd, mifd));
         if (r.getSW() != 0x9000 || r.getData().length != 40) {
             throw new IllegalStateException("BAC EXTERNAL AUTHENTICATE failed: "
                     + Sw.format(r.getSW()));
@@ -98,22 +95,6 @@ public final class Bac {
         return seed;
     }
 
-    private static byte[] sha1(byte[] in) {
-        try {
-            return java.security.MessageDigest.getInstance("SHA-1").digest(in);
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private static void adjustParity(byte[] key) {
-        for (int i = 0; i < key.length; i++) {
-            if ((Integer.bitCount(key[i] & 0xFF) & 1) == 0) {
-                key[i] ^= 0x01;
-            }
-        }
-    }
-
     private static long uint32(byte[] buf, int off) {
         return ((long) (buf[off] & 0xFF) << 24)
                 | ((buf[off + 1] & 0xFF) << 16)
@@ -127,17 +108,5 @@ public final class Bac {
         return out;
     }
 
-    private static byte[] concat(byte[]... parts) {
-        int len = 0;
-        for (byte[] p : parts) {
-            len += p.length;
-        }
-        byte[] out = new byte[len];
-        int off = 0;
-        for (byte[] p : parts) {
-            System.arraycopy(p, 0, out, off, p.length);
-            off += p.length;
-        }
-        return out;
-    }
+
 }

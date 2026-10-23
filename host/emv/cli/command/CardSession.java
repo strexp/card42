@@ -10,10 +10,10 @@ import card42.host.common.cli.Args;
 import card42.host.common.util.Hex;
 import card42.host.common.util.Sw;
 import card42.host.emv.crypto.AcCrypto;
+import card42.host.emv.kernel.data.TerminalDol;
 import card42.host.emv.crypto.ScriptSession;
 import card42.host.emv.kernel.core.TransactionResult;
 import card42.host.emv.kernel.data.TerminalConfig;
-import card42.host.emv.kernel.data.TerminalDol;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.lib.Responses;
 import card42.host.emv.lib.TagPolicy;
@@ -42,6 +42,7 @@ final class CardSession {
     static final String[] PIN_CHANGE_VALUE = {
         "host", "wait", "aid", "mac-key", "enc-key", "old", "new",
     };
+    static final String[] PIN_FLAG = { "trace", "yes" };
     static final String[] PIN_UNBLOCK_VALUE = {
         "host", "wait", "aid", "mac-key", "enc-key", "puk", "new",
     };
@@ -84,7 +85,7 @@ final class CardSession {
             throw new IllegalStateException("READ RECORD 1 -> " + Sw.format(record.getSW()));
         }
         byte[] cdol1 = Tags.find(record.getData(), 0x8C);
-        int length = cdol1 == null ? 0 : AcCrypto.dolDataLength(cdol1);
+        int length = cdol1 == null ? 0 : TerminalDol.dolDataLength(cdol1);
         ResponseAPDU first = terminal.generateAc((byte) 0x80, length);
         if (first.getSW() != 0x9000) {
             throw new IllegalStateException("first GENERATE AC -> " + Sw.format(first.getSW()));

@@ -39,6 +39,7 @@ public final class TerminalApduCommand {
             usage(System.out);
             return 0;
         }
+        args.requireNoPositionals();
         String host = args.get("host", "pcsc:0");
         int wait = Integer.parseInt(args.get("wait", "10"));
 

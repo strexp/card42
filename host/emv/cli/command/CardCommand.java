@@ -12,6 +12,7 @@ import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.lib.Terminal;
 import card42.host.common.transport.TerminalSession;
 import card42.host.common.cli.Args;
+import card42.host.common.cli.CliSupport;
 import card42.host.common.util.Hex;
 import card42.host.common.util.Sw;
 
@@ -24,7 +25,7 @@ import card42.host.common.util.Sw;
  *   card unblock-app [-aid=]      APPLICATION UNBLOCK (EMV v4.4 Book 3 §6.5.2)
  *   card block [-yes]             CARD BLOCK, irreversible (EMV v4.4 Book 3 §6.5.3)
  *   card pin-change -old= -new=   PIN change (EMV v4.4 Book 3 §6.5.10)
- *   card pin-unblock [-puk= -new=] PIN CHANGE/UNBLOCK P2=00 (EMV v4.4 Book 3 §6.5.10)
+ *   card pin-unblock [-new=]      PIN CHANGE/UNBLOCK P2=00 (EMV v4.4 Book 3 §6.5.10)
  *   card get-data -tag=           GET DATA for a 9Fxx tag (EMV v4.4 Book 3 §6.5.7)
  *   card atc                      ATC (9F36)
  *   card last-online-atc          last online ATC (9F13)
@@ -80,12 +81,13 @@ public final class CardCommand {
                     ? "block-app" : "unblock-app", System.out);
             return 0;
         }
-        if (cardBlock && !CardSession.confirmed(args)) {
-            System.err.println("card block: aborted (pass -yes to confirm)");
-            return 2;
-        }
+        args.requireNoPositionals();
         byte[] macKey = Hex.parse(args.require("mac-key"));
         byte[] encKey = args.has("enc-key") ? Hex.parse(args.get("enc-key", "")) : null;
+        if (cardBlock && !CardSession.confirmed(args)) {
+            System.err.println("card block: aborted (pass -yes to confirm)");
+            return CliSupport.EXIT_DECLINED;
+        }
         try (TerminalSession terminalSession = TerminalSession.open(
                 args.get("host", "pcsc:0"),
                 Integer.parseInt(args.get("wait", "10")), args.has("trace"), System.err)) {
@@ -104,10 +106,14 @@ public final class CardCommand {
      * ENC session key (EMV v4.4 Book 2 §9.2).
      */
     private static int pinChange(String[] argv) throws Exception {
-        Args args = new Args(argv, CardSession.PIN_CHANGE_VALUE, CardSession.BASE_FLAG);
+        Args args = new Args(argv, CardSession.PIN_CHANGE_VALUE, CardSession.PIN_FLAG);
         if (args.help()) {
             usage("pin-change", System.out);
             return 0;
+        }
+        args.requireNoPositionals();
+        if (!args.has("yes")) {
+            return CliSupport.fail("card pin-change changes the cardholder PIN; pass -yes");
         }
         String oldPin = args.require("old");
         String newPin = args.require("new");
@@ -146,14 +152,18 @@ public final class CardCommand {
      * sent instead (the reference card refuses it).
      */
     private static int pinUnblock(String[] argv) throws Exception {
-        Args args = new Args(argv, CardSession.PIN_UNBLOCK_VALUE, CardSession.BASE_FLAG);
+        Args args = new Args(argv, CardSession.PIN_UNBLOCK_VALUE, CardSession.PIN_FLAG);
         if (args.help()) {
             usage("pin-unblock", System.out);
             return 0;
         }
+        args.requireNoPositionals();
+        if (!args.has("yes")) {
+            return CliSupport.fail("card pin-unblock changes PIN state; pass -yes");
+        }
         if (args.has("puk")) {
-            System.err.println("card pin-unblock: EMV v4.4 P2=00/P2=01 carry no PUK;"
-                    + " -puk is not transmitted");
+            throw new IllegalArgumentException("card pin-unblock: EMV v4.4 P2=00/P2=01"
+                    + " carry no PUK; remove -puk");
         }
         byte[] macKey = Hex.parse(args.require("mac-key"));
         byte[] encKey = args.has("enc-key") ? Hex.parse(args.get("enc-key", "")) : null;
@@ -184,6 +194,7 @@ public final class CardCommand {
             usage("get-data", System.out);
             return 0;
         }
+        args.requireNoPositionals();
         byte[] tag = Hex.parse(args.require("tag"));
         if (tag.length != 2 || (tag[0] & 0xFF) != 0x9F) {
             throw new IllegalArgumentException("-tag must be a two-byte 9Fxx tag");
@@ -198,6 +209,7 @@ public final class CardCommand {
             usage(name.equals("ATC") ? "atc" : "last-online-atc", System.out);
             return 0;
         }
+        args.requireNoPositionals();
         return getData(args, 0x9F, p2, name);
     }
 
@@ -245,6 +257,14 @@ public final class CardCommand {
 
     // --- Usage ---------------------------------------------------------------
 
+    /** True for the subcommands documented by {@link #usage(PrintStream)}. */
+    public static boolean isSubcommand(String sub) {
+        return "block-app".equals(sub) || "unblock-app".equals(sub)
+                || "block".equals(sub) || "pin-change".equals(sub)
+                || "pin-unblock".equals(sub) || "get-data".equals(sub)
+                || "atc".equals(sub) || "last-online-atc".equals(sub);
+    }
+
     public static void usage(PrintStream out) {
         out.println("usage: Main card <block-app|unblock-app|block|pin-change|pin-unblock"
                 + "|get-data|atc|last-online-atc> [options]");
@@ -252,7 +272,7 @@ public final class CardCommand {
         out.println("  post-issue: -mac-key=<hex> [-enc-key=<hex>]  (block-app/unblock-app/block)");
         out.println("  block     : -yes (CARD BLOCK is irreversible; otherwise it asks)");
         out.println("  pin-change: -old=<pin> -new=<pin> -mac-key= -enc-key=");
-        out.println("  pin-unblock: [-new=<pin>] -mac-key= [-enc-key=] [-puk= (not transmitted)]");
+        out.println("  pin-unblock: [-new=<pin>] -mac-key= [-enc-key=]");
         out.println("  get-data  : -tag=<9Fxx>   atc   last-online-atc");
     }
 
@@ -274,13 +294,13 @@ public final class CardCommand {
             out.println("  -yes            confirm the irreversible block (otherwise it asks)");
             break;
         case "pin-change":
-            out.println("usage: Main card pin-change -old=<pin> -new=<pin> -mac-key=<hex> -enc-key=<hex>");
+            out.println("usage: Main card pin-change -old=<pin> -new=<pin> -mac-key=<hex> -enc-key=<hex> -yes");
             out.println("  The old PIN is verified first; the new PIN is enciphered in P2=01.");
             out.println("  EMV v4.4 P2=01 is payment-system proprietary: the reference card");
             out.println("  answers 6A81, which is reported as a card refusal (exit 1).");
             break;
         case "pin-unblock":
-            out.println("usage: Main card pin-unblock -mac-key=<hex> [-new=<pin> -enc-key=<hex>]");
+            out.println("usage: Main card pin-unblock -mac-key=<hex> [-new=<pin> -enc-key=<hex>] -yes");
             out.println("  P2=00 resets the PIN Try Counter and unblocks the reference PIN;");
             out.println("  it carries no PUK and no new PIN.  -new sends the P2=01 change instead.");
             break;

@@ -59,23 +59,50 @@ public final class Main {
         case "help":
         case "-h":
         case "--help":
-            usage(System.out);
-            return CliSupport.EXIT_OK;
+            return help(rest);
         case "terminal":
-            if (rest.length >= 1 && "emrtd".equals(rest[0])) {
+            if (rest.length == 0) {
+                EmrtdCommand.usage(System.err);
+                return CliSupport.EXIT_USAGE;
+            }
+            if ("-h".equals(rest[0]) || "--help".equals(rest[0])) {
+                EmrtdCommand.usage(System.out);
+                return CliSupport.EXIT_OK;
+            }
+            if ("emrtd".equals(rest[0])) {
                 if (rest.length == 1) {
                     EmrtdCommand.usage(System.err);
                     return CliSupport.EXIT_USAGE;
                 }
                 return EmrtdCommand.run(rest[1], Arrays.copyOfRange(rest, 2, rest.length));
             }
-            System.err.println("usage: Main terminal emrtd <read|inspect|apdu>");
+            System.err.println("usage: Main terminal emrtd <read|inspect|lds2|apdu|ta-export>");
             return CliSupport.EXIT_USAGE;
         default:
             System.err.println("Unknown command: " + command);
             usage(System.err);
             return CliSupport.EXIT_USAGE;
         }
+    }
+
+    /** {@code help [terminal] [emrtd] <read|inspect|lds2|apdu|ta-export>}. */
+    private static int help(String[] rest) {
+        if (rest.length == 0) {
+            usage(System.out);
+            return CliSupport.EXIT_OK;
+        }
+        int at = 0;
+        if ("terminal".equals(rest[at]) && at + 1 < rest.length
+                && "emrtd".equals(rest[at + 1])) {
+            at += 2;
+        } else if ("terminal".equals(rest[at])) {
+            at++;
+        }
+        if (at >= rest.length) {
+            EmrtdCommand.usage(System.out);
+            return CliSupport.EXIT_OK;
+        }
+        return EmrtdCommand.help(rest[at], System.out);
     }
 
     private static void usage(java.io.PrintStream out) {

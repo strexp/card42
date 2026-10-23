@@ -120,7 +120,9 @@ make test-<mod>-card[-run S=]                real-card integration suites
 `card42-emv.jar` / `card42-emrtd.jar` (for third-party applications) and the
 runnable CLIs `card42-emv-cli.jar` / `card42-emrtd-cli.jar`
 (`java -jar ... <command> <subcommand>`, e.g. `perso export`, `terminal pay`,
-`terminal emrtd read`).  The complete target list, simulator and real-card
+`terminal emrtd read`).  When driving the simulator's socket transport, use
+`java -cp ... card42.host.emv.cli.Main ...` instead of `-jar` so the simulator
+socket provider is visible (see toolchain.md §7.1).  The complete target list, simulator and real-card
 workflows, configuration variables and CLI usage are in
 [`docs/specs/common/toolchain.md`](docs/specs/common/toolchain.md).
 

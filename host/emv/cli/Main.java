@@ -139,6 +139,9 @@ public final class Main {
         case "perso":
             PersoCommand.usage(System.out);
             return 0;
+        case "perso export":
+            PersoCommand.usage(System.out);
+            return 0;
         case "terminal":
             terminalUsage(System.out);
             return 0;
@@ -162,11 +165,23 @@ public final class Main {
             return 0;
         default:
             if (topic.startsWith("issuer ")) {
-                IssuerCommand.usage(topic.substring("issuer ".length()), System.out);
+                String sub = topic.substring("issuer ".length());
+                if (!IssuerCommand.isSubcommand(sub)) {
+                    System.err.println("Unknown issuer subcommand: " + sub);
+                    usage(System.err);
+                    return 2;
+                }
+                IssuerCommand.usage(sub, System.out);
                 return 0;
             }
             if (topic.startsWith("card ")) {
-                CardCommand.usage(topic.substring("card ".length()), System.out);
+                String sub = topic.substring("card ".length());
+                if (!CardCommand.isSubcommand(sub)) {
+                    System.err.println("Unknown card subcommand: " + sub);
+                    usage(System.err);
+                    return 2;
+                }
+                CardCommand.usage(sub, System.out);
                 return 0;
             }
             System.err.println("Unknown command: " + topic);

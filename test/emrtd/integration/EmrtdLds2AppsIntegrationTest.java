@@ -16,7 +16,7 @@ import card42.host.emrtd.lds.Lds2Record;
 import card42.host.emrtd.lds.LdsFileUtil;
 import card42.host.emrtd.lds.VisaRecord;
 import card42.host.emrtd.access.LdsReader;
-import card42.host.emrtd.perso.EmrtdPersoExporter;
+import card42.host.emrtd.tools.EmrtdPersoExporter;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**

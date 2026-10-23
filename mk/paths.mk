@@ -76,8 +76,8 @@ HOST_EMRTD_CLI_STAMP   := $(HOST_EMRTD_CLI_CLASSES)/.compiled
 HOST_COMMON_SRC    := $(shell find host/common -name '*.java')
 HOST_EMV_LIB_SRC   := $(shell find host/emv -name '*.java' -not -path 'host/emv/cli/*')
 HOST_EMV_CLI_SRC   := $(shell find host/emv/cli -name '*.java' 2>/dev/null)
-HOST_EMRTD_LIB_SRC := $(shell find host/emrtd -name '*.java' -not -path 'host/emrtd/cli/*' 2>/dev/null)
-HOST_EMRTD_CLI_SRC := $(shell find host/emrtd/cli -name '*.java' 2>/dev/null)
+HOST_EMRTD_LIB_SRC := $(shell find host/emrtd -name '*.java' -not -path 'host/emrtd/cli/*' -not -path 'host/emrtd/tools/*' 2>/dev/null)
+HOST_EMRTD_CLI_SRC := $(shell find host/emrtd/cli host/emrtd/tools -name '*.java' 2>/dev/null)
 HOST_EMV_SRC       := $(HOST_EMV_LIB_SRC) $(HOST_EMV_CLI_SRC)
 HOST_EMRTD_SRC     := $(HOST_EMRTD_LIB_SRC) $(HOST_EMRTD_CLI_SRC)
 

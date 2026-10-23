@@ -28,7 +28,7 @@ import card42.host.emrtd.ta.CvCertificateBuilder;
 import card42.host.emrtd.ta.CvCertificateCodec;
 import card42.host.emrtd.ta.CvChainVerifier;
 import card42.host.emrtd.ta.CvcPrincipal;
-import card42.host.emrtd.ta.TaChain;
+import card42.host.emrtd.tools.TaChain;
 import card42.host.emrtd.ta.TerminalAuth;
 
 /**

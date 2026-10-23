@@ -44,23 +44,7 @@ public final class DscVerifier {
         } catch (CertificateNotYetValidException e) {
             throw new IllegalStateException("DSC is not yet valid", e);
         }
-        for (X509Certificate csca : trust.certificates()) {
-            if (!dsc.getIssuerX500Principal().equals(csca.getSubjectX500Principal())) {
-                continue;
-            }
-            try {
-                csca.checkValidity(at);
-                dsc.verify(csca.getPublicKey());
-                trust.checkRevocation(dsc, at);
-                return dsc;
-            } catch (SignatureException e) {
-                // Not this CSCA; try the next one.
-            } catch (CertificateExpiredException e) {
-                // Expired trust anchor; try the next one.
-            } catch (CertificateNotYetValidException e) {
-                // Future trust anchor; try the next one.
-            }
-        }
-        throw new IllegalStateException("DSC is not signed by any trusted CSCA");
+        CertificateTrust.verify(dsc, trust, at);
+        return dsc;
     }
 }

@@ -124,7 +124,7 @@ public final class LdsCatalog {
             if ((dataGroupMask & DG_BITS[(short) (dg - 1)]) == 0) {
                 continue;
             }
-            short tag = tagForDg(dg);
+            short tag = EmrtdTags.dgTag(dg);
             if (tag > 0xFF) {
                 list[listLength++] = (byte) (tag >> 8);
             }
@@ -141,41 +141,5 @@ public final class LdsCatalog {
         com.set(comBytes, (short) 0, n);
     }
 
-    /** The outer tag of data group dg (Doc 9303-10 §4.7). */
-    private static short tagForDg(short dg) {
-        switch (dg) {
-        case 1:
-            return EmrtdTags.TAG_DG1;
-        case 2:
-            return EmrtdTags.TAG_DG2;
-        case 3:
-            return (short) 0x63;
-        case 4:
-            return (short) 0x76;
-        case 5:
-            return (short) 0x65;
-        case 6:
-            return (short) 0x66;
-        case 7:
-            return (short) 0x67;
-        case 8:
-            return (short) 0x68;
-        case 9:
-            return (short) 0x69;
-        case 10:
-            return (short) 0x6A;
-        case 11:
-            return (short) 0x6B;
-        case 12:
-            return (short) 0x6C;
-        case 13:
-            return (short) 0x6D;
-        case 14:
-            return (short) 0x6E;
-        case 15:
-            return EmrtdTags.TAG_DG15;
-        default:
-            return (short) 0x70; // DG16
-        }
-    }
+
 }

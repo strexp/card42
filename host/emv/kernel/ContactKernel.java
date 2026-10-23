@@ -112,10 +112,12 @@ public final class ContactKernel implements TerminalKernel {
     public TransactionResult run(Terminal terminal, TransactionRequest request, Issuer issuer)
             throws KernelException {
         try {
-            TransactionFlow flow = new TransactionFlow(reporter, random,
-                    new OfflineDataAuthentication(reporter, caKeyStore), listener);
+            OfflineDataAuthentication oda =
+                    new OfflineDataAuthentication(reporter, caKeyStore);
+            TransactionFlow flow = new TransactionFlow(reporter, random, oda, listener);
             TransactionResult.Mutable result = new TransactionResult.Mutable();
-            OfflinePinCvm offline = new OfflinePinCvm(pinProvider, terminal, request, result);
+            OfflinePinCvm offline = new OfflinePinCvm(pinProvider, terminal, request,
+                    result, oda);
             SignatureCvm signature = signatureProvider == null
                     ? null : new SignatureCvm(signatureProvider, result);
             List<CvmPerformer> performers = new ArrayList<CvmPerformer>();

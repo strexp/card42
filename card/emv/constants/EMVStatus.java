@@ -1,5 +1,7 @@
 package card42.emv;
 
+import card42.common.IsoStatus;
+
 /* Status words, key-modulus bounds and issuer-authentication state.  A class
  * depends only on the status codes it uses.
  *
@@ -16,19 +18,19 @@ public final class EMVStatus {
     // status words
     // 6283 ("selected file invalidated") is not exposed by Java Card's ISO7816
     // interface, so it is defined here (EMV v4.4 Book 3 Table 4 / §6.5.1).
-    public static final short SW_SELECTED_FILE_INVALIDATED = (short) 0x6283;
-    public static final short SW_PIN_BLOCKED = (short) 0x6983;
+    public static final short SW_SELECTED_FILE_INVALIDATED = IsoStatus.SW_SELECTED_FILE_INVALIDATED;
+    public static final short SW_PIN_BLOCKED = IsoStatus.SW_AUTH_BLOCKED;
     // Enciphered PIN recovery failed (EMV v4.4 Book 2 §7.2 step 7/8 and its
     // footnote 34; EMV v4.4 Book 3 §10.5.1 allows 6983 or 6984).
-    public static final short SW_REFERENCE_DATA_NOT_USABLE = (short) 0x6984;
+    public static final short SW_REFERENCE_DATA_NOT_USABLE = IsoStatus.SW_REFERENCE_DATA_NOT_USABLE;
     // GET DATA referenced data not found (EMV v4.4 Book 3 Table 5).
-    public static final short SW_REFERENCED_DATA_NOT_FOUND = (short) 0x6A88;
+    public static final short SW_REFERENCED_DATA_NOT_FOUND = IsoStatus.SW_REFERENCED_DATA_NOT_FOUND;
     // Issuer authentication failed (EMV v4.4 Book 3 §6.5.4.5).
-    public static final short SW_ISSUER_AUTHENTICATION_FAILED = (short) 0x6300;
+    public static final short SW_ISSUER_AUTHENTICATION_FAILED = IsoStatus.SW_AUTHENTICATION_FAILED;
     // A chained VERIFY (CLA='10') could not be processed (EMV v4.4 Book 3
     // §6.5.12.5): the failure is not one of the specific chaining errors
     // 6883/6884 of section 6.5.13.  ISO7816 does not define 6800.
-    public static final short SW_COMMAND_CHAINING_FAILED = (short) 0x6800;
+    public static final short SW_COMMAND_CHAINING_FAILED = IsoStatus.SW_COMMAND_CHAINING_FAILED;
 
     /* RSA modulus upper bounds (EMV v4.4 Book 2 Table 43).  The CA key is only
      * used off-card by the terminal / certificate generator, but the issuer,

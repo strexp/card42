@@ -9,8 +9,8 @@ import card42.host.common.cli.Args;
 import card42.host.common.util.Bytes;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.cli.Main;
-import card42.host.emrtd.perso.EmrtdPersoExporter;
-import card42.host.emrtd.ta.TaChain;
+import card42.host.emrtd.tools.EmrtdPersoExporter;
+import card42.host.emrtd.tools.TaChain;
 
 /**
  * End-to-end CLI coverage for {@code terminal emrtd lds2}: SELECT an LDS2 DF,

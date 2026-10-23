@@ -1,6 +1,7 @@
 package card42.test;
 
 import javax.smartcardio.Card;
+import card42.host.emv.kernel.data.TerminalDol;
 import javax.smartcardio.CardTerminal;
 import javax.smartcardio.ResponseAPDU;
 
@@ -71,7 +72,7 @@ public class CardBlockTest {
             return;
         }
         byte[] pdol = Tags.find(sel.getData(), 0x9F38);
-        byte[] pdolData = new byte[pdol == null ? 0 : AcCrypto.dolDataLength(pdol)];
+        byte[] pdolData = new byte[pdol == null ? 0 : TerminalDol.dolDataLength(pdol)];
 
         ResponseAPDU gpo = terminal.gpo(pdolData);
         Checks.check("card block: GPO", gpo.getSW() == 0x9000, gpo);
@@ -93,7 +94,7 @@ public class CardBlockTest {
             return;
         }
         ResponseAPDU first = terminal.generateAc((byte) 0x80,
-                new byte[AcCrypto.dolDataLength(cdol1)]);
+                new byte[TerminalDol.dolDataLength(cdol1)]);
         Checks.check("card block: first AC is ARQC", first.getSW() == 0x9000
                 && Responses.parseCid(first) == (byte) 0x80, first);
         if (first.getSW() != 0x9000) {
@@ -126,12 +127,12 @@ public class CardBlockTest {
         if (cdol2 == null) {
             throw new IllegalStateException("record 1 has no CDOL2");
         }
-        byte[] data = new byte[AcCrypto.dolDataLength(cdol2)];
-        int arcOff = AcCrypto.dolValueOffset(cdol2, 0x8A);
+        byte[] data = new byte[TerminalDol.dolDataLength(cdol2)];
+        int arcOff = TerminalDol.dolValueOffset(cdol2, 0x8A);
         if (arcOff >= 0) {
             System.arraycopy(arc, 0, data, arcOff, 2);
         }
-        int authOff = AcCrypto.dolValueOffset(cdol2, 0x91);
+        int authOff = TerminalDol.dolValueOffset(cdol2, 0x91);
         if (authOff >= 0) {
             byte[] arpc = AcCrypto.computeArpcMethod2(sk, arqc, csu, new byte[0]);
             System.arraycopy(arpc, 0, data, authOff, 4);

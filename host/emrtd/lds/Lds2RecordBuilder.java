@@ -5,6 +5,7 @@ import java.security.PrivateKey;
 import java.security.Signature;
 
 import card42.host.common.codec.TlvWriter;
+import card42.host.common.util.Bytes;
 
 /**
  * Common BER-TLV and signature helpers for the LDS2 record writers
@@ -31,11 +32,7 @@ abstract class Lds2RecordBuilder {
     }
 
     protected static byte[] concat(byte[]... parts) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        for (byte[] part : parts) {
-            out.write(part, 0, part.length);
-        }
-        return out.toByteArray();
+        return Bytes.concat(parts);
     }
 
     /** Signs the complete signed-information DO with the caller's LDS2-TS key. */

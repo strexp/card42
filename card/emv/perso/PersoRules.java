@@ -50,32 +50,14 @@ public final class PersoRules {
         return innerReader;
     }
 
-    /**
-     * The length of the STORE DATA Lc field: 1 byte, or 3 bytes when the first
-     * byte is '00' and two more bytes are present ('00' || LcHi || LcLo,
-     * EMV CPS v2.0 Table 4-8).  Returns 0 when the Lc byte itself is beyond
-     * {@code end}.  A '00' with no room for two length bytes is a 1-byte Lc=0.
-     *
-     * @param lcOffset index of the first Lc byte
-     * @param end      index one past the last available byte of the command
-     */
+    /** The length of the STORE DATA Lc field (see {@link ApduIo}). */
     public static short storeDataLcFieldLength(byte[] buf, short lcOffset, short end) {
-        if (lcOffset >= end) {
-            return 0;
-        }
-        if ((buf[lcOffset] & 0xFF) != 0x00) {
-            return 1;
-        }
-        return (short) ((short) (lcOffset + 3) <= end ? 3 : 1);
+        return ApduIo.storeDataLcFieldLength(buf, lcOffset, end);
     }
 
-    /** The STORE DATA Lc value for a field length returned by storeDataLcFieldLength. */
+    /** The STORE DATA Lc value for a field length from the method above. */
     public static short storeDataLc(byte[] buf, short lcOffset, short fieldLength) {
-        if (fieldLength == 3) {
-            return (short) (((buf[(short) (lcOffset + 1)] & 0xFF) << 8)
-                    | (buf[(short) (lcOffset + 2)] & 0xFF));
-        }
-        return (short) (buf[lcOffset] & 0xFF);
+        return ApduIo.storeDataLc(buf, lcOffset, fieldLength);
     }
 
     /**

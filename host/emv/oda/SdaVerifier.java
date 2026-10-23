@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 import javax.smartcardio.ResponseAPDU;
 
-import card42.host.emv.lib.RsaRecovery;
+import card42.host.common.crypto.RsaRecovery;
 import card42.host.emv.lib.IssuerKey;
 import card42.host.emv.lib.Terminal;
 import card42.host.common.util.Bytes;

@@ -56,24 +56,33 @@ public final class AcResponseBuilder {
                                      short offset) {
         // 9F27(3) + 9F36(5) + 9F26(2+1+8) + 9F10(2+1+iadLength)
         short body = (short) (4 + 5 + 11 + 3 + iadLength);
+        short p = format2Start(cid, atc, body, response, offset);
+        p = Tlv.append(TlvTags.TAG_AC, ac, (short) 0, (short) 8, response, p);
+        appendIad(iad, iadLength, response, p);
+    }
 
+    /**
+     * Writes the common Format-2 prefix {@code 77 { length, 9F27 CID, 9F36 ATC }}
+     * and returns the first free offset.  The caller appends either 9F26 (AC)
+     * or 9F4B (CDA SDAD), then calls {@link #appendIad}.
+     */
+    static short format2Start(byte cid, short atc, short bodyLength,
+                              byte[] response, short offset) {
         short p = offset;
         response[p++] = (byte) 0x77;
-        p = Tlv.appendLength(body, response, p);
+        p = Tlv.appendLength(bodyLength, response, p);
         p = Tlv.appendTag(TlvTags.TAG_CID, response, p);
         response[p++] = 0x01;
         response[p++] = cid;
         p = Tlv.appendTag(TlvTags.TAG_ATC, response, p);
         response[p++] = 0x02;
         Util.setShort(response, p, atc);
-        p += 2;
-        p = Tlv.appendTag(TlvTags.TAG_AC, response, p);
-        response[p++] = 0x08;
-        Util.arrayCopyNonAtomic(ac, (short) 0, response, p, (short) 8);
-        p += 8;
-        p = Tlv.appendTag(TlvTags.TAG_IAD, response, p);
-        p = Tlv.appendLength(iadLength, response, p);
-        Util.arrayCopyNonAtomic(iad, (short) 0, response, p, iadLength);
-        p += iadLength;
+        return (short) (p + 2);
+    }
+
+    /** Appends {@code 9F10 IAD} and returns the new offset. */
+    static short appendIad(byte[] iad, short iadLength, byte[] response, short offset) {
+        short p = Tlv.append(TlvTags.TAG_IAD, iad, (short) 0, iadLength, response, offset);
+        return p;
     }
 }

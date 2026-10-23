@@ -60,6 +60,7 @@ public final class TerminalInspectCommand {
             usage(System.out);
             return 0;
         }
+        args.requireNoPositionals();
         String iface = args.get("iface", "contact");
         boolean contact = iface.equals("contact");
         if (!contact && !iface.equals("contactless")) {
@@ -145,13 +146,24 @@ public final class TerminalInspectCommand {
                 byte[] afl = Responses.gpoAfl(gpo.getData());
 
                 if (args.has("records")) {
+                    List<Record> records = readAfl(terminal, afl);
                     text.append("Records (AIP=").append(String.format("%04X", aip))
                             .append(" AFL=").append(Hex.format(afl)).append(")\n");
-                    for (Record record : readAfl(terminal, afl)) {
+                    StringBuilder recordsJson = new StringBuilder("[");
+                    for (int i = 0; i < records.size(); i++) {
+                        Record record = records.get(i);
                         text.append(String.format("  SFI %d record %d%n",
                                 record.sfi, record.record));
                         text.append(indent(TlvDump.format(record.data)));
+                        if (i > 0) {
+                            recordsJson.append(',');
+                        }
+                        recordsJson.append("{\"sfi\":").append(record.sfi)
+                                .append(",\"record\":").append(record.record)
+                                .append(",\"tlv\":").append(Json.quote(TlvDump.format(record.data)))
+                                .append('}');
                     }
+                    jsonParts.add("\"records\":" + recordsJson.append(']'));
                 }
                 if (args.has("oda")) {
                     List<String> names = TransactionReport.aipNames(aip);
@@ -370,6 +382,7 @@ public final class TerminalInspectCommand {
         out.println("  -fci                 dump the selected application FCI");
         out.println("  -records             read the AFL records and TLV-dump them");
         out.println("  -oda                 decode the AIP, and run ODA with -ca-keys=<path>");
-        out.println("  -json                structured output");
+        out.println("  -json                structured output (directory/FCI/records/ODA)");
+        out.println("  default             without -dir/-fci/-records/-oda: directory + FCI");
     }
 }

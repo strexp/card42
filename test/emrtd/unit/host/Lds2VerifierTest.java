@@ -14,7 +14,7 @@ import card42.host.emrtd.lds.TravelRecordBuilder;
 import card42.host.emrtd.pa.CscaKeyStore;
 import card42.host.emrtd.pa.Lds2Verifier;
 import card42.host.emrtd.pa.PassiveAuthentication;
-import card42.host.emrtd.perso.EmrtdPersoExporter;
+import card42.host.emrtd.tools.EmrtdPersoExporter;
 import card42.host.emrtd.perso.SodBuilder;
 
 /** LDS2 Signer profile, 5F38 resolution and record-signature verification. */

@@ -1,5 +1,6 @@
 package card42.host.emv.kernel.entry;
 
+import card42.host.common.codec.Dol;
 import card42.host.common.codec.Tags;
 import card42.host.common.util.Hex;
 
@@ -280,37 +281,6 @@ public final class EntryPoint {
 
     /** True when a DOL definition contains the given tag (a DOL is tag/length pairs). */
     public static boolean dolContainsTag(byte[] dol, int wanted) {
-        if (dol == null) {
-            return false;
-        }
-        int p = 0;
-        while (p < dol.length) {
-            int b = dol[p] & 0xFF;
-            int tag;
-            if ((b & 0x1F) == 0x1F) {
-                if (p + 1 >= dol.length) {
-                    break;
-                }
-                tag = (b << 8) | (dol[p + 1] & 0xFF);
-                p += 2;
-            } else {
-                tag = b;
-                p += 1;
-            }
-            if (p >= dol.length) {
-                break;
-            }
-            int len = dol[p++] & 0xFF;
-            if ((len & 0x80) != 0) {
-                int n = len & 0x7F;
-                for (int i = 0; i < n && p < dol.length; i++) {
-                    p++;
-                }
-            }
-            if (tag == wanted) {
-                return true;
-            }
-        }
-        return false;
+        return Dol.contains(dol, wanted);
     }
 }

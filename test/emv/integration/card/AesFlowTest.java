@@ -1,6 +1,7 @@
 package card42.test;
 
 import java.util.Arrays;
+import card42.host.emv.kernel.data.TerminalDol;
 
 import javax.smartcardio.Card;
 import javax.smartcardio.CardTerminal;
@@ -91,7 +92,7 @@ public class AesFlowTest {
             Checks.fail("record 1 has no CDOL1/CDOL2");
             return;
         }
-        int cdol1Length = AcCrypto.dolDataLength(cdol1);
+        int cdol1Length = TerminalDol.dolDataLength(cdol1);
         int atc = terminal.readAtc();
         System.out.printf("ATC         : %04X%n", atc);
 
@@ -144,12 +145,12 @@ public class AesFlowTest {
     /** Builds a CDOL2 data field with the ARC and an AES-CMAC ARPC. */
     private static byte[] cdol2Data(byte[] cdol2, byte[] arqc, byte[] sk)
             throws Exception {
-        byte[] data = new byte[AcCrypto.dolDataLength(cdol2)];
-        int arcOff = AcCrypto.dolValueOffset(cdol2, 0x8A);
+        byte[] data = new byte[TerminalDol.dolDataLength(cdol2)];
+        int arcOff = TerminalDol.dolValueOffset(cdol2, 0x8A);
         if (arcOff >= 0) {
             System.arraycopy(ARC_APPROVED, 0, data, arcOff, 2);
         }
-        int authOff = AcCrypto.dolValueOffset(cdol2, 0x91);
+        int authOff = TerminalDol.dolValueOffset(cdol2, 0x91);
         if (authOff >= 0) {
             byte[] arpc = AcCrypto.computeArpcMethod2Aes(sk, arqc, CSU_APPROVE, new byte[0]);
             System.arraycopy(arpc, 0, data, authOff, 4);
@@ -169,7 +170,7 @@ public class AesFlowTest {
         }
         int atc = terminal.readAtc();
         ResponseAPDU first = terminal.generateAc((byte) 0x80,
-                new byte[AcCrypto.dolDataLength(cdol1)]);
+                new byte[TerminalDol.dolDataLength(cdol1)]);
         if (first.getSW() != 0x9000) {
             Checks.fail("wrong ARPC: first AC -> " + Checks.sw(first.getSW()));
             return null;
@@ -177,7 +178,7 @@ public class AesFlowTest {
         byte[] arqc = Responses.parseAc(first).ac;
         byte[] sk = AcCrypto.sessionKeyAes(ICC_KEY, atc);
         byte[] data = cdol2Data(cdol2, arqc, sk);
-        int authOff = AcCrypto.dolValueOffset(cdol2, 0x91);
+        int authOff = TerminalDol.dolValueOffset(cdol2, 0x91);
         data[authOff] ^= 0x01; // corrupt the ARPC
         ResponseAPDU r = terminal.generateAc((byte) 0x40, data);
         Checks.check("wrong AES ARPC second AC", r.getSW() == 0x9000, r);

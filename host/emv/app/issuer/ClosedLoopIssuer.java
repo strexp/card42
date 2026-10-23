@@ -25,12 +25,7 @@ public final class ClosedLoopIssuer implements Issuer {
     @Override
     public Authorization authorize(byte[] arqc, int atc, card42.host.emv.kernel.core.TransactionResult result) {
         try {
-            IssuerHost host = new IssuerHost(iccKey);
-            host.setFirstAc(arqc, atc);
-            byte[] arpc = host.arpcMethod2(csu, new byte[0]);
-            byte[] auth = new byte[8];
-            System.arraycopy(arpc, 0, auth, 0, 4);
-            System.arraycopy(csu, 0, auth, 4, 4);
+            byte[] auth = IssuerCrypto.inlineAuthData(iccKey, atc, arqc, csu);
             return new Authorization(arc, auth, scripts.length == 0 ? null : scripts);
         } catch (Exception e) {
             throw new RuntimeException(e);

@@ -1,4 +1,4 @@
-package card42.host.emrtd.ta;
+package card42.host.emrtd.tools;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import card42.host.common.crypto.P256;
+import card42.host.emrtd.ta.*;
 
 /**
  * Issues a Terminal Authentication CV certificate chain (CVCA trust anchor →

@@ -22,7 +22,7 @@ import card42.host.emrtd.lds.LdsSecurityObject;
 import card42.host.emrtd.lds.Sod;
 import card42.host.emrtd.pa.CscaKeyStore;
 import card42.host.emrtd.pa.PassiveAuthentication;
-import card42.host.emrtd.perso.EmrtdPersoExporter;
+import card42.host.emrtd.tools.EmrtdPersoExporter;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**

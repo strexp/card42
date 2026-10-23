@@ -29,6 +29,7 @@ final class EmrtdCliTest {
         dispatch();
         argumentHandling();
         jsonOptionAccepted();
+        helpDoesNotTouchCardOrFiles();
         flowReachesTransport();
     }
 
@@ -79,8 +80,43 @@ final class EmrtdCliTest {
         Asserts.eq(CliSupport.EXIT_USAGE, runQuietly("lds2",
                         new String[] { "-app=bogus", "-json=0" }),
                 "lds2 accepts -json=0 (§7.1)");
-        Asserts.eq(-1, runQuietly("lds2", new String[] { "-app=bogus", "-json" }),
-                "lds2 rejects a value-less -json (ArityError)");
+        Asserts.eq(CliSupport.EXIT_USAGE, runQuietly("lds2",
+                        new String[] { "-app=bogus", "-json" }),
+                "lds2 accepts a bare -json (and rejects only the app)");
+    }
+
+
+    /**
+     * Help must never reach the card or write files: this is the regression
+     * guard for the eMRTD CLI help paths (CLI-02).
+     */
+    private static void helpDoesNotTouchCardOrFiles() throws Exception {
+        Asserts.eq(CliSupport.EXIT_OK, EmrtdCommand.run("read", new String[] { "-h" }),
+                "read -h exits 0 without opening the transport");
+        Asserts.eq(CliSupport.EXIT_OK, EmrtdCommand.run("inspect", new String[] { "--help" }),
+                "inspect --help exits 0 without opening the transport");
+        Asserts.eq(CliSupport.EXIT_OK, EmrtdCommand.run("lds2", new String[] { "-h" }),
+                "lds2 -h exits 0 without opening the transport");
+        Asserts.eq(CliSupport.EXIT_OK, EmrtdCommand.run("apdu", new String[] { "-h" }),
+                "apdu -h exits 0 without asking for -apdu");
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("card42-ta-help-");
+        try {
+            Asserts.eq(CliSupport.EXIT_OK, EmrtdCommand.run("ta-export",
+                            new String[] { "-dir=" + dir, "-h" }),
+                    "ta-export -h exits 0");
+            try (java.util.stream.Stream<java.nio.file.Path> files =
+                         java.nio.file.Files.list(dir)) {
+                Asserts.check(files.findAny().isEmpty(),
+                        "ta-export -h writes no key/certificate file");
+            }
+        } finally {
+            java.nio.file.Files.deleteIfExists(dir);
+        }
+        Asserts.eq(CliSupport.EXIT_OK,
+                Main.run(new String[] { "help", "terminal", "emrtd", "read" }),
+                "Main help terminal emrtd read exits 0");
+        Asserts.eq(CliSupport.EXIT_OK, Main.run(new String[] { "terminal", "-h" }),
+                "terminal -h exits 0");
     }
 
     /**
@@ -143,7 +179,7 @@ final class EmrtdCliTest {
             Asserts.check(reachesTransport("lds2", new String[] {
                     "-host=socket:localhost:1", "-app=travel", "-pace",
                     "-doc=123456789", "-dob=000101", "-doe=300101",
-                    "-append=" + json, "-ts-key=perso/emrtd/lds2.key" }),
+                    "-append=" + json, "-ts-key=perso/emrtd/lds2.key", "-yes" }),
                     "lds2 -append parses the structured JSON and reaches the transport");
         } catch (java.io.IOException e) {
             Asserts.check(false, "lds2 append test fixture: " + e);

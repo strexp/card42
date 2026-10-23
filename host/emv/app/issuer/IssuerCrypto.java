@@ -34,8 +34,9 @@ public final class IssuerCrypto {
     /** Inline Issuer Authentication Data: ARPC Method 2 || CSU (tag 91). */
     public static byte[] inlineAuthData(byte[] iccKey, int atc, byte[] arqc, byte[] csu)
             throws Exception {
-        byte[] sk = AcCrypto.sessionKey(iccKey, atc);
-        return Bytes.concat(AcCrypto.computeArpcMethod2(sk, arqc, csu, new byte[0]), csu);
+        IssuerHost host = new IssuerHost(iccKey);
+        host.setFirstAc(arqc, atc);
+        return Bytes.concat(host.arpcMethod2(csu, new byte[0]), csu);
     }
 
     /** The block-cipher KCV: leftmost 3 bytes of DES3(key)[00 x8]. */

@@ -1,6 +1,4 @@
-package card42.emv;
-
-import card42.common.*;
+package card42.common;
 
 import static javacard.framework.ISO7816.*;
 import javacard.framework.ISOException;

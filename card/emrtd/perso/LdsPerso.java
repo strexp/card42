@@ -20,31 +20,6 @@ import javacard.framework.Util;
 
 public final class LdsPerso extends DgiStream.Sink {
 
-    /** DGI carrying the 16-byte BAC K_seed. */
-    public static final short DGI_SEED = EmrtdTags.DGI_BAC_SEED;
-    /** DGI carrying the AA private key (modLen || modulus || expLen || exponent). */
-    public static final short DGI_AA_KEY = EmrtdTags.DGI_AA_KEY;
-    /** DGI carrying the AA signature algorithm (1 octet: 1 = SHA-1, 2 = SHA-256, 3 = ECDSA). */
-    public static final short DGI_AA_ALGORITHM = EmrtdTags.DGI_AA_ALGORITHM;
-    /** DGI carrying the ECDSA AA private scalar (32 bytes). */
-    public static final short DGI_AA_EC_KEY = EmrtdTags.DGI_AA_EC_KEY;
-    /** DGI carrying an RSA CVCA trust point (TA). */
-    public static final short DGI_TA_TRUST_POINT_RSA = EmrtdTags.DGI_TA_TRUST_POINT_RSA;
-    /** DGI carrying the secondary RSA CVCA trust point (TA). */
-    public static final short DGI_TA_TRUST_POINT_RSA_2 = EmrtdTags.DGI_TA_TRUST_POINT_RSA_2;
-    /** DGI carrying the Chip Authentication static private scalar (32 bytes). */
-    public static final short DGI_CA_KEY = EmrtdTags.DGI_CA_KEY;
-    /** DGI carrying the PACE key seed SHA-1(MRZ_info) (20 bytes). */
-    public static final short DGI_PACE_SEED = EmrtdTags.DGI_PACE_SEED;
-    /** DGI carrying the PACE password encoding f(CAN) = raw CAN octets (ref 0x02). */
-    public static final short DGI_PACE_CAN_SEED = EmrtdTags.DGI_PACE_CAN_SEED;
-    /** DGI carrying the CVCA trust point W(65) || refLen(1) || CAR (Terminal Authentication). */
-    public static final short DGI_TA_TRUST_POINT = EmrtdTags.DGI_TA_TRUST_POINT;
-    /** DGI carrying the Terminal Authentication current date (6 octets, unpacked BCD). */
-    public static final short DGI_TA_CURRENT_DATE = EmrtdTags.DGI_TA_CURRENT_DATE;
-    /** DGI carrying the secondary CVCA trust point (Terminal Authentication). */
-    public static final short DGI_TA_TRUST_POINT_2 = EmrtdTags.DGI_TA_TRUST_POINT_2;
-
     /** Largest key-DGI value: modLen(2) + 256 + expLen(2) + 256. */
     private static final short SCRATCH_SIZE = (short) 520;
 
@@ -140,29 +115,29 @@ public final class LdsPerso extends DgiStream.Sink {
 
     public void onBeginDgi(short dgi, short valueLength) {
         scratchLen = 0;
-        if (dgi == DGI_SEED) {
+        if (dgi == EmrtdTags.DGI_BAC_SEED) {
             mode = MODE_SEED;
-        } else if (dgi == DGI_AA_KEY) {
+        } else if (dgi == EmrtdTags.DGI_AA_KEY) {
             mode = MODE_AA;
-        } else if (dgi == DGI_AA_ALGORITHM) {
+        } else if (dgi == EmrtdTags.DGI_AA_ALGORITHM) {
             mode = MODE_AA_ALG;
-        } else if (dgi == DGI_AA_EC_KEY) {
+        } else if (dgi == EmrtdTags.DGI_AA_EC_KEY) {
             mode = MODE_AA_EC;
-        } else if (dgi == DGI_CA_KEY) {
+        } else if (dgi == EmrtdTags.DGI_CA_KEY) {
             mode = MODE_CA;
-        } else if (dgi == DGI_PACE_SEED) {
+        } else if (dgi == EmrtdTags.DGI_PACE_SEED) {
             mode = MODE_PACE;
-        } else if (dgi == DGI_PACE_CAN_SEED) {
+        } else if (dgi == EmrtdTags.DGI_PACE_CAN_SEED) {
             mode = MODE_PACE_CAN;
-        } else if (dgi == DGI_TA_TRUST_POINT) {
+        } else if (dgi == EmrtdTags.DGI_TA_TRUST_POINT) {
             mode = MODE_TA;
-        } else if (dgi == DGI_TA_TRUST_POINT_2) {
+        } else if (dgi == EmrtdTags.DGI_TA_TRUST_POINT_2) {
             mode = MODE_TA2;
-        } else if (dgi == DGI_TA_TRUST_POINT_RSA) {
+        } else if (dgi == EmrtdTags.DGI_TA_TRUST_POINT_RSA) {
             mode = MODE_TA_RSA;
-        } else if (dgi == DGI_TA_TRUST_POINT_RSA_2) {
+        } else if (dgi == EmrtdTags.DGI_TA_TRUST_POINT_RSA_2) {
             mode = MODE_TA_RSA2;
-        } else if (dgi == DGI_TA_CURRENT_DATE) {
+        } else if (dgi == EmrtdTags.DGI_TA_CURRENT_DATE) {
             mode = MODE_TA_DATE;
         } else if (dgi == EmrtdTags.FID_CARD_ACCESS) {
             // EF.CardAccess lives in the master file (Doc 9303-10 §3.11.3), not

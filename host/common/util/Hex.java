@@ -46,28 +46,9 @@ public final class Hex {
         return out;
     }
 
-    /**
-     * Builds an 8-byte ISO 9564-1 format 1 Reference PIN Block from ASCII
-     * digits: control nibble 0, PIN length N (4..12), BCD digits, 'F' padding
-     * (EMV CPS v2.0 Annex A Table A-4).
-     */
+    /** Builds an 8-byte ISO 9564-1 format 1 Reference PIN Block. */
     public static byte[] iso9564Format1(String digits) {
-        if (digits == null || digits.length() < 4 || digits.length() > 12) {
-            throw new IllegalArgumentException(
-                    "Reference PIN must be 4..12 digits: " + digits);
-        }
-        for (int i = 0; i < digits.length(); i++) {
-            char c = digits.charAt(i);
-            if (c < '0' || c > '9') {
-                throw new IllegalArgumentException(
-                        "Reference PIN must be numeric: " + digits);
-            }
-        }
-        byte[] block = new byte[8];
-        Arrays.fill(block, (byte) 0xFF);
-        block[0] = (byte) (digits.length() & 0x0F);
-        byte[] bcd = bcd(digits);
-        System.arraycopy(bcd, 0, block, 1, Math.min(bcd.length, 7));
-        return block;
+        return Iso9564.format1(digits);
     }
+
 }

@@ -1,4 +1,4 @@
-package card42.host.emrtd.perso;
+package card42.host.emrtd.tools;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -13,8 +13,9 @@ import card42.host.common.codec.DerWriter;
 import card42.host.common.codec.TlvWriter;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.access.MrzKeySeed;
+import card42.host.emrtd.perso.Dg2Builder;
+import card42.host.emrtd.perso.LdsScript;
 import card42.host.emrtd.lds.security.SecurityInfo;
-import card42.host.emrtd.ta.TaChain;
 
 /**
  * The demo sample data of the card42 eMRTD personalization: the ICAO TD3 MRZ

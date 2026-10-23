@@ -27,6 +27,7 @@ public final class Args {
     private final Map<String, List<String>> lists = new LinkedHashMap<>();
     private final Set<String> flags = new LinkedHashSet<>();
     private final List<String> positional = new ArrayList<>();
+    private final Set<String> hybrid = new HashSet<>();
 
     /**
      * Parses {@code argv}.
@@ -37,8 +38,19 @@ public final class Args {
      *                                  a value given to a flag
      */
     public Args(String[] argv, String[] valueOptions, String[] flagOptions) {
+        this(argv, valueOptions, flagOptions, new String[0]);
+    }
+
+    /**
+     * As above, with names that accept both a bare flag and an {@code =value}
+     * form (for compatibility switches such as {@code -json} / {@code -json=1}).
+     */
+    public Args(String[] argv, String[] valueOptions, String[] flagOptions,
+                String[] hybridOptions) {
         Set<String> valueNames = new HashSet<>(Arrays.asList(valueOptions));
         Set<String> flagNames = new HashSet<>(Arrays.asList(flagOptions));
+        hybrid.addAll(Arrays.asList(hybridOptions));
+        flagNames.addAll(hybrid);
         flagNames.add("h");
         flagNames.add("help");
 
@@ -60,7 +72,11 @@ public final class Args {
             }
             if (flagNames.contains(name)) {
                 if (value != null) {
-                    throw new IllegalArgumentException("Option -" + name + " takes no value");
+                    if (!hybrid.contains(name)) {
+                        throw new IllegalArgumentException("Option -" + name + " takes no value");
+                    }
+                    values.put(name, value);
+                    lists.computeIfAbsent(name, k -> new ArrayList<>()).add(value);
                 }
                 flags.add(name);
                 continue;
@@ -110,8 +126,21 @@ public final class Args {
         return positional;
     }
 
-    /** True when {@code -h} or {@code --help} was given. */
+    /**
+     * Rejects positional arguments: every card42 command is option-driven, and
+     * silently ignoring a stray word (for example {@code terminal pay help})
+     * would otherwise run the command instead of showing help.
+     */
+    public void requireNoPositionals() {
+        if (!positional.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected argument: " + positional.get(0)
+                    + " (options use -name=value; use -h for help)");
+        }
+    }
+
+    /** True when {@code -h}, {@code --help} or the word {@code help} was given. */
     public boolean help() {
-        return flags.contains("h") || flags.contains("help");
+        return flags.contains("h") || flags.contains("help")
+                || (positional.size() == 1 && positional.get(0).equals("help"));
     }
 }

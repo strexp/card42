@@ -278,7 +278,8 @@ host/emrtd/
 │              Bac, Iso7816Sm, Iso7816SmAes, SecureMessaging, ChipAuth, Pace
 ├── pa/        CscaKeyStore, DscVerifier, PassiveAuthentication
 ├── aa/        ActiveAuthentication
-├── perso/     EmrtdPersoExporter, SodBuilder, Dg2Builder, CardSecurityBuilder, LdsScript
+├── perso/     SodBuilder, Dg2Builder, CardSecurityBuilder, LdsScript
+├── tools/     EmrtdPersoExporter, SampleData, TaChain
 ├── report/    PassportReport
 └── cli/       Main, command/EmrtdCommand
 ```
@@ -446,7 +447,7 @@ Main terminal emrtd lds2    -host=<spec> [-app=travel|visa|biometrics] \
                             (-pace -doc=<no> -dob=YYMMDD -doe=YYMMDD | -can=<CAN>) \
                             [-ca] [-ta -ta-chain=<file> -ta-key=<hex>] [-csca=<cert>] \
                             [-record=entry|exit|visa|cert|all] [-json=1] \
-                            [-append=<json> -ts-key=<pem> [-cert-ref=n]]
+                            [-append=<json> -ts-key=<pem> [-cert-ref=n] -yes]
 Main terminal emrtd apdu    -host=<spec> -apdu=<hex>
 Main version | help
 ```
@@ -545,7 +546,8 @@ DER 转换。完整决策、APDU 序列与开放点见 [terminal-authentication.
   在存在信任点时按 ePassport CHAT 位（b1=DG3、b2=DG4）门控 LDS1 的 DG3/DG4 读；无信任点时仅
   强制 PACE（开发配置）。
 - **主机**（`host/emrtd/ta/`）：`CvCertificate`/`CvCertificateCodec`/`CvcPrincipal`/`Chat`/
-  `CvCertificateBuilder`/`CvChainVerifier`/`TaChain`/`TerminalAuth`；`TerminalAuthenticationInfo`
+  `CvCertificateBuilder`/`CvChainVerifier`/`TerminalAuth`；demo 链生成器 `TaChain` 在
+  `host/emrtd/tools/`；`TerminalAuthenticationInfo`
   接入 `SecurityInfo`/`CardAccess`；`host/common/crypto/Ecdsa` 为自包含 P-256（plain）。
   CLI：`terminal emrtd ta-export -dir=<path>` 生成 demo 链；`terminal emrtd read -pace -ca -ta
   -ta-chain=<file> -ta-key=<hex>` 跑完整 PACE→CA→TA。

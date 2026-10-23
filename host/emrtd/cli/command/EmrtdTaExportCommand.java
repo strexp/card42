@@ -6,7 +6,7 @@ import card42.host.common.cli.Args;
 import card42.host.common.cli.CliSupport;
 import card42.host.common.util.Bytes;
 import card42.host.common.util.Hex;
-import card42.host.emrtd.ta.TaChain;
+import card42.host.emrtd.tools.TaChain;
 
 /**
  * {@code terminal emrtd ta-export}: writes a demo Terminal Authentication CV
@@ -20,6 +20,11 @@ final class EmrtdTaExportCommand {
 
     static int run(String[] args) throws Exception {
         Args parsed = new Args(args, new String[] { "dir" }, new String[0]);
+        if (parsed.help()) {
+            usage(System.out);
+            return CliSupport.EXIT_OK;
+        }
+        parsed.requireNoPositionals();
         java.nio.file.Path dir = java.nio.file.Paths.get(parsed.get("dir", "."));
         java.nio.file.Files.createDirectories(dir);
         TaChain.Chain chain = TaChain.create(new SecureRandom());
@@ -36,5 +41,12 @@ final class EmrtdTaExportCommand {
                 Hex.format(key).getBytes(java.nio.charset.StandardCharsets.US_ASCII));
         System.out.println("wrote cvca.der, dv.der, is.der, chain.der, terminal-key.hex to " + dir);
         return CliSupport.EXIT_OK;
+    }
+
+    static void usage(java.io.PrintStream out) {
+        out.println("usage: Main terminal emrtd ta-export [-dir=<path>]");
+        out.println("  -dir=<path>   output directory (default '.')");
+        out.println("  Writes a DEMO CVCA/DV/IS chain and the matching terminal private key.");
+        out.println("  The key is for test/demo use only; do not use it in production.");
     }
 }

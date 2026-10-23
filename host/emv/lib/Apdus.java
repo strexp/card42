@@ -3,6 +3,7 @@ package card42.host.emv.lib;
 import javax.smartcardio.CommandAPDU;
 
 import card42.host.common.util.Hex;
+import card42.host.common.util.Iso9564;
 
 /**
  * Builders for the EMV command APDUs used by the host clients and test suites.
@@ -76,12 +77,7 @@ public final class Apdus {
      * (EMV v4.4 Book 3 §6.5.12.2 Table 25).
      */
     public static CommandAPDU verifyOfflinePin(String pin) {
-        byte[] data = new byte[8];
-        java.util.Arrays.fill(data, (byte) 0xFF);
-        data[0] = (byte) (0x20 | pin.length());
-        byte[] digits = Hex.bcd(pin);
-        System.arraycopy(digits, 0, data, 1, digits.length);
-        return new CommandAPDU(0x00, 0x20, 0x00, 0x80, data);
+        return new CommandAPDU(0x00, 0x20, 0x00, 0x80, Iso9564.format2(pin));
     }
 
     /**

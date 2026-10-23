@@ -12,7 +12,7 @@ import card42.emrtd.EmrtdTags;
 import card42.emrtd.LdsCatalog;
 import card42.emrtd.LdsFile;
 import card42.emrtd.LdsFileSystem;
-import card42.emrtd.MrzKeySeed;
+import card42.host.emrtd.access.MrzKeySeed;
 import card42.host.common.crypto.P256;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.aa.ActiveAuthentication;
@@ -314,22 +314,15 @@ final class EmrtdCryptoTest {
     }
 
     private static void checkDigits() {
-        byte[] out = new byte[1];
-        MrzKeySeed.checkDigit("L898902C<".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
-                (short) 0, (short) 9, out, (short) 0);
-        Asserts.eq(3, out[0] & 0xFF, "MRZ document-number check digit");
-        MrzKeySeed.checkDigit("690806".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
-                (short) 0, (short) 6, out, (short) 0);
-        Asserts.eq(1, out[0] & 0xFF, "MRZ date-of-birth check digit");
-        MrzKeySeed.checkDigit("940623".getBytes(java.nio.charset.StandardCharsets.US_ASCII),
-                (short) 0, (short) 6, out, (short) 0);
-        Asserts.eq(6, out[0] & 0xFF, "MRZ date-of-expiry check digit");
+        Asserts.eq(3, MrzKeySeed.checkDigit("L898902C<"),
+                "MRZ document-number check digit");
+        Asserts.eq(1, MrzKeySeed.checkDigit("690806"), "MRZ date-of-birth check digit");
+        Asserts.eq(6, MrzKeySeed.checkDigit("940623"), "MRZ date-of-expiry check digit");
     }
 
     private static void bacKeyDerivation() {
-        byte[] seed = new byte[20];
-        short n = MrzKeySeed.seed(MRZ_INFO, (short) 0, seed, (short) 0);
-        Asserts.eq(16, n, "BAC seed length");
+        byte[] seed = MrzKeySeed.seed(MRZ_INFO);
+        Asserts.eq(16, seed.length, "BAC seed length");
         Asserts.bytes(Hex.parse("239AB9CB282DAF66231DC5A4DF6BFBAE"),
                 java.util.Arrays.copyOf(seed, 16), "BAC K_seed (Doc 9303-11 sample)");
 

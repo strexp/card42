@@ -23,6 +23,7 @@ host-emv-cli: $(JAR_EMV_CLI)
 host-emrtd-cli: $(JAR_EMRTD_CLI)
 
 $(HOST_COMMON_STAMP): $(HOST_COMMON_SRC)
+	@rm -rf $(HOST_COMMON_CLASSES)
 	@mkdir -p $(HOST_COMMON_CLASSES)
 	$(JAVAC) -d $(HOST_COMMON_CLASSES) $(HOST_COMMON_SRC)
 	@touch $@
@@ -33,6 +34,7 @@ $(JAR_COMMON): $(HOST_COMMON_STAMP)
 
 # EMV library (host/emv minus host/emv/cli).
 $(HOST_EMV_LIB_STAMP): $(HOST_EMV_LIB_SRC) $(HOST_COMMON_STAMP)
+	@rm -rf $(HOST_EMV_LIB_CLASSES)
 	@mkdir -p $(HOST_EMV_LIB_CLASSES)
 	$(JAVAC) -cp $(HOST_COMMON_CLASSES) -d $(HOST_EMV_LIB_CLASSES) $(HOST_EMV_LIB_SRC)
 	@touch $@
@@ -45,6 +47,7 @@ $(JAR_EMV): $(HOST_EMV_LIB_STAMP)
 
 # EMV CLI (host/emv/cli), on top of the library.
 $(HOST_EMV_CLI_STAMP): $(HOST_EMV_CLI_SRC) $(HOST_EMV_LIB_STAMP)
+	@rm -rf $(HOST_EMV_CLI_CLASSES)
 	@mkdir -p $(HOST_EMV_CLI_CLASSES)
 	$(JAVAC) -cp $(HOST_COMMON_CLASSES):$(HOST_EMV_LIB_CLASSES) \
 	  -d $(HOST_EMV_CLI_CLASSES) $(HOST_EMV_CLI_SRC)

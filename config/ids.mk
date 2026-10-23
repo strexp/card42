@@ -10,7 +10,7 @@ CARD42_RID ?= 0x43:0x41:0x52:0x44:0x42
 # --- card42common library package (no applet) --------------------------------
 COMMON_PACKAGE_NAME ?= card42.common
 COMMON_PACKAGE_AID  ?= $(CARD42_RID):0x00
-COMMON_VERSION      ?= 1.0
+COMMON_VERSION      ?= 1.1
 
 # --- card42-emv package ------------------------------------------------------
 PACKAGE_NAME    ?= card42.emv

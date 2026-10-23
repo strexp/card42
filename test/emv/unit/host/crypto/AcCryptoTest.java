@@ -6,6 +6,7 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 
 import card42.host.emv.crypto.AcCrypto;
+import card42.host.emv.kernel.data.TerminalDol;
 import card42.host.common.crypto.AesCmac;
 import card42.host.common.util.Bytes;
 import card42.host.common.util.Hex;
@@ -76,10 +77,10 @@ final class AcCryptoTest {
         byte[] cdol1 = Hex.parse(
                 "9F02 06 9F03 06 9F1A 02 95 05 5F2A 02 9A 03 9C 01 "
                 + "9F37 04");
-        Asserts.eq(29, AcCrypto.dolDataLength(cdol1), "dolDataLength CDOL1");
-        Asserts.eq(25, AcCrypto.dolValueOffset(cdol1, 0x9F37),
+        Asserts.eq(29, TerminalDol.dolDataLength(cdol1), "dolDataLength CDOL1");
+        Asserts.eq(25, TerminalDol.dolValueOffset(cdol1, 0x9F37),
                 "dolValueOffset finds 9F37");
-        Asserts.eq(-1, AcCrypto.dolValueOffset(cdol1, 0x1234),
+        Asserts.eq(-1, TerminalDol.dolValueOffset(cdol1, 0x1234),
                 "dolValueOffset missing tag");
 
         // --- ISO/IEC 9797-1 algorithm 3 and ARPC (EMV v4.4 Book 2 §8.2, §9.2/§9.3) ------------

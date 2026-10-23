@@ -82,6 +82,7 @@ public final class IssuerCommand {
             usage("authorize", System.out);
             return 0;
         }
+        args.requireNoPositionals();
         byte[] iccKey = Hex.parse(args.require("icc-key"));
         byte[] arc = twoBytes(Hex.parse(args.get("arc", "3030")), "arc");
         byte[] csu = args.has("csu-reset")
@@ -141,6 +142,7 @@ public final class IssuerCommand {
             usage("arpc", System.out);
             return 0;
         }
+        args.requireNoPositionals();
         int method = Integer.parseInt(args.get("method", "2"));
         byte[] key = Hex.parse(args.require("key"));
         int atc = parseAtc(args.require("atc"));
@@ -165,6 +167,7 @@ public final class IssuerCommand {
             usage("script", System.out);
             return 0;
         }
+        args.requireNoPositionals();
         int tag = Integer.parseInt(args.get("tag", "72"), 16);
         if (tag != 0x71 && tag != 0x72) {
             throw new IllegalArgumentException("-tag must be 71 or 72");
@@ -215,6 +218,7 @@ public final class IssuerCommand {
             usage("keys", System.out);
             return 0;
         }
+        args.requireNoPositionals();
         byte[] key = Hex.parse(args.require("key"));
         System.out.println("KCV     " + Hex.format(IssuerCrypto.kcv(key)));
         if (args.has("atc")) {
@@ -266,6 +270,12 @@ public final class IssuerCommand {
     }
 
     // --- Usage ---------------------------------------------------------------
+
+    /** True for the subcommands documented by {@link #usage(PrintStream)}. */
+    public static boolean isSubcommand(String sub) {
+        return "authorize".equals(sub) || "arpc".equals(sub)
+                || "script".equals(sub) || "keys".equals(sub);
+    }
 
     public static void usage(PrintStream out) {
         out.println("usage: Main issuer <authorize|arpc|script|keys> [options]");

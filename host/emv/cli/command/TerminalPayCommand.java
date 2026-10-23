@@ -62,15 +62,15 @@ public final class TerminalPayCommand {
         "terminal-type", "capabilities", "addl-capabilities", "ttq",
         "app-version", "terminal-id", "ifd", "mcc", "merchant", "acquirer",
         "ca-keys", "icc-key", "csu", "arc", "issuer-cmd", "auth", "online",
-        "script", "pin", "pin-file", "referral", "exception",
-        "confirm", "receipt",
+        "script", "pin", "pin-file", "pin-key", "referral", "exception",
+        "confirm", "receipt", "report",
     };
 
     private static final String[] FLAG_OPTIONS = {
         "merchant-online", "online-pin", "signature", "no-oda", "csu-reset",
         "ep-status-check", "ep-zero-amount", "ep-zero-offline",
         "ep-extended-selection", "ep-restart-decline",
-        "json", "trace", "quiet", "verbose", "no-pin",
+        "json", "trace", "quiet", "no-pin",
     };
 
     private TerminalPayCommand() {
@@ -83,6 +83,7 @@ public final class TerminalPayCommand {
             usage(System.out);
             return 0;
         }
+        args.requireNoPositionals();
         Map<String, String> profile = args.has("profile")
                 ? KeyValueFile.read(args.get("profile", null))
                 : new LinkedHashMap<>();
@@ -130,6 +131,15 @@ public final class TerminalPayCommand {
 
         int count = Integer.parseInt(PayProviders.setting(args, profile, "count", "count", "1"));
         long interval = Long.parseLong(PayProviders.setting(args, profile, "interval", "interval", "0"));
+        if (count < 1) {
+            throw new IllegalArgumentException("-count must be >= 1: " + count);
+        }
+        if (interval < 0) {
+            throw new IllegalArgumentException("-interval must be >= 0 ms: " + interval);
+        }
+        if (wait < 0) {
+            throw new IllegalArgumentException("-wait must be >= 0 seconds: " + wait);
+        }
         boolean json = args.has("json");
         String reportPath = args.get("report", null);
         ReceiptPrinter receiptPrinter = PayProviders.receiptPrinter(args);
@@ -277,6 +287,9 @@ public final class TerminalPayCommand {
     private static void applyRequest(TransactionRequest request, Args args,
             Map<String, String> profile, String[] aids) {
         int decimals = Integer.parseInt(PayProviders.setting(args, profile, "decimals", "decimals", "2"));
+        if (decimals < 0 || decimals > 6) {
+            throw new IllegalArgumentException("-decimals must be 0..6: " + decimals);
+        }
         request.amountAuthorised = Bcd.longToBcd(
                 Amounts.amount(PayProviders.setting(args, profile, "amount", "amount", "0.00"), decimals), 6);
         request.amountOther = Bcd.longToBcd(
@@ -439,6 +452,6 @@ public final class TerminalPayCommand {
         out.println("  online    : -icc-key=<hex> -csu=<hex> -arc=<hex> -csu-reset -script=<hex>");
         out.println("              -issuer-cmd=<cmd> -auth=<path> -online=auto|always|never|decline");
         out.println("              -referral=accept|decline -exception=<pan[:seq]>[,<pan[:seq]>]");
-        out.println("  output    : -json -report=<path> -receipt=<path> -trace -quiet -verbose");
+        out.println("  output    : -json -report=<path> -receipt=<path> -trace -quiet");
     }
 }

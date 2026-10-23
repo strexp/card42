@@ -1,6 +1,7 @@
 package card42.test;
 
 import java.util.Arrays;
+import card42.host.emv.kernel.data.TerminalDol;
 
 import javax.smartcardio.Card;
 import javax.smartcardio.CardTerminal;
@@ -249,7 +250,7 @@ public class BoundaryTest {
         cdol1 = beginSession(terminal, aid, pdolData);
         if (cdol1 != null) {
             byte[] data = cdolData(cdol1);
-            int tvr = AcCrypto.dolValueOffset(cdol1, 0x95);
+            int tvr = TerminalDol.dolValueOffset(cdol1, 0x95);
             if (tvr >= 0) {
                 data[tvr] = (byte) 0x80; // IAC-Denial: card decides AAC
             }
@@ -293,7 +294,7 @@ public class BoundaryTest {
         byte[] cdol1 = beginSession(terminal, aid, pdolData);
         if (cdol1 != null) {
             byte[] data = cdolData(cdol1);
-            int tvr = AcCrypto.dolValueOffset(cdol1, 0x95);
+            int tvr = TerminalDol.dolValueOffset(cdol1, 0x95);
             if (tvr < 0) {
                 Checks.fail("CDA+AAC: CDOL1 has no TVR (95)");
             } else {
@@ -611,7 +612,7 @@ public class BoundaryTest {
             return null;
         }
         byte[] pdol = Tags.find(r.getData(), 0x9F38);
-        return new byte[pdol == null ? 0 : AcCrypto.dolDataLength(pdol)];
+        return new byte[pdol == null ? 0 : TerminalDol.dolDataLength(pdol)];
     }
 
     /**
@@ -645,7 +646,7 @@ public class BoundaryTest {
 
     /** A zero-filled CDOL data field of the length described by cdol. */
     private static byte[] cdolData(byte[] cdol) {
-        return new byte[cdol == null ? 0 : AcCrypto.dolDataLength(cdol)];
+        return new byte[cdol == null ? 0 : TerminalDol.dolDataLength(cdol)];
     }
 
     /** The CDOL2 definition (tag 8D) of record 1 in the current session. */

@@ -6,11 +6,11 @@ import card42.host.emv.kernel.data.Cvm;
 import card42.host.common.codec.Tags;
 import card42.host.emv.crypto.AcCrypto;
 import card42.host.emv.kernel.core.CvmPerformer;
+import card42.host.emv.kernel.core.OdaVerifier;
 import card42.host.emv.kernel.core.PinProvider;
 import card42.host.emv.kernel.core.TransactionResult;
 import card42.host.emv.kernel.data.TransactionRequest;
 import card42.host.emv.kernel.data.Tvr;
-import card42.host.emv.oda.SdaVerifier;
 import card42.host.emv.lib.IssuerKey;
 import card42.host.emv.lib.Terminal;
 
@@ -42,13 +42,21 @@ public final class OfflinePinCvm implements CvmPerformer {
     private final Terminal terminal;
     private final TransactionRequest data;
     private final TransactionResult.Mutable result;
+    /** Injected ODA seam; null in legacy unit tests that only exercise plaintext PIN. */
+    private final OdaVerifier oda;
 
     public OfflinePinCvm(PinProvider pinProvider, Terminal terminal, TransactionRequest data,
                          TransactionResult.Mutable result) {
+        this(pinProvider, terminal, data, result, null);
+    }
+
+    public OfflinePinCvm(PinProvider pinProvider, Terminal terminal, TransactionRequest data,
+                         TransactionResult.Mutable result, OdaVerifier oda) {
         this.pinProvider = pinProvider;
         this.terminal = terminal;
         this.data = data;
         this.result = result;
+        this.oda = oda;
     }
 
     @Override
@@ -120,20 +128,19 @@ public final class OfflinePinCvm implements CvmPerformer {
         if (result.issuerKey() == null) {
             return null;
         }
-        SdaVerifier.Result pinKey = SdaVerifier.recoverPinKey(terminal, result.issuerKey(),
+        if (oda == null) {
+            return null;
+        }
+        IssuerKey key = oda.recoverPinKey(terminal, result.issuerKey(),
                 data.transactionDate);
-        IssuerKey key = pinKey.ok ? pinKey.key : null;
         if (key == null) {
             // EMV v4.4 Book 2 §7.1 step 2: when the Table 24 PIN encipherment
             // data is incomplete but the Table 12 data is complete, the ICC
             // DDA/CDA public key (Book 2 §6) is used for PIN encipherment.
             key = result.iccKey();
             if (key == null) {
-                SdaVerifier.Result icc = SdaVerifier.recoverIccKey(terminal, result.issuerKey(),
+                key = oda.recoverIccKey(terminal, result.issuerKey(),
                         data.transactionDate);
-                if (icc.ok) {
-                    key = icc.key;
-                }
             }
         }
         if (key == null) {

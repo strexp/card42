@@ -41,7 +41,7 @@ ISO 注册 RID）。package AID 为 `RID:00`（common）、`RID:01`（emv）、`
 | `card42.emrtd.EmrtdApplet` | `43415244420201` | `A0 00 00 02 47 10 01`（ICAO LDS1 DF name） | eMRTD LDS1 |
 | `card42.emrtd.EmrtdApplet` | `43415244420201` | `A0 00 00 02 47 20 01/02/03`（LDS2 DF name） | eMRTD LDS2 Travel/Visa/Biometrics |
 
-- package AID：common `434152444200`、emv `434152444201`、emrtd `434152444202`，version `1.0`。
+- package AID：common `434152444200`（version `1.1`）、emv `434152444201`、emrtd `434152444202`（version `1.0`）。
 - `deploy/deploy-emv-test.conf` 另装模拟器/测试专用支付实例：`43415244420104`（无 DDA/PIN 与 SM
   密钥）、`43415244420106`（CDA 无 `9F37`、5 位 PIN、通用 `EXTERNAL AUTHENTICATE` 路径，AIP
   byte1 bit3=1）、`43415244420108`（CV '6' / AES-128），由 `perso/emv/sample-test.perso`
@@ -172,9 +172,9 @@ host/emrtd/     card42.host.emrtd：transport/EmrtdTerminal；lds/（LdsFileUtil
                 TerminalAuthenticationInfo）；access/（LdsReader（LDS 读文件 I/O）/
                 MrzKeySeed / Bac / Iso7816Sm / Iso7816SmAes /
                 SecureMessaging / ChipAuth / Pace）；pa/（CscaKeyStore / DscVerifier /
-                PassiveAuthentication）；aa/ActiveAuthentication；perso/（EmrtdPersoExporter /
-                SampleData（样例 DG/密钥数据）/ SodBuilder / Dg2Builder /
-                CardSecurityBuilder / LdsScript）；
+                PassiveAuthentication）；aa/ActiveAuthentication；perso/（SodBuilder /
+                Dg2Builder / CardSecurityBuilder / LdsScript）；tools/（EmrtdPersoExporter /
+                SampleData（样例 DG/密钥数据）/ TaChain（demo CVCA 链））；
                 report/PassportReport；cli/（Main / EmrtdCommand）
 test/           测试（package card42.test，目录为功能分组而非包）
   common/       fixtures/TestKeys（示例 CA/SDA 密钥 + SdaKeys 档案 + CaKeyStore）；
@@ -211,7 +211,7 @@ GET RESPONSE（SunPCSC 会沿用触发命令的 CLA，严格卡以 `6E00` 拒绝
 **分层依赖方向**（由 `test/emv/unit/host/LayeringTest` 守卫）：
 
 - `common` 不依赖任何其它 host 模块；
-- `emv.lib → common`；`emv.kernel → {common, emv.lib}`；`emv.report → {…, kernel}`；
+- `emv.lib → common`；`emv.kernel → {common, emv.lib, emv.crypto, emv.oda}`；`emv.report → {…, kernel}`；
   `emv.app`；`emv.cli`（可依赖全部）；
 - `emrtd.lib → common`；`emrtd.cli → {common, emrtd.lib}`；
 - **库模块不得依赖任何 CLI 模块**（业务模块之间亦互不依赖），从而库 jar 可脱离 CLI jar
@@ -222,7 +222,7 @@ GET RESPONSE（SunPCSC 会沿用触发命令的 CLA，严格卡以 `6E00` 拒绝
 卡侧堆（持久 EEPROM 与 CLEAR_ON_DESELECT 瞬态）稀缺，因此**职责拆分必须堆中性**
 （docs/specs/common/risks.md §2）：
 
-- 允许：把类拆成**无状态的 `static` 帮助类**（如 `TaKeys` / `TaTrustStore`、
+- 允许：把类拆成**无状态的 `static` 帮助类**（如 `Tlv.find` / `ApduIo`；`TaTrustStore` 属于包级共享状态，不是无状态例子）、
   `card42.common.Tlv.find`）；把方法搬进**已经分配过**的协作者；改字段可见性；
   用**已存在对象**实现的窄接口（如 `PersoTarget`）；以已存在对象/数组作参数。
 - 禁止：新增对象实例、新增数组（含延迟分配）、给已有对象新增字段（字段只可**等量搬移**）、
@@ -242,7 +242,7 @@ GET RESPONSE（SunPCSC 会沿用触发命令的 CLA，严格卡以 `6E00` 拒绝
 - **输入**：`TerminalConfig`（不可变，终端常驻：身份/能力/TAC/限额/CVM 支持/exception file，
   `forContact()`/`builder()` 构造）由 `TransactionRequest` 引用；`TransactionRequest` 承载每笔
   金额/币种/日期时间/类型/UN、选中的 `9F06` 与 `9F41`，是唯一被内核改写的输入对象。
-- **输出**：`TransactionResult` 字段只读（getter），内核经包内 `TransactionResult.Mutable` 写入；
+- **输出**：`TransactionResult` 字段只读（getter）；内核经 `TransactionResult.Mutable` 写入。该嵌套类目前是 public（kernel SPI），第三方调用方应只读，见 HOST-09。
   提供 `decision()`（`Decision`：APPROVE/DECLINE/ONLINE/END_APPLICATION，综合接触 Book 4
   §6.3.2 终端决策与非接触 Book A Table 6-1 Outcome）与 `record()`/`firstValue(tag)`。交易态
   一律从结果读，不写回 `TransactionRequest`。

@@ -17,7 +17,7 @@ import card42.host.emrtd.lds.TravelRecordBuilder;
 import card42.host.emrtd.lds.VisaRecordBuilder;
 import card42.host.emrtd.pa.CscaKeyStore;
 import card42.host.emrtd.pa.Lds2Verifier;
-import card42.host.emrtd.perso.EmrtdPersoExporter;
+import card42.host.emrtd.tools.EmrtdPersoExporter;
 
 /**
  * Parsed {@code lds2 -append=<json>} request: the target record EF and the

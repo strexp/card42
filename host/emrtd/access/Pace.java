@@ -10,8 +10,10 @@ import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.codec.Tags;
 import card42.host.common.crypto.AesCmac;
+import card42.host.common.crypto.Kdf;
 import card42.host.common.crypto.Iso9797;
 import card42.host.common.crypto.P256;
+import card42.host.common.util.Bytes;
 import card42.host.common.util.Sw;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
@@ -149,7 +151,7 @@ public final class Pace {
         // MSE:Set AT: DO'80'(OID) || DO'83'(password reference) || DO'84'(P-256 param id)
         // || DO'7F4C'(CHAT, id-IS) to request the CVCA CARs in the response
         // (ICAO Doc 9303-11 §4.4.4.1).
-        byte[] mse = concat(new byte[] { (byte) 0x80, (byte) oid.length }, oid,
+        byte[] mse = Bytes.concat(new byte[] { (byte) 0x80, (byte) oid.length }, oid,
                 new byte[] { (byte) 0x83, 0x01, passwordReference,
                         (byte) 0x84, 0x01, PARAM_ID_P256 },
                 REQUEST_CARS);
@@ -233,21 +235,9 @@ public final class Pace {
     }
 
     /** KDF(x, counter) = SHA-1(x || 00 00 00 counter), 16-byte key. */
-    public static byte[] kdf(byte[] x, int counter, boolean aes) throws Exception {
-        byte[] in = new byte[x.length + 4];
-        System.arraycopy(x, 0, in, 0, x.length);
-        in[in.length - 1] = (byte) counter;
-        byte[] key = Arrays.copyOf(
-                MessageDigest.getInstance("SHA-1").digest(in), 16);
-        if (!aes) {
-            // DES parity adjustment applies to 3DES keys only (BSI A.2.3.1).
-            for (int i = 0; i < key.length; i++) {
-                if ((Integer.bitCount(key[i] & 0xFF) & 1) == 0) {
-                    key[i] ^= 0x01;
-                }
-            }
-        }
-        return key;
+    public static byte[] kdf(byte[] x, int counter, boolean aes) {
+        // DES parity adjustment applies to 3DES keys only (BSI A.2.3.1).
+        return Kdf.sha1Counter(x, counter, !aes);
     }
 
     static byte[] tokenMac(byte[] ksMac, byte[] input, boolean aes) throws Exception {
@@ -267,27 +257,15 @@ public final class Pace {
 
     /** 7F49 { 06 <OID> 86 <point> } for the authentication token MAC. */
     static byte[] tokenInput(byte[] oid, byte[] point) {
-        byte[] inner = concat(new byte[] { 0x06, (byte) oid.length }, oid,
+        byte[] inner = Bytes.concat(new byte[] { 0x06, (byte) oid.length }, oid,
                 new byte[] { (byte) 0x86, (byte) point.length }, point);
-        return concat(new byte[] { 0x7F, 0x49, (byte) inner.length }, inner);
+        return Bytes.concat(new byte[] { 0x7F, 0x49, (byte) inner.length }, inner);
     }
 
     private static byte[] ga(int tag, byte[] value) {
-        return concat(new byte[] { (byte) 0x7C, (byte) (value.length + 2), (byte) tag,
+        return Bytes.concat(new byte[] { (byte) 0x7C, (byte) (value.length + 2), (byte) tag,
                 (byte) value.length }, value);
     }
 
-    private static byte[] concat(byte[]... parts) {
-        int len = 0;
-        for (byte[] p : parts) {
-            len += p.length;
-        }
-        byte[] out = new byte[len];
-        int off = 0;
-        for (byte[] p : parts) {
-            System.arraycopy(p, 0, out, off, p.length);
-            off += p.length;
-        }
-        return out;
-    }
+
 }

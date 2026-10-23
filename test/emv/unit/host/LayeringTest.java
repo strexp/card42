@@ -35,8 +35,10 @@ import java.util.stream.Stream;
  */
 final class LayeringTest {
 
-    private static final Pattern IMPORT = Pattern.compile("^import\\s+(card42\\.host[\\w.]*);",
-            Pattern.MULTILINE);
+    private static final Pattern IMPORT = Pattern.compile(
+            "^import\\s+(?:static\\s+)?(card42\\.host[\\w.]*);", Pattern.MULTILINE);
+    /** Fully-qualified references (the import scan alone misses these). */
+    private static final Pattern REFERENCE = Pattern.compile("\\bcard42\\.host[\\w.]*");
 
     private LayeringTest() {
     }
@@ -45,10 +47,8 @@ final class LayeringTest {
         System.out.println("Layering");
 
         Path host = Path.of("host");
-        if (!Files.isDirectory(host)) {
-            System.out.println("  skip (host not found; run from the repo root)");
-            return;
-        }
+        Asserts.check(Files.isDirectory(host),
+                "LayeringTest must run from the repository root (host/ not found)");
         List<String> violations = new ArrayList<String>();
         try (Stream<Path> files = Files.walk(host)) {
             files.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
@@ -63,19 +63,38 @@ final class LayeringTest {
                     violations.add(p + " (unreadable)");
                     return;
                 }
-                Matcher m = IMPORT.matcher(source);
+                String code = stripComments(source);
+                Matcher m = IMPORT.matcher(code);
                 while (m.find()) {
-                    String target = moduleOfPackage(m.group(1));
-                    // Intra-module imports are always fine; only a dependency on
-                    // another module is constrained by the layering rules.
-                    if (target != null && !target.equals(module)
-                            && !allowed(module).contains(target)) {
-                        violations.add(p + ": " + module + " -> " + m.group(1));
-                    }
+                    checkReference(p, module, m.group(1), violations);
+                }
+                Matcher ref = REFERENCE.matcher(code);
+                while (ref.find()) {
+                    checkReference(p, module, ref.group(), violations);
                 }
             });
         }
         Asserts.check(violations.isEmpty(), "module layering violations: " + violations);
+    }
+
+    private static void checkReference(Path file, String module, String reference,
+                                       List<String> violations) {
+        String target = moduleOfPackage(reference);
+        // Intra-module references are always fine; only a dependency on another
+        // module is constrained by the layering rules.
+        if (target != null && !target.equals(module)
+                && !allowed(module).contains(target)) {
+            String violation = file + ": " + module + " -> " + reference;
+            if (!violations.contains(violation)) {
+                violations.add(violation);
+            }
+        }
+    }
+
+    /** Removes block and line comments so docs/strings cannot hide a reference. */
+    private static String stripComments(String source) {
+        String noBlocks = source.replaceAll("(?s)/\\*.*?\\*/", " ");
+        return noBlocks.replaceAll("//[^\\n]*", " ");
     }
 
     /** The module of a host source path, or null for paths outside the modules. */
@@ -105,7 +124,7 @@ final class LayeringTest {
         if (p.startsWith("host/emv/oda/")) {
             return "emv.oda";
         }
-        if (p.startsWith("host/emrtd/cli/")) {
+        if (p.startsWith("host/emrtd/cli/") || p.startsWith("host/emrtd/tools/")) {
             return "emrtd.cli";
         }
         if (p.startsWith("host/emrtd/")) {
@@ -140,7 +159,8 @@ final class LayeringTest {
         if (pkg.startsWith("card42.host.emv")) {
             return "emv.lib";
         }
-        if (pkg.startsWith("card42.host.emrtd.cli")) {
+        if (pkg.startsWith("card42.host.emrtd.cli")
+                || pkg.startsWith("card42.host.emrtd.tools")) {
             return "emrtd.cli";
         }
         if (pkg.startsWith("card42.host.emrtd")) {

@@ -21,6 +21,17 @@ public final class EmrtdCommand {
     }
 
     public static int run(String subcommand, String[] args) throws Exception {
+        if (isHelp(subcommand)) {
+            usage(System.out);
+            return CliSupport.EXIT_OK;
+        }
+        if ("help".equals(subcommand)) {
+            if (args.length == 0) {
+                usage(System.out);
+                return CliSupport.EXIT_OK;
+            }
+            return help(args[0], System.out);
+        }
         switch (subcommand) {
         case "read":
             return EmrtdReadCommand.run(args, false);
@@ -33,6 +44,31 @@ public final class EmrtdCommand {
         case "ta-export":
             return EmrtdTaExportCommand.run(args);
         default:
+            usage(System.err);
+            return CliSupport.EXIT_USAGE;
+        }
+    }
+
+    private static boolean isHelp(String arg) {
+        return "-h".equals(arg) || "--help".equals(arg);
+    }
+
+    public static int help(String topic, PrintStream out) {        switch (topic) {
+        case "read":
+        case "inspect":
+            EmrtdReadCommand.usage(out);
+            return CliSupport.EXIT_OK;
+        case "lds2":
+            EmrtdLds2Command.usage(out);
+            return CliSupport.EXIT_OK;
+        case "apdu":
+            EmrtdApduCommand.usage(out);
+            return CliSupport.EXIT_OK;
+        case "ta-export":
+            EmrtdTaExportCommand.usage(out);
+            return CliSupport.EXIT_OK;
+        default:
+            System.err.println("Unknown eMRTD help topic: " + topic);
             usage(System.err);
             return CliSupport.EXIT_USAGE;
         }

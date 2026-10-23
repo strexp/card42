@@ -8,8 +8,10 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 import card42.host.common.crypto.AesCmac;
 import card42.host.common.crypto.Iso9797;
+import card42.host.common.crypto.RsaRecovery;
 import card42.host.common.util.Bytes;
 import card42.host.common.util.Hex;
+import card42.host.common.util.Iso9564;
 
 /**
  * Terminal-side EMV cryptography (EMV v4.4 Book 2 §5, §7.2, §8.2, Annex
@@ -93,44 +95,17 @@ public final class AcCrypto {
         return PersoMac.mac(sessionKey(iccKey, atc), acInput);
     }
 
-    /** ISO 9564-1 format 2 PIN block (8 bytes, padded with 0xF). */
+    /** ISO 9564-1 format 2 PIN block (8 bytes, padded with 0xFF). */
     public static byte[] iso9564Format2(String pin) {
-        byte[] block = new byte[8];
-        Arrays.fill(block, (byte) 0xFF);
-        block[0] = (byte) (0x20 | pin.length());
-        byte[] digits = Hex.bcd(pin);
-        System.arraycopy(digits, 0, block, 1, digits.length);
-        return block;
+        return Iso9564.format2(pin);
     }
 
     /**
      * ISO 9564-1 format 0 PIN block (8 bytes) for the online PIN CVM
-     * (EMV v4.4 Book 4 §6.3.4.4): the PIN block '0 || N || PIN || F padding' is
-     * XORed with the PAN field '0000 || rightmost 12 PAN digits excluding the
-     * check digit'.  The result is ready for the host's PIN encryption callback.
+     * (EMV v4.4 Book 4 §6.3.4.4).
      */
     public static byte[] iso9564Format0(String pin, byte[] pan) {
-        byte[] pinBlock = new byte[8];
-        Arrays.fill(pinBlock, (byte) 0xFF);
-        pinBlock[0] = (byte) pin.length();
-        byte[] digits = Hex.bcd(pin);
-        System.arraycopy(digits, 0, pinBlock, 1, digits.length);
-
-        String panDigits = Hex.format(pan);
-        if (panDigits.length() > 1) {
-            panDigits = panDigits.substring(0, panDigits.length() - 1); // drop check digit
-        }
-        if (panDigits.length() > 12) {
-            panDigits = panDigits.substring(panDigits.length() - 12);
-        }
-        String panField = "0000000000000000".substring(panDigits.length()) + panDigits;
-        byte[] panBlock = Hex.parse(panField);
-
-        byte[] block = new byte[8];
-        for (int i = 0; i < 8; i++) {
-            block[i] = (byte) (pinBlock[i] ^ panBlock[i]);
-        }
-        return block;
+        return Iso9564.format0(pin, pan);
     }
 
     /**
@@ -139,8 +114,7 @@ public final class AcCrypto {
      * the terminal applies to the Table 25 PIN block.
      */
     public static byte[] rsaRecover(byte[] message, BigInteger modulus, BigInteger exponent) {
-        return toFixed(new BigInteger(1, message).modPow(exponent, modulus),
-                modulusLength(modulus));
+        return RsaRecovery.recover(message, modulus, exponent);
     }
 
     /**
@@ -150,7 +124,7 @@ public final class AcCrypto {
      */
     public static byte[] emvEncipherPin(byte[] pinBlock, byte[] iccUn,
                                         BigInteger modulus, BigInteger exponent) {
-        int n = modulusLength(modulus);
+        int n = RsaRecovery.modulusLength(modulus);
         byte[] block = new byte[n];
         new java.security.SecureRandom().nextBytes(block);
         block[0] = 0x7F;
@@ -159,19 +133,6 @@ public final class AcCrypto {
         return rsaRecover(block, modulus, exponent);
     }
 
-    private static int modulusLength(BigInteger modulus) {
-        return (modulus.bitLength() + 7) / 8;
-    }
-
-    /** Big-endian byte string of exactly length bytes, left-padded with zero. */
-    private static byte[] toFixed(BigInteger value, int length) {
-        byte[] raw = value.toByteArray();
-        int start = (raw.length > 1 && raw[0] == 0) ? 1 : 0;
-        int size = raw.length - start;
-        byte[] out = new byte[length];
-        System.arraycopy(raw, start, out, length - size, size);
-        return out;
-    }
 
     // --- Issuer authentication (EMV v4.4 Book 2 §8.2) -------------------------
 
@@ -310,65 +271,5 @@ public final class AcCrypto {
         return AesCmac.mac(sk16, Bytes.concat(arqc, csu, proprietary), 4);
     }
 
-    // --- DOL helpers (DDA/CDA, EMV v4.4 Book 2 §6.5/§6.6) ---------------------
 
-    /** Total value length described by a DOL definition (tag+length entries). */
-    public static int dolDataLength(byte[] dol) {
-        int p = 0;
-        int total = 0;
-        while (p < dol.length) {
-            int b = dol[p] & 0xFF;
-            p += (b & 0x1F) == 0x1F ? 2 : 1;
-            int lb = dol[p] & 0xFF;
-            int lLen = (lb & 0x80) == 0 ? 1 : 1 + (lb & 0x7F);
-            int len = 0;
-            for (int i = 0; i < lLen - 1; i++) {
-                len = (len << 8) | (dol[p + 1 + i] & 0xFF);
-            }
-            if ((lb & 0x80) == 0) {
-                len = lb;
-            }
-            total += len;
-            p += lLen;
-        }
-        return total;
-    }
-
-    /** Offset of the value of tag in a DOL definition, or -1. */
-    public static int dolValueOffset(byte[] dol, int tag) {
-        int p = 0;
-        int offset = 0;
-        while (p < dol.length) {
-            int b = dol[p] & 0xFF;
-            int t;
-            int tagLen;
-            if ((b & 0x1F) == 0x1F) {
-                t = (b << 8) | (dol[p + 1] & 0xFF);
-                tagLen = 2;
-            } else {
-                t = b;
-                tagLen = 1;
-            }
-            p += tagLen;
-            int lb = dol[p] & 0xFF;
-            int lLen;
-            int len;
-            if ((lb & 0x80) == 0) {
-                lLen = 1;
-                len = lb;
-            } else {
-                lLen = 1 + (lb & 0x7F);
-                len = 0;
-                for (int i = 0; i < lLen - 1; i++) {
-                    len = (len << 8) | (dol[p + 1 + i] & 0xFF);
-                }
-            }
-            if (t == tag) {
-                return offset;
-            }
-            offset += len;
-            p += lLen;
-        }
-        return -1;
-    }
 }

@@ -27,7 +27,7 @@ import card42.host.emrtd.lds.security.UnknownSecurityInfo;
 import card42.host.emrtd.pa.CscaKeyStore;
 import card42.host.emrtd.pa.PassiveAuthentication;
 import card42.host.emrtd.perso.SodBuilder;
-import card42.host.emrtd.perso.EmrtdPersoExporter;
+import card42.host.emrtd.tools.EmrtdPersoExporter;
 
 /**
  * Pure-JVM tests for host EF.CardAccess / SecurityInfo parsing, the

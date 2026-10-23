@@ -1,5 +1,7 @@
 package card42.host.emv.kernel.data;
 
+import card42.host.common.codec.Dol;
+
 /**
  * Terminal-side DOL processing (EMV v4.4 Book 3 §5.4): maps a (tag, length)
  * DOL definition onto the terminal data model's values, applying the numeric /
@@ -176,21 +178,11 @@ public final class TerminalDol {
 
     /** The value length described by a DOL definition. */
     public static int dolDataLength(byte[] dol) {
-        int total = 0;
-        int p = 0;
-        while (p < dol.length) {
-            int b = dol[p] & 0xFF;
-            p += ((b & 0x1F) == 0x1F) ? 2 : 1;
-            int len = dol[p++] & 0xFF;
-            if ((len & 0x80) != 0) {
-                int n = len & 0x7F;
-                len = 0;
-                for (int i = 0; i < n; i++) {
-                    len = (len << 8) | (dol[p++] & 0xFF);
-                }
-            }
-            total += len;
-        }
-        return total;
+        return Dol.dataLength(dol);
     }
+    /** Offset of the value of {@code tag} in a DOL definition, or -1. */
+    public static int dolValueOffset(byte[] dol, int tag) {
+        return Dol.valueOffset(dol, tag);
+    }
+
 }

@@ -15,7 +15,7 @@ import card42.host.emrtd.lds.LdsFileUtil;
 import card42.host.emrtd.access.LdsReader;
 import card42.host.emrtd.ta.CvCertificate;
 import card42.host.emrtd.ta.CvCertificateCodec;
-import card42.host.emrtd.ta.TaChain;
+import card42.host.emrtd.tools.TaChain;
 import card42.host.emrtd.ta.TerminalAuth;
 import card42.host.emrtd.transport.EmrtdTerminal;
 

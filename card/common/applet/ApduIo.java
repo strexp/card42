@@ -59,4 +59,30 @@ public final class ApduIo {
         apdu.setOutgoingLength(len);
         apdu.sendBytesLong(buf, off, len);
     }
+
+    /**
+     * Length of the STORE DATA Lc field: 1 byte, or 3 bytes when the first
+     * byte is {@code 00} and two more bytes are present
+     * ({@code 00 || LcHi || LcLo}, EMV CPS v2.0 Table 4-8).  Returns 0 when
+     * the Lc byte itself is beyond {@code end}.  A {@code 00} without room for
+     * the two length bytes is a 1-byte Lc=0.
+     */
+    public static short storeDataLcFieldLength(byte[] buf, short lcOffset, short end) {
+        if (lcOffset >= end) {
+            return 0;
+        }
+        if ((buf[lcOffset] & 0xFF) != 0x00) {
+            return 1;
+        }
+        return (short) ((short) (lcOffset + 3) <= end ? 3 : 1);
+    }
+
+    /** The STORE DATA Lc value for a field length returned by the method above. */
+    public static short storeDataLc(byte[] buf, short lcOffset, short fieldLength) {
+        if (fieldLength == 3) {
+            return (short) (((buf[(short) (lcOffset + 1)] & 0xFF) << 8)
+                    | (buf[(short) (lcOffset + 2)] & 0xFF));
+        }
+        return (short) (buf[lcOffset] & 0xFF);
+    }
 }

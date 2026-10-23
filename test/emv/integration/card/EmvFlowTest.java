@@ -1,6 +1,7 @@
 package card42.test;
 
 import java.util.Arrays;
+import card42.host.emv.kernel.data.TerminalDol;
 import java.util.Random;
 
 import javax.smartcardio.Card;
@@ -130,7 +131,7 @@ public class EmvFlowTest {
         // PDOL from the ADF FCI (EMV v4.4 Book 3 §6.5.8): the GPO command data is
         // built from it.  Without a PDOL the terminal sends '83 00'.
         byte[] pdol = Tags.find(r.getData(), 0x9F38);
-        byte[] pdolData = new byte[pdol == null ? 0 : AcCrypto.dolDataLength(pdol)];
+        byte[] pdolData = new byte[pdol == null ? 0 : TerminalDol.dolDataLength(pdol)];
         System.out.println("PDOL        : " + (pdol == null ? "(none)" : Hex.format(pdol))
                 + " -> " + pdolData.length + " data byte(s)");
 
@@ -157,7 +158,7 @@ public class EmvFlowTest {
         // (docs/specs/common/toolchain.md §6).
         byte[] cdol1Definition = Tags.find(record1, 0x8C);
         if (cdol1Definition != null) {
-            cdol1DataLength = AcCrypto.dolDataLength(cdol1Definition);
+            cdol1DataLength = TerminalDol.dolDataLength(cdol1Definition);
         }
 
         // Optional record data objects (EMV v4.4 Book 3 Annex A Table 37): the
@@ -340,7 +341,7 @@ public class EmvFlowTest {
         // portable across the personalized ODA profile (0x7900 on the simulator,
         // 0x5800 on an SDA-only card such as the J3R180).
         ResponseAPDU sel = terminal.select("43415244420101");
-        ResponseAPDU gpo = terminal.gpo(new byte[AcCrypto.dolDataLength(
+        ResponseAPDU gpo = terminal.gpo(new byte[TerminalDol.dolDataLength(
                 Tags.find(sel.getData(), 0x9F38))]);
         byte[] aipBytes = gpo.getSW() == 0x9000 ? gpoAip(gpo.getData()) : null;
         int contactAip = aipBytes == null ? -1
@@ -410,12 +411,12 @@ public class EmvFlowTest {
         if (cdol2 == null) {
             throw new IllegalStateException("record 1 has no CDOL2");
         }
-        byte[] data = new byte[AcCrypto.dolDataLength(cdol2)];
-        int arcOff = AcCrypto.dolValueOffset(cdol2, 0x8A);
+        byte[] data = new byte[TerminalDol.dolDataLength(cdol2)];
+        int arcOff = TerminalDol.dolValueOffset(cdol2, 0x8A);
         if (arcOff >= 0) {
             System.arraycopy(arc, 0, data, arcOff, 2);
         }
-        int authOff = AcCrypto.dolValueOffset(cdol2, 0x91);
+        int authOff = TerminalDol.dolValueOffset(cdol2, 0x91);
         if (authOff >= 0) {
             byte[] arpc = AcCrypto.computeArpcMethod2(sk, arqc, csu, new byte[0]);
             System.arraycopy(arpc, 0, data, authOff, 4);
@@ -487,7 +488,7 @@ public class EmvFlowTest {
         byte[] cdol2 = cdol2Data(record1, arqc, sk, ARC_APPROVED, CSU_APPROVE);
 
         byte[] definition = Tags.find(record1, 0x8D);
-        int authOff = AcCrypto.dolValueOffset(definition, 0x91);
+        int authOff = TerminalDol.dolValueOffset(definition, 0x91);
         cdol2[authOff] ^= 0x01; // corrupt the ARPC
 
         ResponseAPDU r = terminal.generateAc((byte) 0x40, cdol2); // request TC
@@ -630,7 +631,7 @@ public class EmvFlowTest {
         byte[] csu = { 0x00, (byte) 0x40, 0x00, 0x00 }; // Card Block bit
         byte[] cdol2 = cdol2Data(record1, arqc, sk, ARC_APPROVED, csu);
         byte[] definition = Tags.find(record1, 0x8D);
-        int authOff = AcCrypto.dolValueOffset(definition, 0x91);
+        int authOff = TerminalDol.dolValueOffset(definition, 0x91);
         cdol2[authOff] ^= 0x01; // corrupt the ARPC
         ResponseAPDU r = terminal.generateAc((byte) 0x40, cdol2);
         Checks.check("wrong ARPC with CSU Card Block", r.getSW() == 0x9000, r);
@@ -697,7 +698,7 @@ public class EmvFlowTest {
             throws Exception {
         ResponseAPDU sel = terminal.select(paymentAid);
         Checks.check("AIP: SELECT contact", sel.getSW() == 0x9000, sel);
-        ResponseAPDU gpo = terminal.gpo(new byte[AcCrypto.dolDataLength(
+        ResponseAPDU gpo = terminal.gpo(new byte[TerminalDol.dolDataLength(
                 Tags.find(sel.getData(), 0x9F38))]);
         byte[] aipBytes = gpo.getSW() == 0x9000 ? gpoAip(gpo.getData()) : null;
         boolean contactB3 = aipBytes != null && (aipBytes[0] & 0x04) != 0;
@@ -819,8 +820,8 @@ public class EmvFlowTest {
             Checks.check("CDA CDOL1 present", false);
             return;
         }
-        int cdolLength = AcCrypto.dolDataLength(cdol1);
-        int unOffset = AcCrypto.dolValueOffset(cdol1, 0x9F37);
+        int cdolLength = TerminalDol.dolDataLength(cdol1);
+        int unOffset = TerminalDol.dolValueOffset(cdol1, 0x9F37);
         if (unOffset < 0) {
             Checks.check("CDA CDOL1 contains 9F37", false);
             return;
@@ -859,7 +860,7 @@ public class EmvFlowTest {
             Checks.fail("CDA: record 1 has no CDOL2 (8D)");
             return;
         }
-        int un2Offset = AcCrypto.dolValueOffset(cdol2Definition, 0x9F37);
+        int un2Offset = TerminalDol.dolValueOffset(cdol2Definition, 0x9F37);
         if (un2Offset < 0) {
             Checks.fail("CDA: CDOL2 does not contain 9F37");
             return;
@@ -922,8 +923,8 @@ public class EmvFlowTest {
             Checks.fail(label + ": record 1 has no CDOL1 (8C)");
             return;
         }
-        int cdolLength = AcCrypto.dolDataLength(cdol1);
-        int tvrOffset = AcCrypto.dolValueOffset(cdol1, 0x95);
+        int cdolLength = TerminalDol.dolDataLength(cdol1);
+        int tvrOffset = TerminalDol.dolValueOffset(cdol1, 0x95);
         if (tvrOffset < 0) {
             Checks.check(label + ": CDOL1 contains 95", false);
             return;
@@ -1049,7 +1050,7 @@ public class EmvFlowTest {
         // T1: an ARQC whose second AC the Default pair approves offline (ARC Y3)
         // for an amount above UCOTA.
         byte[] cdol1 = new byte[cdol1DataLength];
-        int amountOff = AcCrypto.dolValueOffset(Tags.find(record1, 0x8C), 0x9F02);
+        int amountOff = TerminalDol.dolValueOffset(Tags.find(record1, 0x8C), 0x9F02);
         if (amountOff >= 0) {
             System.arraycopy(Bcd.longToBcd(1100, 6), 0, cdol1, amountOff, 6);
         }
@@ -1101,7 +1102,7 @@ public class EmvFlowTest {
         // A TVR floor-limit bit (not in IAC-Denial, matched by IAC-Online)
         // makes the card answer the requested ARQC.
         byte[] cdol1 = new byte[cdol1DataLength];
-        int tvrOff = AcCrypto.dolValueOffset(Tags.find(record1, 0x8C), 0x95);
+        int tvrOff = TerminalDol.dolValueOffset(Tags.find(record1, 0x8C), 0x95);
         if (tvrOff >= 0) {
             cdol1[tvrOff + 3] = (byte) 0x80;
         }
@@ -1117,8 +1118,8 @@ public class EmvFlowTest {
 
         // CDOL2 with tag '8A' = 'Y3' and tag '91' left all zero.
         byte[] cdol2 = Tags.find(record1, 0x8D);
-        byte[] data = new byte[AcCrypto.dolDataLength(cdol2)];
-        int arcOff = AcCrypto.dolValueOffset(cdol2, 0x8A);
+        byte[] data = new byte[TerminalDol.dolDataLength(cdol2)];
+        int arcOff = TerminalDol.dolValueOffset(cdol2, 0x8A);
         System.arraycopy(ARC_UNABLE, 0, data, arcOff, 2);
         ResponseAPDU second = terminal.generateAc((byte) 0x40, data); // request TC
         Checks.check("zero issuer auth + ARC Y3 -> TC",

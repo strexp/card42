@@ -1,5 +1,6 @@
 package card42.emrtd;
 
+import card42.common.IsoStatus;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
@@ -204,7 +205,7 @@ public final class TaContext {
         }
 
         if (!resolveDstKey()) {
-            ISOException.throwIt((short) 0x6A88); // referenced data not found
+            ISOException.throwIt(IsoStatus.SW_REFERENCED_DATA_NOT_FOUND);
         }
         short expected = stagingKind == TaKeys.KIND_EC ? ECDSA_SIGNATURE_LENGTH : stagingKeyLength;
         if (signatureLength != expected) {
@@ -247,7 +248,7 @@ public final class TaContext {
         if (!Tlv.find(data, off, len, EmrtdTags.DO_KEY_REFERENCE, FIND)
                 || FIND[1] < 1 || FIND[1] != importedRefLength
                 || Util.arrayCompare(data, FIND[0], importedRef, (short) 0, FIND[1]) != 0) {
-            ISOException.throwIt((short) 0x6A88); // referenced data not found
+            ISOException.throwIt(IsoStatus.SW_REFERENCED_DATA_NOT_FOUND);
         }
         terminalSelected = true;
         challengeValid = false;
@@ -282,7 +283,7 @@ public final class TaContext {
         challengeValid = false;
         terminalSelected = false;
         if (!ok) {
-            ISOException.throwIt((short) 0x6300); // warning: signature verification failed
+            ISOException.throwIt(IsoStatus.SW_AUTHENTICATION_FAILED);
         }
         taDone = true;
     }

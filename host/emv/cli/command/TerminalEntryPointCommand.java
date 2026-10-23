@@ -47,6 +47,7 @@ public final class TerminalEntryPointCommand {
             usage(System.out);
             return 0;
         }
+        args.requireNoPositionals();
         String iface = args.get("iface", "contactless");
         if (!iface.equals("contactless")) {
             throw new IllegalArgumentException("-iface must be contactless for entrypoint");
