@@ -1,4 +1,4 @@
-package card42.host.emrtd.access;
+package card42.host.emrtd.access.lds2;
 
 import java.io.ByteArrayOutputStream;
 
@@ -6,7 +6,7 @@ import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.codec.DerWriter;
 import card42.host.common.util.Sw;
-import card42.host.emrtd.lds.LdsFileUtil;
+import card42.host.emrtd.lds.common.LdsFileUtil;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**
@@ -36,7 +36,7 @@ public final class Lds2RecordWriter {
     /**
      * Writes (and then ACTIVATEs) an Additional Biometrics EF.  The record is
      * usually a {@code 7F2E { 5F2E, 5F37, 5F38 }} envelope from
-     * {@link card42.host.emrtd.lds.BiometricsRecordBuilder}.
+     * {@link card42.host.emrtd.lds.lds2.BiometricsRecordBuilder}.
      */
     public static void writeBiometrics(EmrtdTerminal terminal, int fid, byte[] record)
             throws Exception {

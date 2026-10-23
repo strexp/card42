@@ -303,7 +303,7 @@ final class EmrtdPersoStreamTest {
         LdsFile com = catalog.getSelected();
         byte[] comBytes = new byte[64];
         short n = com.read((short) 0, com.getLength(), comBytes, (short) 0);
-        card42.host.emrtd.lds.Com parsed = card42.host.emrtd.lds.Com.parse(
+        card42.host.emrtd.lds.lds1.Com parsed = card42.host.emrtd.lds.lds1.Com.parse(
                 java.util.Arrays.copyOf(comBytes, n));
         Asserts.eq(3, parsed.dataGroupTags.length, "LDS1 streaming COM data group count");
         Asserts.eq(0x61, parsed.dataGroupTags[0], "LDS1 streaming COM DG1 tag");

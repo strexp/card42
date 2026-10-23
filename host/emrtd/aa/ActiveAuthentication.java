@@ -12,7 +12,7 @@ import javax.smartcardio.ResponseAPDU;
 import card42.host.common.codec.DerWriter;
 import card42.host.common.crypto.Ecdsa;
 import card42.host.common.util.Sw;
-import card42.host.emrtd.lds.Dg15;
+import card42.host.emrtd.lds.lds1.Dg15;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**

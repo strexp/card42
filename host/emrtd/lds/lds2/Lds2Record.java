@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.lds2;
 
 import java.io.ByteArrayOutputStream;
 import java.util.LinkedHashMap;
@@ -23,6 +23,29 @@ import card42.host.common.util.Hex;
  */
 public class Lds2Record {
 
+    /** Explicit record kind; the EF/FID determines it, not a display label. */
+    public enum Kind {
+        TRAVEL, VISA, BIOMETRICS, CERTIFICATE, UNKNOWN;
+
+        /** Compatibility mapping for callers that still carry a display label. */
+        public static Kind forLabel(String label) {
+            String name = label == null ? "" : label.toLowerCase(java.util.Locale.ROOT);
+            if (name.contains("cert")) {
+                return CERTIFICATE;
+            }
+            if (name.contains("visa")) {
+                return VISA;
+            }
+            if (name.contains("entry") || name.contains("exit")) {
+                return TRAVEL;
+            }
+            if (name.contains("biometric")) {
+                return BIOMETRICS;
+            }
+            return UNKNOWN;
+        }
+    }
+
     protected final byte[] raw;
 
     protected Lds2Record(byte[] raw) {
@@ -30,25 +53,35 @@ public class Lds2Record {
     }
 
     /**
-     * Parses the record with the EF-specific model.  The label (e.g.
-     * {@code "EF.EntryRecords (0101)"}) is authoritative because the demo
-     * records do not carry the distinguishing outer tags; otherwise the tags
-     * {@code 73}/{@code 71}/{@code 72} select the model.
+     * Parses the record with an explicit kind derived from the EF/FID.  This is
+     * the production path; display labels are not authoritative.
      */
-    public static Lds2Record parse(String label, byte[] raw) {
-        String name = label == null ? "" : label.toLowerCase(java.util.Locale.ROOT);
-        if (name.contains("cert")) {
+    public static Lds2Record parse(Kind kind, byte[] raw) {
+        switch (kind) {
+        case CERTIFICATE:
             return new CertificateRecord(raw);
-        }
-        if (name.contains("visa")) {
+        case VISA:
             return new VisaRecord(raw);
-        }
-        if (name.contains("entry") || name.contains("exit")) {
+        case TRAVEL:
             return new TravelRecord(raw);
-        }
-        if (name.contains("biometric")) {
+        case BIOMETRICS:
             return new BiometricsRecord(raw);
+        default:
+            return parseByTags(raw);
         }
+    }
+
+    /**
+     * Compatibility overload for tests/legacy callers that only have a label.
+     *
+     * @deprecated production callers should pass an explicit {@link Kind}.
+     */
+    @Deprecated
+    public static Lds2Record parse(String label, byte[] raw) {
+        return parse(Kind.forLabel(label), raw);
+    }
+
+    private static Lds2Record parseByTags(byte[] raw) {
         Map<Integer, byte[]> top = direct(raw);
         if (top.containsKey(0x71)) {
             return new VisaRecord(raw);
@@ -63,6 +96,21 @@ public class Lds2Record {
             return new BiometricsRecord(raw);
         }
         return new Lds2Record(raw);
+    }
+
+    /** The explicit kind of this record. */
+    public Kind kind() {
+        return Kind.UNKNOWN;
+    }
+
+    /** The EF.Certificates reference (5F38), or null when this kind has none. */
+    public Integer certificateReference() {
+        return null;
+    }
+
+    /** Verifies the record's signature token against the signer key. */
+    public boolean verify(java.security.PublicKey key) {
+        return false;
     }
 
     public byte[] raw() {

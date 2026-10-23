@@ -13,12 +13,12 @@ import java.util.List;
 
 import card42.host.common.codec.Der;
 import card42.host.common.codec.DerWriter;
-import card42.host.emrtd.lds.AlgorithmIds;
-import card42.host.emrtd.lds.CardSecurity;
-import card42.host.emrtd.lds.CmsSignedData;
-import card42.host.emrtd.lds.Dg1;
-import card42.host.emrtd.lds.LdsSecurityObject;
-import card42.host.emrtd.lds.Sod;
+import card42.host.emrtd.lds.common.AlgorithmIds;
+import card42.host.emrtd.lds.common.CardSecurity;
+import card42.host.emrtd.lds.common.CmsSignedData;
+import card42.host.emrtd.lds.lds1.Dg1;
+import card42.host.emrtd.lds.common.LdsSecurityObject;
+import card42.host.emrtd.lds.common.Sod;
 
 /**
  * Passive Authentication (ICAO Doc 9303-11 §5.1, H3.6): verify the DSC against

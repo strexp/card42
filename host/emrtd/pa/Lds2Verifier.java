@@ -23,12 +23,9 @@ import javax.smartcardio.ResponseAPDU;
 
 import card42.host.common.util.Hex;
 import card42.host.emrtd.access.LdsReader;
-import card42.host.emrtd.lds.BiometricsRecord;
-import card42.host.emrtd.lds.CertificateRecord;
-import card42.host.emrtd.lds.Lds2Record;
-import card42.host.emrtd.lds.LdsFileUtil;
-import card42.host.emrtd.lds.TravelRecord;
-import card42.host.emrtd.lds.VisaRecord;
+import card42.host.emrtd.lds.lds2.CertificateRecord;
+import card42.host.emrtd.lds.lds2.Lds2Record;
+import card42.host.emrtd.lds.common.LdsFileUtil;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**
@@ -358,7 +355,7 @@ public final class Lds2Verifier {
                     + " -> " + String.format("%04X", response.getSW()));
         }
         return (CertificateRecord) Lds2Record.parse(
-                "EF.Certificates (011A)", response.getData());
+                Lds2Record.Kind.CERTIFICATE, response.getData());
     }
 
     /** Loads and parses EF.Certificates record {@code reference}, or null. */
@@ -397,7 +394,7 @@ public final class Lds2Verifier {
                 LdsFileUtil.sfi(LdsFileUtil.FID_CERTIFICATES), 1);
         for (int i = 0; i < certificateBytes.size(); i++) {
             CertificateRecord record = (CertificateRecord) Lds2Record.parse(
-                    "EF.Certificates (011A)", certificateBytes.get(i));
+                    Lds2Record.Kind.CERTIFICATE, certificateBytes.get(i));
             records.put(i + 1, record);
             try {
                 certificates.put(i + 1, x509(record.certificate));
@@ -408,11 +405,13 @@ public final class Lds2Verifier {
         for (Map.Entry<String, List<byte[]>> group : groups.entrySet()) {
             List<Verification> results = new ArrayList<Verification>();
             for (byte[] raw : group.getValue()) {
-                Lds2Record record = Lds2Record.parse(group.getKey(), raw);
-                if (record instanceof CertificateRecord) {
+                Lds2Record record = Lds2Record.parse(
+                        Lds2Record.Kind.forLabel(group.getKey()), raw);
+                if (record.kind() == Lds2Record.Kind.CERTIFICATE) {
+                    CertificateRecord certificateRecord = (CertificateRecord) record;
                     CertificateCheck check = checkCertificate(
-                            x509(((CertificateRecord) record).certificate),
-                            (CertificateRecord) record, application, trust);
+                            x509(certificateRecord.certificate),
+                            certificateRecord, application, trust);
                     results.add(new Verification(group.getKey(), check.profileValid, check,
                             check.problems));
                 } else {
@@ -460,9 +459,9 @@ public final class Lds2Verifier {
     public static Verification verifyRecord(byte[] raw, String label, X509Certificate signer,
                                             CertificateRecord signerRecord, String application,
                                             CscaKeyStore trust) {
-        Lds2Record record = Lds2Record.parse(label, raw);
+        Lds2Record record = Lds2Record.parse(Lds2Record.Kind.forLabel(label), raw);
         CertificateCheck check = checkCertificate(signer, signerRecord, application, trust);
-        boolean signatureValid = signer != null && signature(record, signer.getPublicKey());
+        boolean signatureValid = signer != null && record.verify(signer.getPublicKey());
         List<String> problems = new ArrayList<String>(check.problems);
         if (!signatureValid) {
             problems.add("5F37 signature does not verify");
@@ -471,29 +470,11 @@ public final class Lds2Verifier {
     }
 
     public static Integer certificateReference(Lds2Record record) {
-        if (record instanceof TravelRecord) {
-            return ((TravelRecord) record).certificateReference;
-        }
-        if (record instanceof VisaRecord) {
-            return ((VisaRecord) record).certificateReference;
-        }
-        if (record instanceof BiometricsRecord) {
-            return ((BiometricsRecord) record).certificateReference;
-        }
-        return null;
+        return record.certificateReference();
     }
 
     private static boolean signature(Lds2Record record, PublicKey key) {
-        if (record instanceof TravelRecord) {
-            return ((TravelRecord) record).verify(key);
-        }
-        if (record instanceof VisaRecord) {
-            return ((VisaRecord) record).verify(key);
-        }
-        if (record instanceof BiometricsRecord) {
-            return ((BiometricsRecord) record).verify(key);
-        }
-        return false;
+        return record.verify(key);
     }
 
     private static String subjectValue(X509Certificate certificate, String type) {

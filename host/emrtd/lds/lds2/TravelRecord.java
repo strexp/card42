@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.lds2;
 
 import java.util.Map;
 import java.util.Set;
@@ -56,6 +56,16 @@ public final class TravelRecord extends Lds2Record {
     }
 
     @Override
+    public Kind kind() {
+        return Kind.TRAVEL;
+    }
+
+    @Override
+    public Integer certificateReference() {
+        return certificateReference;
+    }
+
+    @Override
     public String type() {
         return "Travel record";
     }
@@ -69,6 +79,7 @@ public final class TravelRecord extends Lds2Record {
     }
 
     /** Verifies the 5F37 token with the referenced EF.Certificates public key. */
+    @Override
     public boolean verify(java.security.PublicKey key) {
         return Lds2Signature.verify(key, signedInfoTlv(), signature);
     }

@@ -63,22 +63,22 @@ UNIT_CARD_SRC := \
   $(CARD_EMRTD_DIR)/access/Iso7816SmAes.java \
   $(CARD_EMRTD_DIR)/access/PaceSeedSink.java $(CARD_EMRTD_DIR)/access/SecureMessaging.java \
   $(CARD_EMRTD_DIR)/applet/EmrtdApplet.java $(CARD_EMRTD_DIR)/applet/EmrtdInstallParameters.java \
-  $(CARD_EMRTD_DIR)/command/ExternalAuthenticate.java $(CARD_EMRTD_DIR)/command/GetChallenge.java \
-  $(CARD_EMRTD_DIR)/command/InternalAuthenticate.java $(CARD_EMRTD_DIR)/command/Lds2File.java \
-  $(CARD_EMRTD_DIR)/command/Lds2Record.java $(CARD_EMRTD_DIR)/command/Mse.java \
-  $(CARD_EMRTD_DIR)/command/PsoVerifyCertificate.java $(CARD_EMRTD_DIR)/command/ReadBinary.java \
-  $(CARD_EMRTD_DIR)/command/SelectFile.java \
+  $(CARD_EMRTD_DIR)/command/lds1/ExternalAuthenticate.java $(CARD_EMRTD_DIR)/command/lds1/GetChallenge.java \
+  $(CARD_EMRTD_DIR)/command/lds1/InternalAuthenticate.java $(CARD_EMRTD_DIR)/command/lds2/Lds2File.java \
+  $(CARD_EMRTD_DIR)/command/lds2/Lds2Record.java $(CARD_EMRTD_DIR)/command/lds1/Mse.java \
+  $(CARD_EMRTD_DIR)/command/lds1/PsoVerifyCertificate.java $(CARD_EMRTD_DIR)/command/lds1/ReadBinary.java \
+  $(CARD_EMRTD_DIR)/command/lds1/SelectFile.java \
   $(CARD_EMRTD_DIR)/crypto/AaCrypto.java $(CARD_EMRTD_DIR)/crypto/P256.java \
   $(CARD_EMRTD_DIR)/crypto/Sha1Kdf.java \
-  $(CARD_EMRTD_DIR)/lds/Lds2FileSystem.java $(CARD_EMRTD_DIR)/lds/Lds2RecordFile.java \
-  $(CARD_EMRTD_DIR)/lds/PagedFile.java \
-  $(CARD_EMRTD_DIR)/lds/Lds2TransparentFile.java $(CARD_EMRTD_DIR)/lds/LdsCatalog.java \
-  $(CARD_EMRTD_DIR)/lds/LdsFile.java $(CARD_EMRTD_DIR)/lds/LdsFileSystem.java \
-  $(CARD_EMRTD_DIR)/lds/LdsMfStore.java \
+  $(CARD_EMRTD_DIR)/lds/lds2/Lds2FileSystem.java $(CARD_EMRTD_DIR)/lds/lds2/Lds2RecordFile.java \
+  $(CARD_EMRTD_DIR)/lds/common/PagedFile.java \
+  $(CARD_EMRTD_DIR)/lds/lds2/Lds2TransparentFile.java $(CARD_EMRTD_DIR)/lds/lds1/LdsCatalog.java \
+  $(CARD_EMRTD_DIR)/lds/lds1/LdsFile.java $(CARD_EMRTD_DIR)/lds/lds1/LdsFileSystem.java \
+  $(CARD_EMRTD_DIR)/lds/common/LdsMfStore.java \
   $(CARD_EMRTD_DIR)/mem/EmrtdScratch.java $(CARD_EMRTD_DIR)/mem/KdfEngines.java \
   $(CARD_EMRTD_DIR)/mem/MacEngines.java $(CARD_EMRTD_DIR)/mem/SmScratch.java \
-  $(CARD_EMRTD_DIR)/perso/DgiStream.java $(CARD_EMRTD_DIR)/perso/Lds2Perso.java \
-  $(CARD_EMRTD_DIR)/perso/LdsPerso.java \
+  $(CARD_EMRTD_DIR)/perso/common/DgiStream.java $(CARD_EMRTD_DIR)/perso/lds2/Lds2Perso.java \
+  $(CARD_EMRTD_DIR)/perso/lds1/LdsPerso.java \
   $(CARD_EMRTD_DIR)/ta/TaContext.java \
   $(CARD_EMRTD_DIR)/ta/TaKeys.java $(CARD_EMRTD_DIR)/ta/TaTrustStore.java \
   $(CARD_EMRTD_DIR)/constants/EmrtdTags.java

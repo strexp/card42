@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.common;
 
 import java.util.LinkedHashMap;
 import java.util.List;

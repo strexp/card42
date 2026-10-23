@@ -60,23 +60,27 @@ card/emv/      card42.emv：
                PostIssuance
   constants/   EMVCommands / EMVStatus / EMVRoles / EMVCodes / EMVAids / Defaults
   data/        EMVStaticData(门面) / PaymentData / SdaCertificateData（ODA 证书数据）/
-               DirectoryRecords / RecordStore / Iad / TransactionLog（交易日志）/
-               TransactionFinalizer（交易收尾：累计器/日志/CVR 结转位）
+               DirectoryRecords / RecordStore / Iad / TransactionLog（交易日志）
   state/       EMVProtocolState / OfflinePinState
-  risk/        CardRiskManagement / OfflineRisk
-  crypto/      EMVCrypto / SessionKey / CryptoProfile / SecureMessaging / DdaCrypto /
+  risk/        CardRiskManagement / OfflineRisk / TransactionFinalizer（交易收尾）
+  sm/          SecureMessaging（Format-1 命令信封 + CVR 脚本状态）
+  crypto/      EMVCrypto / SessionKey / CryptoProfile / DdaCrypto /
                PinCrypto / RsaKey / Arpc（ARPC 校验）
   builder/     FciBuilder / RecordBuilder / DirectoryBuilder / AcResponseBuilder /
                CvrBuilder（CVR/IAD 组装）
   perso/       PersoHandler / PersoTarget（PersoHandler 的窄接口）/ PersoRules
                （DGI/记录结构校验）/ PersoErrors / PaymentPerso
-  tlv/         Dgi / DgiReader / DolReader / TlvTags
+  constants/   TlvTags（项目标签/DGI 常量表）
+  tlv/         Dgi / DgiReader / DolReader
 card/emrtd/    card42.emrtd：applet/（EmrtdApplet / EmrtdInstallParameters）、
-               lds/（LdsFile / LdsFileSystem / LdsCatalog；LDS2：
-               Lds2TransparentFile / Lds2RecordFile / Lds2FileSystem）、
-               perso/（LdsPerso / Lds2Perso / DgiStream）、
-               command/（SelectFile / ReadBinary / GetChallenge / ExternalAuthenticate /
-               InternalAuthenticate / Lds2File / Lds2Record / Mse）、access/（MrzKeySeed /
+               lds/common/（PagedFile / LdsMfStore）、
+               lds/lds1/（LdsFile / LdsFileSystem / LdsCatalog）、
+               lds/lds2/（Lds2TransparentFile / Lds2RecordFile / Lds2FileSystem）、
+               perso/common/（DgiStream）、perso/lds1/（LdsPerso）、
+               perso/lds2/（Lds2Perso）、
+               command/lds1/（SelectFile / ReadBinary / GetChallenge / ExternalAuthenticate /
+               InternalAuthenticate / Mse / PsoVerifyCertificate）、
+               command/lds2/（Lds2File / Lds2Record）、access/（MrzKeySeed /
                BacCrypto / SecureMessaging / AbstractSecureMessaging /
                Iso7816Sm / Iso7816SmAes / ChipAuth / Pace / PaceSeedSink）、
                crypto/（AaCrypto / P256 / Sha1Kdf）、
@@ -84,7 +88,7 @@ card/emrtd/    card42.emrtd：applet/（EmrtdApplet / EmrtdInstallParameters）�
                TaKeys（ECDSA/RSA-PSS 校验引擎）/
                TaTrustStore（CVCA 信任点、Effective Date 与授权））、
                mem/（EmrtdScratch / SmScratch / MacEngines / KdfEngines）、
-               tlv/（EmrtdTags）
+               constants/（EmrtdTags）
 ```
 
 卡侧 applet 骨架：
@@ -164,16 +168,21 @@ host/emv/       card42.host.emv：
   cli/          Main（`card42.host.emv.cli.Main`）
     command/    PersoCommand / TerminalPayCommand / TerminalInspectCommand /
                 TerminalApduCommand / TerminalEntryPointCommand / IssuerCommand / CardCommand
-host/emrtd/     card42.host.emrtd：transport/EmrtdTerminal；lds/（LdsFileUtil /
-                Dg1 / Dg2 / Dg15 / Dg / Com / Sod / CmsSignedData / LdsSecurityObject /
-                AlgorithmIds / CardAccess / CardSecurity）；lds/security/（SecurityInfo /
-                UnknownSecurityInfo / PaceInfo / ChipAuthenticationInfo /
-                ChipAuthenticationPublicKeyInfo / ActiveAuthenticationInfo /
-                TerminalAuthenticationInfo）；access/（LdsReader（LDS 读文件 I/O）/
-                MrzKeySeed / Bac / Iso7816Sm / Iso7816SmAes /
-                SecureMessaging / ChipAuth / Pace）；pa/（CscaKeyStore / DscVerifier /
-                PassiveAuthentication）；aa/ActiveAuthentication；perso/（SodBuilder /
-                Dg2Builder / CardSecurityBuilder / LdsScript）；tools/（EmrtdPersoExporter /
+host/emrtd/     card42.host.emrtd：transport/EmrtdTerminal；
+                lds/common/（LdsFileUtil / AlgorithmIds / CmsSignedData / Sod /
+                LdsSecurityObject / CardAccess / CardSecurity）；
+                lds/lds1/（Dg1 / Dg2 / Dg15 / Dg / Com）；
+                lds/lds2/（Lds2Record / TravelRecord / VisaRecord / BiometricsRecord /
+                CertificateRecord / 各 RecordBuilder / Lds2Signature）；
+                lds/security/（SecurityInfo / UnknownSecurityInfo / PaceInfo /
+                ChipAuthenticationInfo / ChipAuthenticationPublicKeyInfo /
+                ActiveAuthenticationInfo / TerminalAuthenticationInfo）；
+                access/（LdsReader（LDS 读文件 I/O）/ MrzKeySeed / Bac / Iso7816Sm /
+                Iso7816SmAes / SecureMessaging / ChipAuth / Pace）；
+                access/lds2/（Lds2RecordWriter / Lds2CertificateStore）；
+                pa/（CscaKeyStore / DscVerifier / PassiveAuthentication / Lds2Verifier）；
+                aa/ActiveAuthentication；perso/（SodBuilder / Dg2Builder /
+                CardSecurityBuilder / LdsScript）；tools/（EmrtdPersoExporter /
                 SampleData（样例 DG/密钥数据）/ TaChain（demo CVCA 链））；
                 report/PassportReport；cli/（Main / EmrtdCommand）
 test/           测试（package card42.test，目录为功能分组而非包）

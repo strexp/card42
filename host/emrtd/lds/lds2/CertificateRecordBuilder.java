@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.lds2;
 
 /**
  * Builds an EF.Certificates record (ICAO Doc 9303-10 §5.1.2 Table 83):

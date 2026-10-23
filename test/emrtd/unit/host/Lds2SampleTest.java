@@ -5,11 +5,11 @@ import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Map;
 
-import card42.host.emrtd.lds.BiometricsRecord;
-import card42.host.emrtd.lds.CertificateRecord;
-import card42.host.emrtd.lds.Lds2Record;
-import card42.host.emrtd.lds.TravelRecord;
-import card42.host.emrtd.lds.VisaRecord;
+import card42.host.emrtd.lds.lds2.BiometricsRecord;
+import card42.host.emrtd.lds.lds2.CertificateRecord;
+import card42.host.emrtd.lds.lds2.Lds2Record;
+import card42.host.emrtd.lds.lds2.TravelRecord;
+import card42.host.emrtd.lds.lds2.VisaRecord;
 import card42.host.emrtd.tools.EmrtdPersoExporter;
 import card42.host.emrtd.perso.LdsScript;
 

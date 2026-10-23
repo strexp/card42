@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.common;
 
 /**
  * Maps the PKCS#1 / NIST algorithm OIDs used by EF.SOD to the JDK digest and

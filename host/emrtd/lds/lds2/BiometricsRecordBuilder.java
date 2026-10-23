@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.lds2;
 
 import java.security.PrivateKey;
 

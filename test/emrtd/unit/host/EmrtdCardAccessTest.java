@@ -15,14 +15,14 @@ import java.security.spec.PSSParameterSpec;
 import card42.host.common.codec.DerWriter;
 import card42.host.common.codec.TlvWriter;
 import card42.host.common.util.Hex;
-import card42.host.emrtd.lds.CardAccess;
+import card42.host.emrtd.lds.common.CardAccess;
 import card42.host.emrtd.lds.security.ChipAuthenticationInfo;
 import card42.host.emrtd.lds.security.ChipAuthenticationPublicKeyInfo;
-import card42.host.emrtd.lds.Dg;
-import card42.host.emrtd.lds.LdsSecurityObject;
+import card42.host.emrtd.lds.lds1.Dg;
+import card42.host.emrtd.lds.common.LdsSecurityObject;
 import card42.host.emrtd.lds.security.PaceInfo;
 import card42.host.emrtd.lds.security.SecurityInfo;
-import card42.host.emrtd.lds.Sod;
+import card42.host.emrtd.lds.common.Sod;
 import card42.host.emrtd.lds.security.UnknownSecurityInfo;
 import card42.host.emrtd.pa.CscaKeyStore;
 import card42.host.emrtd.pa.PassiveAuthentication;
@@ -73,8 +73,8 @@ final class EmrtdCardAccessTest {
         byte[] cms = DerWriter.sequence(DerWriter.oid("1.2.840.113549.1.7.2"),
                 DerWriter.context(0, signedData));
 
-        card42.host.emrtd.lds.CardSecurity security =
-                card42.host.emrtd.lds.CardSecurity.parse(cms);
+        card42.host.emrtd.lds.common.CardSecurity security =
+                card42.host.emrtd.lds.common.CardSecurity.parse(cms);
         Asserts.eq(2, security.securityInfos.size(), "CardSecurity SecurityInfo count");
         Asserts.eq(1, security.publicKeyInfos().size(), "CardSecurity CA public key");
         Asserts.check(security.publicKeyInfos().get(0).toPublicKey() != null,
@@ -149,8 +149,8 @@ final class EmrtdCardAccessTest {
         Asserts.eq(0x6B, parsed.outerTag, "DG11 outer tag");
         Asserts.eq("ERIKSSON", new String(parsed.value(0x5F0E),
                 java.nio.charset.StandardCharsets.US_ASCII), "DG11 inner value");
-        Asserts.eq(0x6C, card42.host.emrtd.lds.LdsFileUtil.dgTag(12), "DG12 tag");
-        Asserts.eq(12, card42.host.emrtd.lds.LdsFileUtil.dgForTag(0x6C), "DG tag -> number");
+        Asserts.eq(0x6C, card42.host.emrtd.lds.common.LdsFileUtil.dgTag(12), "DG12 tag");
+        Asserts.eq(12, card42.host.emrtd.lds.common.LdsFileUtil.dgForTag(0x6C), "DG tag -> number");
 
         // DG14 = 6E { SET OF SecurityInfo } (Doc 9303-10 §4.7.14): the generic
         // parser sees the outer 6E tag, and the SecurityInfos set it wraps is
@@ -164,7 +164,7 @@ final class EmrtdCardAccessTest {
         Dg dg14 = Dg.parse(Dg.wrap(14, securityInfos));
         Asserts.eq(14, dg14.number, "DG14 number");
         Asserts.eq(0x6E, dg14.outerTag, "DG14 outer tag");
-        Asserts.eq(0x010E, card42.host.emrtd.lds.LdsFileUtil.FID_DG14, "DG14 FID");
+        Asserts.eq(0x010E, card42.host.emrtd.lds.common.LdsFileUtil.FID_DG14, "DG14 FID");
         java.util.List<SecurityInfo> infos = SecurityInfo.parseList(securityInfos);
         Asserts.eq(1, infos.size(), "DG14 SecurityInfo count");
         Asserts.check(infos.get(0) instanceof ChipAuthenticationPublicKeyInfo,

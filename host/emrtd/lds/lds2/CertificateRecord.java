@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.lds2;
 
 import java.util.Map;
 
@@ -42,6 +42,11 @@ public final class CertificateRecord extends Lds2Record {
             serialNumber = hex(serial);
         }
         wellFormed = serial != null && wrapped != null;
+    }
+
+    @Override
+    public Kind kind() {
+        return Kind.CERTIFICATE;
     }
 
     @Override

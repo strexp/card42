@@ -7,12 +7,12 @@ import java.util.Map;
 import card42.host.common.codec.Json;
 import card42.host.common.codec.TlvCursor;
 import card42.host.common.util.Hex;
-import card42.host.emrtd.lds.CardAccess;
-import card42.host.emrtd.lds.Com;
-import card42.host.emrtd.lds.Dg1;
-import card42.host.emrtd.lds.Dg15;
-import card42.host.emrtd.lds.Dg2;
-import card42.host.emrtd.lds.Lds2Record;
+import card42.host.emrtd.lds.common.CardAccess;
+import card42.host.emrtd.lds.lds1.Com;
+import card42.host.emrtd.lds.lds1.Dg1;
+import card42.host.emrtd.lds.lds1.Dg15;
+import card42.host.emrtd.lds.lds1.Dg2;
+import card42.host.emrtd.lds.lds2.Lds2Record;
 import card42.host.emrtd.lds.security.SecurityInfo;
 import card42.host.emrtd.pa.Lds2Verifier;
 
@@ -148,7 +148,7 @@ public final class PassportReport {
                     b.append("  record ").append(i + 1).append(" (")
                             .append(record.length).append(" B) tags: ")
                             .append(outerTags(record)).append('\n');
-                    indent(b, Lds2Record.parse(group.getKey(), record).toText(), "    ");
+                    indent(b, Lds2Record.parse(Lds2Record.Kind.forLabel(group.getKey()), record).toText(), "    ");
                     if (results != null && i < results.size()) {
                         b.append("    ").append(verificationText(results.get(i))).append('\n');
                     }
@@ -161,7 +161,7 @@ public final class PassportReport {
     private static String verificationText(Lds2Verifier.Verification result) {
         Lds2Verifier.CertificateCheck check = result.certificate;
         boolean certificate = result.label != null
-                && result.label.toLowerCase(java.util.Locale.ROOT).contains("certif");
+                && Lds2Record.Kind.forLabel(result.label) == Lds2Record.Kind.CERTIFICATE;
         StringBuilder b = new StringBuilder("verification      : ");
         b.append(result.valid() ? "valid" : "INVALID");
         b.append(" (").append(certificate ? "certificate" : "signature");
@@ -271,7 +271,7 @@ public final class PassportReport {
                 .put("length", record.length)
                 .put("tags", outerTags(record))
                 .put("hex", Hex.format(record))
-                .raw("parsed", Lds2Record.parse(label, record).toJson());
+                .raw("parsed", Lds2Record.parse(Lds2Record.Kind.forLabel(label), record).toJson());
         if (verification != null) {
             Lds2Verifier.CertificateCheck check = verification.certificate;
             Json.Arr problems = new Json.Arr();
@@ -279,7 +279,7 @@ public final class PassportReport {
                 problems.add(problem);
             }
             boolean certificate = label != null
-                    && label.toLowerCase(java.util.Locale.ROOT).contains("certif");
+                    && Lds2Record.Kind.forLabel(label) == Lds2Record.Kind.CERTIFICATE;
             Json.Obj verificationJson = new Json.Obj()
                     .put("valid", verification.valid())
                     .put("profileValid", check != null && check.profileValid)

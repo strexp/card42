@@ -10,11 +10,11 @@ import java.util.Map;
 
 import card42.host.common.codec.Json;
 import card42.host.common.util.Hex;
-import card42.host.emrtd.lds.BiometricsRecordBuilder;
-import card42.host.emrtd.lds.CertificateRecordBuilder;
-import card42.host.emrtd.lds.LdsFileUtil;
-import card42.host.emrtd.lds.TravelRecordBuilder;
-import card42.host.emrtd.lds.VisaRecordBuilder;
+import card42.host.emrtd.lds.lds2.BiometricsRecordBuilder;
+import card42.host.emrtd.lds.lds2.CertificateRecordBuilder;
+import card42.host.emrtd.lds.common.LdsFileUtil;
+import card42.host.emrtd.lds.lds2.TravelRecordBuilder;
+import card42.host.emrtd.lds.lds2.VisaRecordBuilder;
 import card42.host.emrtd.pa.CscaKeyStore;
 import card42.host.emrtd.pa.Lds2Verifier;
 import card42.host.emrtd.tools.EmrtdPersoExporter;

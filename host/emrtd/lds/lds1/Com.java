@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.lds1;
 
 import card42.host.common.codec.Tags;
 

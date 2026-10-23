@@ -16,7 +16,7 @@ import card42.host.emrtd.access.MrzKeySeed;
 import card42.host.common.crypto.P256;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.aa.ActiveAuthentication;
-import card42.host.emrtd.lds.Dg15;
+import card42.host.emrtd.lds.lds1.Dg15;
 
 /**
  * Pure-JVM tests for the eMRTD card-side crypto and LDS file system.
@@ -138,7 +138,7 @@ final class EmrtdCryptoTest {
         LdsFile com = catalog.getSelected();
         byte[] out = new byte[64];
         short n = com.read((short) 0, com.getLength(), out, (short) 0);
-        card42.host.emrtd.lds.Com parsed = card42.host.emrtd.lds.Com.parse(
+        card42.host.emrtd.lds.lds1.Com parsed = card42.host.emrtd.lds.lds1.Com.parse(
                 java.util.Arrays.copyOf(out, n));
         Asserts.eq("0107", parsed.ldsVersion, "COM index LDS version");
         Asserts.eq("040001", parsed.unicodeVersion, "COM index Unicode version");

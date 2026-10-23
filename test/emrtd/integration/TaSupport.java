@@ -8,10 +8,10 @@ import java.util.List;
 
 import card42.host.emrtd.access.ChipAuth;
 import card42.host.emrtd.access.Pace;
-import card42.host.emrtd.lds.CardAccess;
-import card42.host.emrtd.lds.CardSecurity;
+import card42.host.emrtd.lds.common.CardAccess;
+import card42.host.emrtd.lds.common.CardSecurity;
 import card42.host.emrtd.lds.security.ChipAuthenticationInfo;
-import card42.host.emrtd.lds.LdsFileUtil;
+import card42.host.emrtd.lds.common.LdsFileUtil;
 import card42.host.emrtd.access.LdsReader;
 import card42.host.emrtd.ta.CvCertificate;
 import card42.host.emrtd.ta.CvCertificateCodec;

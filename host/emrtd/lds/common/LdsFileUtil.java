@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.common;
 
 /**
  * LDS1/LDS2 file identifier / outer-tag mapping (ICAO Doc 9303-10 §4.6/§4.7 for

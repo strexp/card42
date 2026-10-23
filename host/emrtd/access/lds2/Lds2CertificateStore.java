@@ -1,12 +1,14 @@
-package card42.host.emrtd.access;
+package card42.host.emrtd.access.lds2;
 
 import java.security.cert.X509Certificate;
 import java.util.List;
 
-import card42.host.emrtd.lds.CertificateRecord;
-import card42.host.emrtd.lds.CertificateRecordBuilder;
-import card42.host.emrtd.lds.Lds2Record;
-import card42.host.emrtd.lds.LdsFileUtil;
+import card42.host.emrtd.lds.lds2.CertificateRecord;
+import card42.host.emrtd.lds.lds2.CertificateRecordBuilder;
+import card42.host.emrtd.access.LdsReader;
+import card42.host.emrtd.lds.lds2.CertificateRecord;
+import card42.host.emrtd.lds.lds2.Lds2Record;
+import card42.host.emrtd.lds.common.LdsFileUtil;
 import card42.host.emrtd.pa.CscaKeyStore;
 import card42.host.emrtd.pa.Lds2Verifier;
 import card42.host.emrtd.transport.EmrtdTerminal;
@@ -89,7 +91,7 @@ public final class Lds2CertificateStore {
                 LdsFileUtil.sfi(LdsFileUtil.FID_CERTIFICATES), 1);
         for (int i = 0; i < records.size(); i++) {
             CertificateRecord record = (CertificateRecord) Lds2Record.parse(
-                    "EF.Certificates (011A)", records.get(i));
+                    Lds2Record.Kind.CERTIFICATE, records.get(i));
             if (record.certificate != null
                     && java.util.Arrays.equals(record.certificate, encoded)) {
                 return i + 1;

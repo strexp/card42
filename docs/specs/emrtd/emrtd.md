@@ -267,15 +267,16 @@ LDS2 指令为 `@lds2 <role>`、`@cardaccess`、`@cardsecurity`、`@record <fid>
 ```
 host/emrtd/
 ├── transport/ EmrtdTerminal
-├── lds/       LdsFileUtil, Dg1, Dg2, Dg15, Dg, Com, Sod,
-│              CmsSignedData, LdsSecurityObject, AlgorithmIds,
-│              SecurityInfo, PaceInfo, ChipAuthenticationInfo,
-│              ChipAuthenticationPublicKeyInfo, ActiveAuthenticationInfo,
-│              CardAccess, CardSecurity, Lds2Record,
-│              TravelRecord/VisaRecord/CertificateRecord + builders,
-│              Lds2Signature
-├── access/    LdsReader, Lds2RecordWriter, Lds2CertificateStore, MrzKeySeed,
-│              Bac, Iso7816Sm, Iso7816SmAes, SecureMessaging, ChipAuth, Pace
+├── lds/common/ LdsFileUtil, AlgorithmIds, CmsSignedData, Sod,
+│              LdsSecurityObject, CardAccess, CardSecurity
+├── lds/lds1/  Dg, Dg1, Dg2, Dg15, Com
+├── lds/lds2/  Lds2Record, TravelRecord/VisaRecord/BiometricsRecord/
+│              CertificateRecord + builders, Lds2Signature
+├── lds/security/ SecurityInfo, PaceInfo, ChipAuthenticationInfo,
+│              ChipAuthenticationPublicKeyInfo, ActiveAuthenticationInfo
+├── access/    LdsReader, MrzKeySeed, Bac, Iso7816Sm, Iso7816SmAes,
+│              SecureMessaging, ChipAuth, Pace
+├── access/lds2/ Lds2RecordWriter, Lds2CertificateStore
 ├── pa/        CscaKeyStore, DscVerifier, PassiveAuthentication
 ├── aa/        ActiveAuthentication
 ├── perso/     SodBuilder, Dg2Builder, CardSecurityBuilder, LdsScript

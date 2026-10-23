@@ -1,4 +1,4 @@
-package card42.host.emrtd.lds;
+package card42.host.emrtd.lds.lds1;
 
 import java.math.BigInteger;
 import java.security.GeneralSecurityException;

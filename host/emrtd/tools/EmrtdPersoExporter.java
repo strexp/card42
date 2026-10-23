@@ -22,11 +22,11 @@ import card42.host.emrtd.perso.CardSecurityBuilder;
 import card42.host.emrtd.perso.Dg2Builder;
 import card42.host.emrtd.perso.LdsScript;
 import card42.host.emrtd.perso.SodBuilder;
-import card42.host.emrtd.lds.BiometricsRecordBuilder;
-import card42.host.emrtd.lds.CertificateRecordBuilder;
-import card42.host.emrtd.lds.LdsFileUtil;
-import card42.host.emrtd.lds.TravelRecordBuilder;
-import card42.host.emrtd.lds.VisaRecordBuilder;
+import card42.host.emrtd.lds.lds2.BiometricsRecordBuilder;
+import card42.host.emrtd.lds.lds2.CertificateRecordBuilder;
+import card42.host.emrtd.lds.common.LdsFileUtil;
+import card42.host.emrtd.lds.lds2.TravelRecordBuilder;
+import card42.host.emrtd.lds.lds2.VisaRecordBuilder;
 import card42.host.emrtd.lds.security.SecurityInfo;
 
 /**

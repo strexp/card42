@@ -10,7 +10,7 @@ import card42.host.common.transport.Terminal;
 import card42.host.emrtd.access.ChipAuth;
 import card42.host.emrtd.access.LdsReader;
 import card42.host.emrtd.access.Pace;
-import card42.host.emrtd.lds.LdsFileUtil;
+import card42.host.emrtd.lds.common.LdsFileUtil;
 import card42.host.emrtd.tools.EmrtdPersoExporter;
 import card42.host.emrtd.ta.TerminalAuth;
 import card42.host.emrtd.transport.EmrtdTerminal;
