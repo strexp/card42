@@ -1,6 +1,7 @@
 package card42.test;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.security.PrivateKey;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -20,6 +21,7 @@ import card42.host.emrtd.access.Lds2RecordWriter;
 import card42.host.emrtd.lds.LdsFileUtil;
 import card42.host.emrtd.lds.TravelRecord;
 import card42.host.emrtd.lds.TravelRecordBuilder;
+import card42.host.emrtd.pa.CscaKeyStore;
 import card42.host.emrtd.perso.EmrtdPersoExporter;
 import card42.host.emrtd.transport.EmrtdTerminal;
 
@@ -27,7 +29,8 @@ import card42.host.emrtd.transport.EmrtdTerminal;
  * End-to-end structured LDS2 write: build a Table 86 Travel record, sign the
  * {@code 73} DO with the demo LDS2-TS key (the DSC fixture used by the sample
  * EF.Certificates record), APPEND it to EF.EntryRecords after PACE+TA, read it
- * back and verify the signature with the certificate read from the card.
+ * back and verify the signature with the LDS2 Signer certificate read from the
+ * card.
  */
 public final class EmrtdLds2WriteIntegrationTest {
 
@@ -76,11 +79,12 @@ public final class EmrtdLds2WriteIntegrationTest {
                 .generateCertificate(new ByteArrayInputStream(certificateRecord.certificate));
 
         int certificateReference = Lds2CertificateStore.findOrAppend(
-                terminal, certificate, "US");
+                terminal, certificate, "travel",
+                CscaKeyStore.fromFiles(new File("perso/emrtd/csca.crt")));
         Checks.check("EF.Certificates dedup returns record 1",
                 certificateReference == 1);
 
-        PrivateKey signerKey = EmrtdPersoExporter.loadPrivateKey("perso/emrtd/dsc.key");
+        PrivateKey signerKey = EmrtdPersoExporter.loadPrivateKey("perso/emrtd/lds2.key");
         byte[] record = new TravelRecordBuilder()
                 .state("SWE")
                 .travelDate("20260701")

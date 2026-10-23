@@ -10,6 +10,7 @@ import card42.host.common.transport.Terminal;
 import card42.host.common.cli.Args;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.access.Pace;
+import card42.host.emrtd.lds.BiometricsRecord;
 import card42.host.emrtd.lds.CardAccess;
 import card42.host.emrtd.lds.Lds2Record;
 import card42.host.emrtd.lds.LdsFileUtil;
@@ -107,7 +108,13 @@ public final class EmrtdLds2AppsIntegrationTest {
         TaSupport.authenticate(terminal, biometricsPace, new java.security.SecureRandom());
         Checks.check("Chip + Terminal Authentication on the Biometrics application", true);
         byte[] biometrics = LdsReader.read(terminal, LdsFileUtil.FID_BIOMETRICS);
-        Checks.bytes(Hex.parse("7F611002010102020304050608010A0B0C0D0E0F10"), biometrics,
-                "EF.Biometrics1 content");
+        BiometricsRecord biometricsRecord = (BiometricsRecord) Lds2Record.parse(
+                "EF.Biometrics1 (0201)", biometrics);
+        Checks.check("EF.Biometrics1 is a signed 7F2E wrapper", biometricsRecord.wellFormed);
+        Checks.bytes(Hex.parse("7F611002010102020304050608010A0B0C0D0E0F10"),
+                biometricsRecord.biometrics, "EF.Biometrics1 biometric data");
+        Checks.check("EF.Biometrics1 signature verifies",
+                biometricsRecord.verify(EmrtdPersoExporter.loadCertificate(
+                        "perso/emrtd/lds2.crt").getPublicKey()));
     }
 }

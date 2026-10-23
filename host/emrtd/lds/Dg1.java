@@ -11,6 +11,7 @@ import card42.host.common.codec.Tags;
 public final class Dg1 {
 
     public final String mrz;
+    public final String documentCode;
     public final String issuingState;
     public final String surname;
     public final String givenNames;
@@ -28,6 +29,7 @@ public final class Dg1 {
             String line1 = slice(mrz, 0, 30);
             String line2 = slice(mrz, 30, 60);
             String line3 = slice(mrz, 60, 90);
+            this.documentCode = slice(line1, 0, 2).trim();
             this.issuingState = slice(line1, 2, 5).trim();
             this.documentNumber = slice(line1, 5, 14).trim();
             String[] names = names(line3);
@@ -41,6 +43,7 @@ public final class Dg1 {
             // TD3: two 44-character lines.
             String line1 = slice(mrz, 0, 44);
             String line2 = slice(mrz, 44, 88);
+            this.documentCode = slice(line1, 0, 2).trim();
             this.issuingState = slice(line1, 2, 5).trim();
             String[] names = names(slice(line1, 5, 44));
             this.surname = names[0];
@@ -54,6 +57,7 @@ public final class Dg1 {
             // TD2: two 36-character lines.
             String line1 = slice(mrz, 0, 36);
             String line2 = slice(mrz, 36, 72);
+            this.documentCode = slice(line1, 0, 2).trim();
             this.issuingState = slice(line1, 2, 5).trim();
             String[] names = names(slice(line1, 5, 36));
             this.surname = names[0];
@@ -69,6 +73,11 @@ public final class Dg1 {
             throw new IllegalArgumentException(
                     "DG1 MRZ length " + len + " is not TD1/TD2/TD3");
         }
+    }
+
+    /** The two-character document code at MRZ line 1 positions 1-2. */
+    public String documentCode() {
+        return documentCode;
     }
 
     /** Parses a DG1: tag 61 containing 5F1F (ICAO Doc 9303-10 §4.7.1). */

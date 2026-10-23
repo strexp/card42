@@ -20,7 +20,7 @@ final class EmrtdApduCommand {
         if (hex == null) {
             return CliSupport.fail("apdu needs -apdu=<hex>");
         }
-        try (TerminalSession session = TerminalSession.open(host, 0, true, System.out)) {
+        try (TerminalSession session = TerminalSession.open(host, 10, true, System.out)) {
             ResponseAPDU r = session.terminal.transmit(Hex.parse(hex));
             System.out.println("SW=" + String.format("%04X", r.getSW()));
             if (r.getData().length > 0) {

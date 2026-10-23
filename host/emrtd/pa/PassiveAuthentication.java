@@ -14,7 +14,9 @@ import java.util.List;
 import card42.host.common.codec.Der;
 import card42.host.common.codec.DerWriter;
 import card42.host.emrtd.lds.AlgorithmIds;
+import card42.host.emrtd.lds.CardSecurity;
 import card42.host.emrtd.lds.CmsSignedData;
+import card42.host.emrtd.lds.Dg1;
 import card42.host.emrtd.lds.LdsSecurityObject;
 import card42.host.emrtd.lds.Sod;
 
@@ -33,15 +35,80 @@ public final class PassiveAuthentication {
     private static final String OID_CONTENT_TYPE = "1.2.840.113549.1.9.3";
     private static final String OID_MESSAGE_DIGEST = "1.2.840.113549.1.9.4";
     private static final String OID_SUBJECT_KEY_IDENTIFIER = "2.5.29.14";
+    private static final String OID_DOCUMENT_TYPE = "2.23.136.1.1.6.2";
 
     private PassiveAuthentication() {
     }
 
+    /** The verified SOD plus the Document Signer certificate that signed it. */
+    public static final class Result {
+        public final LdsSecurityObject securityObject;
+        public final X509Certificate dsc;
+
+        Result(LdsSecurityObject securityObject, X509Certificate dsc) {
+            this.securityObject = securityObject;
+            this.dsc = dsc;
+        }
+    }
+
     /** Verifies the DSC chain and the SOD signature; returns the security object. */
     public static LdsSecurityObject verify(Sod sod, CscaKeyStore trust) throws Exception {
-        X509Certificate dsc = selectSigner(sod.cms, trust);
-        verifySignature(sod.cms, dsc);
-        return sod.securityObject;
+        return verifyResult(sod, trust).securityObject;
+    }
+
+    /** Verifies the DSC chain and the SOD signature, keeping the DSC for policy checks. */
+    public static Result verifyResult(Sod sod, CscaKeyStore trust) throws Exception {
+        X509Certificate dsc = verifyCms(sod.cms, trust);
+        return new Result(sod.securityObject, dsc);
+    }
+
+    /** Verifies a CMS SignedData (EF.SOD or EF.CardSecurity) against the CSCA store. */
+    public static X509Certificate verifyCms(CmsSignedData cms, CscaKeyStore trust)
+            throws Exception {
+        X509Certificate dsc = selectSigner(cms, trust);
+        verifySignature(cms, dsc);
+        return dsc;
+    }
+
+    /** Verifies EF.CardSecurity's CMS signature before its CA key is trusted. */
+    public static X509Certificate verifyCardSecurity(CardSecurity cardSecurity,
+                                                     CscaKeyStore trust) throws Exception {
+        if (cardSecurity == null || cardSecurity.cms == null) {
+            throw new IllegalStateException("EF.CardSecurity has no CMS SignedData");
+        }
+        return verifyCms(cardSecurity.cms, trust);
+    }
+
+    /**
+     * Checks the DSC's DocumentType extension against DG1 (Doc 9303-10 §4.7.1,
+     * Doc 9303-12 §7.1.1.6).  A one-letter entry authorizes every document type
+     * starting with that letter.
+     */
+    public static void verifyDocumentType(X509Certificate dsc, Dg1 dg1) {
+        byte[] extension = dsc.getExtensionValue(OID_DOCUMENT_TYPE);
+        if (extension == null) {
+            throw new IllegalStateException("DSC has no DocumentType extension");
+        }
+        Der.Tlv outer = Der.read(extension, 0);
+        byte[] value = Der.value(extension, outer);
+        Der.Tlv sequence = Der.read(value, 0);
+        List<Der.Tlv> fields = Der.children(value, sequence);
+        if (fields.size() < 2) {
+            throw new IllegalStateException("DSC DocumentType extension is malformed");
+        }
+        List<Der.Tlv> entries = Der.children(value, fields.get(1));
+        String code = dg1.documentCode();
+        for (Der.Tlv entry : entries) {
+            if (entry.tag != 0x13) {
+                continue;
+            }
+            String type = new String(Der.value(value, entry),
+                    java.nio.charset.StandardCharsets.US_ASCII);
+            if (type.equals(code) || (type.length() == 1 && code.startsWith(type))) {
+                return;
+            }
+        }
+        throw new IllegalStateException("DSC DocumentType does not authorize " + code);
     }
 
     /** True when the data group bytes match the hash in the security object. */

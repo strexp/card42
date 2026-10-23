@@ -73,7 +73,7 @@ test/common   Fixtures/stubs shared by the unit and integration builds
 test/emv      EMV unit + integration suites
 test/emrtd    eMRTD unit + integration suites
 perso/emv     EMV personalization scripts and key profiles
-perso/emrtd   eMRTD personalization script (sample.perso), CSCA/DSC fixtures
+perso/emrtd   eMRTD personalization scripts, CSCA/DSC/LDS2 Signer fixtures
 deploy/       deploy.conf (both), deploy-emv.conf, deploy-emv-test.conf,
               deploy-emrtd.conf
 config/       Tunable build/toolchain/target/ids/simulator/card defaults

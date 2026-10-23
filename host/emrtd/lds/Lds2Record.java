@@ -46,6 +46,9 @@ public class Lds2Record {
         if (name.contains("entry") || name.contains("exit")) {
             return new TravelRecord(raw);
         }
+        if (name.contains("biometric")) {
+            return new BiometricsRecord(raw);
+        }
         Map<Integer, byte[]> top = direct(raw);
         if (top.containsKey(0x71)) {
             return new VisaRecord(raw);
@@ -55,6 +58,9 @@ public class Lds2Record {
         }
         if (top.containsKey(0x72)) {
             return new CertificateRecord(raw);
+        }
+        if (top.containsKey(0x7F2E)) {
+            return new BiometricsRecord(raw);
         }
         return new Lds2Record(raw);
     }

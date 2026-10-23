@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.Set;
 
 import card42.host.common.codec.Json;
+import card42.host.common.codec.TlvCursor;
 
 /**
  * An Entry/Exit Travel Record (ICAO Doc 9303-10 §5.1.3/§5.1.4, Table 86):
@@ -22,6 +23,7 @@ public final class TravelRecord extends Lds2Record {
 
     public final String state;
     public final byte[] signedInfo;
+    private final byte[] signedInfoEncoded;
     public final Map<Integer, byte[]> fields;
     public final byte[] signature;
     public final Integer certificateReference;
@@ -31,8 +33,19 @@ public final class TravelRecord extends Lds2Record {
         super(raw);
         Map<Integer, byte[]> top = direct(raw);
         state = ascii(top.get(0x5F44));
-        signedInfo = top.get(0x73);
-        fields = signedInfo != null ? direct(signedInfo) : top;
+        TlvCursor cursor = new TlvCursor(raw);
+        byte[] encoded = null;
+        byte[] value = null;
+        while (cursor.next() == TlvCursor.Status.OK) {
+            if (cursor.tag() == 0x73) {
+                encoded = cursor.encoded();
+                value = cursor.value();
+                break;
+            }
+        }
+        signedInfo = value;
+        signedInfoEncoded = encoded;
+        fields = value != null ? direct(value) : top;
         signature = top.get(0x5F37);
         certificateReference = number(top.get(0x5F38));
         boolean complete = signedInfo != null && signature != null && certificateReference != null;
@@ -47,8 +60,11 @@ public final class TravelRecord extends Lds2Record {
         return "Travel record";
     }
 
-    /** The complete {@code 73 || Len || value} signed by the LDS2-TS key. */
+    /** The complete {@code 73 || Len || value} exactly as read from the card. */
     public byte[] signedInfoTlv() {
+        if (signedInfoEncoded != null) {
+            return signedInfoEncoded.clone();
+        }
         return signedInfo == null ? null : tlv(0x73, signedInfo);
     }
 

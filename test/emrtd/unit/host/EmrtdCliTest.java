@@ -143,7 +143,7 @@ final class EmrtdCliTest {
             Asserts.check(reachesTransport("lds2", new String[] {
                     "-host=socket:localhost:1", "-app=travel", "-pace",
                     "-doc=123456789", "-dob=000101", "-doe=300101",
-                    "-append=" + json, "-ts-key=perso/emrtd/dsc.key" }),
+                    "-append=" + json, "-ts-key=perso/emrtd/lds2.key" }),
                     "lds2 -append parses the structured JSON and reaches the transport");
         } catch (java.io.IOException e) {
             Asserts.check(false, "lds2 append test fixture: " + e);

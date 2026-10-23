@@ -50,7 +50,7 @@ final class EmrtdReadCommand {
                 new String[] { "pace", "ca", "ta" });
         String host = parsed.get("host", "socket:localhost:9025");
         boolean json = "1".equals(parsed.get("json", "0"));
-        try (TerminalSession session = TerminalSession.open(host, 0, false, System.out)) {
+        try (TerminalSession session = TerminalSession.open(host, 10, false, System.out)) {
             EmrtdTerminal terminal = new EmrtdTerminal(session.terminal);
             ResponseAPDU selected = terminal.selectLds1();
             if (selected.getSW() != 0x9000) {
@@ -74,6 +74,9 @@ final class EmrtdReadCommand {
             }
             boolean paceRequired = parsed.has("pace") || can != null;
             boolean ca = parsed.has("ca");
+            String cscaPath = parsed.get("csca", null);
+            CscaKeyStore trust = cscaPath == null ? null
+                    : CscaKeyStore.fromPath(new java.io.File(cscaPath));
             if (ca && !paceRequired) {
                 // EF.CardSecurity has read access PACE (Doc 9303-10 §3.11.4
                 // Table 34), so the LDS1 EF.CardSecurity cannot be read after
@@ -114,8 +117,11 @@ final class EmrtdReadCommand {
             // Optional Chip Authentication: re-key the secure messaging with the
             // chip's static key (Doc 9303-11 §6.2).  EF.CardSecurity requires
             // PACE (Doc 9303-10 §3.11.4 Table 34).
-            ChipAuth.Result caResult = ca ? chipAuthentication(terminal) : null;
+            ChipAuth.Result caResult = ca ? chipAuthentication(terminal, trust) : null;
             boolean caOk = caResult != null;
+            if (ca && trust == null) {
+                System.out.println("EF.CardSecurity signature: not verified (no -csca)");
+            }
 
             // Optional Terminal Authentication (Doc 9303-11 §7.1): on top of CA,
             // send the CV certificate chain and answer the chip challenge.  The
@@ -148,11 +154,11 @@ final class EmrtdReadCommand {
             if (ca) {
                 System.out.println("Chip Authentication: " + (caOk ? "OK" : "not available"));
             }
-            String csca = parsed.get("csca", null);
-            if (csca == null) {
+            if (trust == null) {
                 System.out.println("Passive Authentication: not verified (no -csca)");
             } else {
-                boolean pa = passiveAuthentication(terminal, csca, dg1Bytes, dg2Bytes, clearDg15Bytes);
+                boolean pa = passiveAuthentication(terminal, trust, dg1Bytes, dg2Bytes,
+                        clearDg15Bytes);
                 System.out.println("Passive Authentication: " + (pa ? "OK" : "FAILED"));
             }
             return CliSupport.EXIT_OK;
@@ -164,13 +170,19 @@ final class EmrtdReadCommand {
      * CSCA store, then each read data group against its hash in the LDS Security
      * Object.
      */
-    private static boolean passiveAuthentication(EmrtdTerminal terminal, String cscaPath,
+    private static boolean passiveAuthentication(EmrtdTerminal terminal, CscaKeyStore trust,
                                                  byte[] dg1, byte[] dg2, byte[] dg15)
             throws Exception {
         byte[] sodBytes = LdsReader.read(terminal, LdsFileUtil.FID_SOD);
-        CscaKeyStore trust = CscaKeyStore.fromFiles(new java.io.File(cscaPath));
-        LdsSecurityObject securityObject =
-                PassiveAuthentication.verify(Sod.parse(sodBytes), trust);
+        PassiveAuthentication.Result result =
+                PassiveAuthentication.verifyResult(Sod.parse(sodBytes), trust);
+        LdsSecurityObject securityObject = result.securityObject;
+        try {
+            PassiveAuthentication.verifyDocumentType(result.dsc, Dg1.parse(dg1));
+        } catch (IllegalStateException e) {
+            System.out.println("DocumentType check: " + e.getMessage());
+            return false;
+        }
         boolean ok = PassiveAuthentication.verifyDataGroup(securityObject, 1, dg1)
                 && PassiveAuthentication.verifyDataGroup(securityObject, 2, dg2);
         if (dg15 != null) {
@@ -196,6 +208,17 @@ final class EmrtdReadCommand {
      * usable ECDH/3DES Chip Authentication profile.
      */
     static ChipAuth.Result chipAuthentication(EmrtdTerminal terminal) throws Exception {
+        return chipAuthentication(terminal, null);
+    }
+
+    /**
+     * Chip Authentication with an optional CSCA store: when supplied,
+     * EF.CardSecurity's CMS signature is verified before its CA key is used
+     * (Doc 9303-11 §6.2 / H7.2).  A null store keeps the old behaviour and the
+     * caller is expected to warn that authenticity was not checked.
+     */
+    static ChipAuth.Result chipAuthentication(EmrtdTerminal terminal, CscaKeyStore trust)
+            throws Exception {
         CardAccess cardAccess = CardAccess.parse(
                 LdsReader.readMf(terminal, LdsFileUtil.FID_CARD_ACCESS));
         if (cardAccess.chipAuthenticationInfos().isEmpty()) {
@@ -203,6 +226,9 @@ final class EmrtdReadCommand {
         }
         CardSecurity cardSecurity = CardSecurity.parse(
                 readMasterFile(terminal, LdsFileUtil.FID_CARD_SECURITY));
+        if (trust != null) {
+            PassiveAuthentication.verifyCardSecurity(cardSecurity, trust);
+        }
         if (cardSecurity.publicKeyInfos().isEmpty()) {
             return null;
         }

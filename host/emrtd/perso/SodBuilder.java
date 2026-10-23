@@ -13,8 +13,8 @@ import card42.host.common.codec.DerWriter;
 
 /**
  * Builds an EF.SOD: a CMS SignedData over an LDS Security Object, signed by a
- * Document Signer key (ICAO Doc 9303-10 §4.6.2, H5.3).  The digest is SHA-256 and
- * the signature is RSA PKCS#1 v1.5.
+ * Document Signer key (ICAO Doc 9303-10 §4.6.2, H5.3).  The digest is SHA-256;
+ * the signature follows the DSC key type (ECDSA-SHA-256 or RSA PKCS#1 v1.5).
  */
 public final class SodBuilder {
 
@@ -24,6 +24,7 @@ public final class SodBuilder {
     private static final String OID_MESSAGE_DIGEST = "1.2.840.113549.1.9.4";
     private static final String OID_SHA256 = "2.16.840.1.101.3.4.2.1";
     private static final String OID_SHA256_RSA = "1.2.840.113549.1.1.11";
+    private static final String OID_SHA256_ECDSA = "1.2.840.10045.4.3.2";
 
     private SodBuilder() {
     }
@@ -55,13 +56,18 @@ public final class SodBuilder {
                         DerWriter.set(DerWriter.octetString(eContentDigest))));
         byte[] signedAttrsSet = DerWriter.set(signedAttrsContent);
 
-        Signature signer = Signature.getInstance("SHA256withRSA");
+        boolean ec = "EC".equalsIgnoreCase(dscKey.getAlgorithm());
+        Signature signer = Signature.getInstance(ec ? "SHA256withECDSA" : "SHA256withRSA");
         signer.initSign(dscKey);
         signer.update(signedAttrsSet);
         byte[] signature = signer.sign();
 
         byte[] digestAlgorithm = algorithmIdentifier(OID_SHA256);
-        byte[] signatureAlgorithm = algorithmIdentifier(OID_SHA256_RSA);
+        // ECDSA AlgorithmIdentifier parameters MUST be absent (RFC 5753);
+        // PKCS#1 v1.5 keeps the NULL parameter.
+        byte[] signatureAlgorithm = ec
+                ? DerWriter.sequence(DerWriter.oid(OID_SHA256_ECDSA))
+                : algorithmIdentifier(OID_SHA256_RSA);
         byte[] sid = DerWriter.sequence(
                 dscCertificate.getIssuerX500Principal().getEncoded(),
                 DerWriter.integer(dscCertificate.getSerialNumber()));

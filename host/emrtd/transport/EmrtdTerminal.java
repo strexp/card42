@@ -62,6 +62,20 @@ public final class EmrtdTerminal {
         return transmit(0x00, 0xE2, 0x00, sfi << 3, record, 0);
     }
 
+    /**
+     * UPDATE BINARY for an LDS2 Additional Biometrics transparent EF
+     * (Doc 9303-10 §3.8): the command data is {@code 54 offset || 53 data
+     * [|| C0 size]}.  The caller selects the EF first.
+     */
+    public ResponseAPDU updateBinary(byte[] data) throws Exception {
+        return transmit(0x00, 0xD7, 0x00, 0x00, data, 0);
+    }
+
+    /** ACTIVATE (44) an LDS2 Additional Biometrics transparent EF. */
+    public ResponseAPDU activate() throws Exception {
+        return transmit(0x00, 0x44, 0x00, 0x00, null, 0);
+    }
+
     /** FILE AND MEMORY MANAGEMENT (5F). */
     public ResponseAPDU fileMemoryManagement(int p1, int p2, byte[] data) throws Exception {
         return transmit(0x00, 0x5F, p1, p2, data, 0);

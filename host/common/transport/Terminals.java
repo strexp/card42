@@ -1,6 +1,8 @@
 package card42.host.common.transport;
 
 import java.net.InetSocketAddress;
+import java.security.Provider;
+import java.security.Security;
 import java.util.List;
 
 import javax.smartcardio.Card;
@@ -108,16 +110,33 @@ public final class Terminals {
      */
     private static CardTerminal socketTerminal(String host, int port) throws Exception {
         TerminalFactory factory;
+        java.security.GeneralSecurityException missing = null;
         try {
             factory = TerminalFactory.getInstance(
                     "SocketCardTerminalFactoryType",
                     List.of(new InetSocketAddress(host, port)),
                     "SocketCardTerminalProvider");
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new IllegalStateException(
-                    "socket transport needs the Java Card simulator's "
-                    + "SocketCardTerminalProvider on the module path (see "
-                    + "docs/specs/common/toolchain.md §6)", e);
+        } catch (java.security.GeneralSecurityException e) {
+            missing = e;
+            // Classpath deployments (test runners, `java -cp ...`) do not
+            // register the module's provider automatically.  Load and register
+            // it reflectively; under a module path the first attempt succeeds.
+            try {
+                Provider provider = (Provider) Class
+                        .forName("com.oracle.smartcardio.socket.SocketCardTerminalProvider")
+                        .getDeclaredConstructor().newInstance();
+                Security.addProvider(provider);
+                factory = TerminalFactory.getInstance(
+                        "SocketCardTerminalFactoryType",
+                        List.of(new InetSocketAddress(host, port)),
+                        provider.getName());
+            } catch (Exception fallback) {
+                throw new IllegalStateException(
+                        "socket transport needs the Java Card simulator's "
+                        + "SocketCardTerminalProvider on the module path or "
+                        + "classpath (see docs/specs/common/toolchain.md §6)",
+                        missing != null ? missing : fallback);
+            }
         }
         List<CardTerminal> terminals = factory.terminals().list();
         if (terminals.isEmpty()) {

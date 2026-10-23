@@ -2,6 +2,7 @@ package card42.host.emrtd.cli.command;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,11 +13,16 @@ import card42.host.common.cli.Args;
 import card42.host.common.cli.CliSupport;
 import card42.host.common.transport.TerminalSession;
 import card42.host.emrtd.access.ChipAuth;
+import card42.host.emrtd.access.Lds2CertificateStore;
 import card42.host.emrtd.access.LdsReader;
 import card42.host.emrtd.access.Pace;
 import card42.host.emrtd.lds.CardAccess;
+import card42.host.emrtd.lds.CertificateRecord;
+import card42.host.emrtd.lds.Lds2Record;
 import card42.host.emrtd.access.Lds2RecordWriter;
 import card42.host.emrtd.lds.LdsFileUtil;
+import card42.host.emrtd.pa.CscaKeyStore;
+import card42.host.emrtd.pa.Lds2Verifier;
 import card42.host.emrtd.report.PassportReport;
 import card42.host.emrtd.ta.CvCertificate;
 import card42.host.emrtd.ta.CvCertificateCodec;
@@ -33,13 +39,14 @@ import card42.host.emrtd.transport.EmrtdTerminal;
  * trust point, the matching LDS2 authorization bits; the command therefore
  * shares the {@code read} authentication flow instead of touching READ RECORD
  * before the session is authorized.  {@code -append=<json>} builds a structured
- * Travel/Visa/Certificate record (Table 86/90/83) and APPENDs it.
+ * Travel/Visa/Biometrics/Certificate record (Table 86/90/93/83), validates the
+ * signer certificate and key binding, writes it, and verifies the read-back.
  */
 final class EmrtdLds2Command {
 
     private static final String[] RECORD_OPTIONS = {
             "host", "app", "json", "record", "doc", "dob", "doe", "can",
-            "ta-chain", "ta-key", "append", "ts-key", "cert-ref" };
+            "ta-chain", "ta-key", "append", "ts-key", "cert-ref", "csca" };
     private static final String[] RECORD_FLAGS = { "pace", "ca", "ta" };
 
     private EmrtdLds2Command() {
@@ -59,13 +66,17 @@ final class EmrtdLds2Command {
         String taKey = parsed.get("ta-key", null);
         String append = parsed.get("append", null);
         String tsKey = parsed.get("ts-key", null);
+        String csca = parsed.get("csca", null);
         int certRef = parseCertRef(parsed.get("cert-ref", "1"));
+        CscaKeyStore trust = csca == null ? null
+                : CscaKeyStore.fromPath(new java.io.File(csca));
 
         Lds2AppendSpec appendSpec = null;
         if (append != null) {
             try {
-                appendSpec = Lds2AppendSpec.parse(java.nio.file.Paths.get(append), tsKey, certRef);
-            } catch (RuntimeException e) {
+                appendSpec = Lds2AppendSpec.parse(java.nio.file.Paths.get(append), app,
+                        tsKey, certRef, trust);
+            } catch (Exception e) {
                 return CliSupport.fail(e.getMessage());
             }
             record = parsed.has("record") ? record : null;
@@ -119,9 +130,12 @@ final class EmrtdLds2Command {
 
             ChipAuth.Result caResult = null;
             if (parsed.has("ca")) {
-                caResult = EmrtdReadCommand.chipAuthentication(terminal);
+                caResult = EmrtdReadCommand.chipAuthentication(terminal, trust);
                 System.out.println("Chip Authentication: "
                         + (caResult != null ? "OK" : "not available"));
+                if (caResult != null && trust == null) {
+                    System.out.println("EF.CardSecurity signature: not verified (no -csca)");
+                }
             }
 
             if (parsed.has("ta")) {
@@ -141,18 +155,87 @@ final class EmrtdLds2Command {
             }
 
             if (appendSpec != null) {
-                Lds2RecordWriter.append(terminal, appendSpec.fid, appendSpec.record);
-                System.out.println("Appended " + appendSpec.type + " record ("
-                        + appendSpec.record.length + " B) to "
-                        + String.format("%04X", appendSpec.fid));
+                String label = labelForFid(appendSpec.fid);
+                if ("certificate".equals(appendSpec.type)) {
+                    if (trust == null) {
+                        return CliSupport.fail(
+                                "certificate append needs -csca=<CSCA certificate>");
+                    }
+                    int before = LdsReader.readAllRecords(terminal,
+                            LdsFileUtil.sfi(LdsFileUtil.FID_CERTIFICATES), 1).size();
+                    int reference = Lds2CertificateStore.findOrAppend(
+                            terminal, appendSpec.certificate, app, trust);
+                    CertificateRecord certificateRecord = Lds2Verifier.loadCertificateRecord(
+                            terminal, reference);
+                    Lds2Verifier.CertificateCheck check = Lds2Verifier.checkCertificate(
+                            Lds2Verifier.x509(certificateRecord.certificate),
+                            certificateRecord, app, trust);
+                    if (!check.profileValid || !check.trusted) {
+                        return CliSupport.fail("written LDS2 certificate is not conformant: "
+                                + String.join("; ", check.problems));
+                    }
+                    System.out.println((reference > before ? "Appended" : "Reused")
+                            + " certificate record #" + reference + " ("
+                            + certificateRecord.raw().length + " B) in 011A; signer "
+                            + check.subject + " (profile OK, trust OK)");
+                } else {
+                    CertificateRecord signerRecord = Lds2Verifier.loadCertificateRecord(
+                            terminal, appendSpec.certificateReference);
+                    if (signerRecord == null) {
+                        return CliSupport.fail("5F38 references missing EF.Certificates record "
+                                + appendSpec.certificateReference);
+                    }
+                    X509Certificate signer = Lds2Verifier.x509(signerRecord.certificate);
+                    Lds2Verifier.CertificateCheck check = Lds2Verifier.checkCertificate(
+                            signer, signerRecord, app, trust);
+                    if (!check.profileValid || (trust != null && !check.trusted)) {
+                        return CliSupport.fail("LDS2 signer certificate rejected: "
+                                + String.join("; ", check.problems));
+                    }
+                    if (!appendSpec.keyMatches(signer)) {
+                        return CliSupport.fail("the -ts-key does not match EF.Certificates record "
+                                + appendSpec.certificateReference);
+                    }
+                    System.out.println("Signer certificate: " + check.subject
+                            + " (profile OK, trust=" + check.trusted + ")");
+                    int before = 0;
+                    if ("biometrics".equals(appendSpec.type)) {
+                        Lds2RecordWriter.writeBiometrics(terminal, appendSpec.fid,
+                                appendSpec.record);
+                    } else {
+                        before = LdsReader.readAllRecords(terminal,
+                                LdsFileUtil.sfi(appendSpec.fid), 1).size();
+                        Lds2RecordWriter.append(terminal, appendSpec.fid, appendSpec.record);
+                    }
+                    byte[] written = "biometrics".equals(appendSpec.type)
+                            ? LdsReader.read(terminal, appendSpec.fid)
+                            : LdsReader.readRecord(terminal, LdsFileUtil.sfi(appendSpec.fid),
+                                    before + 1);
+                    Lds2Verifier.Verification verification = Lds2Verifier.verifyRecord(
+                            written, label, signer, signerRecord, app, trust);
+                    if (!verification.signatureValid || verification.certificate == null
+                            || !verification.certificate.profileValid
+                            || (trust != null && !verification.certificate.trusted)) {
+                        return CliSupport.fail("written record failed LDS2 verification: "
+                                + String.join("; ", verification.problems));
+                    }
+                    System.out.println("Written record signature: valid (signer "
+                            + verification.certificate.subject + ", trust="
+                            + verification.certificate.trusted + ")");
+                    System.out.println("Appended " + appendSpec.type + " record ("
+                            + appendSpec.record.length + " B) to "
+                            + String.format("%04X", appendSpec.fid));
+                }
                 if (record == null) {
                     return CliSupport.EXIT_OK;
                 }
             }
 
             Map<String, List<byte[]>> groups = readGroups(terminal, app, record);
-            System.out.print(json ? PassportReport.lds2Json(cardAccess, groups)
-                    : PassportReport.lds2Text(cardAccess, groups));
+            Map<String, List<Lds2Verifier.Verification>> verification =
+                    Lds2Verifier.verifyGroups(terminal, groups, app, trust);
+            System.out.print(json ? PassportReport.lds2Json(cardAccess, groups, verification)
+                    : PassportReport.lds2Text(cardAccess, groups, verification));
             return CliSupport.EXIT_OK;
         }
     }
@@ -168,6 +251,9 @@ final class EmrtdLds2Command {
         if (appendSpec != null) {
             if (!appendTypeMatches(app, appendSpec.type)) {
                 return "lds2 -app=" + app + " cannot append a " + appendSpec.type + " record";
+            }
+            if ("certificate".equals(appendSpec.type) && parsed.get("csca", null) == null) {
+                return "certificate append needs -csca=<CSCA certificate>";
             }
         }
         if (biometrics) {
@@ -202,7 +288,8 @@ final class EmrtdLds2Command {
         if ("visa".equals(app)) {
             return "visa".equals(type) || "certificate".equals(type);
         }
-        return "biometrics".equals(app) && "certificate".equals(type);
+        return "biometrics".equals(app)
+                && ("biometrics".equals(type) || "certificate".equals(type));
     }
 
     private static int parseCertRef(String value) {
@@ -268,6 +355,23 @@ final class EmrtdLds2Command {
     private static void addRecords(Map<String, List<byte[]>> groups, String label,
                                    EmrtdTerminal terminal, int fid) throws Exception {
         groups.put(label, LdsReader.readAllRecords(terminal, LdsFileUtil.sfi(fid), 1));
+    }
+
+    private static String labelForFid(int fid) {
+        switch (fid) {
+        case LdsFileUtil.FID_RECORDS:
+            return "EF.EntryRecords (0101)";
+        case LdsFileUtil.FID_EXIT_RECORDS:
+            return "EF.ExitRecords (0102)";
+        case LdsFileUtil.FID_VISA_RECORDS:
+            return "EF.VisaRecords (0103)";
+        case LdsFileUtil.FID_CERTIFICATES:
+            return "EF.Certificates (011A)";
+        case LdsFileUtil.FID_BIOMETRICS:
+            return "EF.Biometrics1 (0201)";
+        default:
+            return String.format("EF.%04X", fid);
+        }
     }
 
     private static String sw(int sw) {

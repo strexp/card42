@@ -18,6 +18,7 @@ import card42.host.common.codec.DerWriter;
 import card42.host.common.codec.TlvWriter;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.access.MrzKeySeed;
+import card42.host.emrtd.lds.BiometricsRecordBuilder;
 import card42.host.emrtd.lds.CertificateRecordBuilder;
 import card42.host.emrtd.lds.LdsFileUtil;
 import card42.host.emrtd.lds.TravelRecordBuilder;
@@ -62,6 +63,8 @@ public final class EmrtdPersoExporter {
 
     private static final String DEFAULT_DSC = "perso/emrtd/dsc.crt";
     private static final String DEFAULT_DSC_KEY = "perso/emrtd/dsc.key";
+    private static final String DEFAULT_LDS2_CERT = "perso/emrtd/lds2.crt";
+    private static final String DEFAULT_LDS2_KEY = "perso/emrtd/lds2.key";
 
     /** LDS1 project DGI: AA signature algorithm (1 = SHA-1, 2 = SHA-256, 3 = ECDSA). */
     private static final int DGI_AA_ALGORITHM = 0xFF0A;
@@ -225,6 +228,8 @@ public final class EmrtdPersoExporter {
             throws Exception {
         X509Certificate dscCertificate = loadCertificate(dscPath);
         PrivateKey dscKey = loadPrivateKey(dscKeyPath);
+        X509Certificate lds2Certificate = loadCertificate(DEFAULT_LDS2_CERT);
+        PrivateKey lds2Key = loadPrivateKey(DEFAULT_LDS2_KEY);
 
         Map<Integer, byte[]> dgs = SampleData.dataGroups(portrait);
         // AA material: RSA (SHA-1/256) or ECDSA.
@@ -320,32 +325,37 @@ public final class EmrtdPersoExporter {
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
         sb.append("@cardsecurity ").append(Hex.format(cardSecurity)).append('\n');
 
-        appendLds2Sections(sb, cardAccess, caScalar, cardSecurity, dscCertificate, dscKey);
+        appendLds2Sections(sb, cardAccess, caScalar, cardSecurity,
+                lds2Certificate, lds2Key);
         return sb.toString();
     }
 
     // --- LDS2 demo sections --------------------------------------------------
 
     private static void appendLds2Sections(StringBuilder sb, byte[] cardAccess, byte[] caScalar,
-                                           byte[] cardSecurity, X509Certificate dscCertificate,
-                                           PrivateKey dscKey) throws Exception {
-        // One LDS2-TS signer certificate record (Table 83: 5F3A || 72), referenced
-        // by every Travel/Visa record through 5F38 = 01.
+                                           byte[] cardSecurity, X509Certificate lds2Certificate,
+                                           PrivateKey lds2Key) throws Exception {
+        // One LDS2 signer certificate record (Table 83: 5F3A || 72), referenced
+        // by every Travel/Visa/Biometrics record through 5F38 = 01.
         byte[] certRecord = new CertificateRecordBuilder()
                 .country("US")
-                .serialNumber(dscCertificate.getSerialNumber().toByteArray())
-                .certificate(dscCertificate.getEncoded())
+                .serialNumber(lds2Certificate.getSerialNumber().toByteArray())
+                .certificate(lds2Certificate.getEncoded())
                 .build();
-        byte[] entry1 = travelRecord(dscKey, "USA", "20260101", "CBP", "SFO", "SFO00001", "A");
-        byte[] entry2 = travelRecord(dscKey, "NLD", "20260215", "KMAR", "AMS", "AMS00002", "A");
-        byte[] entry3 = travelRecord(dscKey, "JPN", "20260320", "MOJ", "NRT", "NRT00003", "A");
-        byte[] exit1 = travelRecord(dscKey, "DEU", "20260601", "BPol", "FRA", "FRA00004", "A");
-        byte[] visa1 = visaRecord(dscKey, "JPN", "X1234567", "DOE", "JOHN", "19900101",
+        byte[] entry1 = travelRecord(lds2Key, "USA", "20260101", "CBP", "SFO", "SFO00001", "A");
+        byte[] entry2 = travelRecord(lds2Key, "NLD", "20260215", "KMAR", "AMS", "AMS00002", "A");
+        byte[] entry3 = travelRecord(lds2Key, "JPN", "20260320", "MOJ", "NRT", "NRT00003", "A");
+        byte[] exit1 = travelRecord(lds2Key, "DEU", "20260601", "BPol", "FRA", "FRA00004", "A");
+        byte[] visa1 = visaRecord(lds2Key, "JPN", "X1234567", "DOE", "JOHN", "19900101",
                 "JPN", "V<JPNX1234567<<DOE<<JOHN<<<<<<<<<<<<<<<<<<<<<<",
                 "20260401", "20270401", "TOKYO", new byte[] { 0x02, 0x01 });
-        byte[] visa2 = visaRecord(dscKey, "AUS", "Y7654321", "ROE", "JANE", "19851212",
+        byte[] visa2 = visaRecord(lds2Key, "AUS", "Y7654321", "ROE", "JANE", "19851212",
                 "AUS", "V<AUSY7654321<<ROE<<JANE<<<<<<<<<<<<<<<<<<<<<<<<",
                 "20260505", "20280505", "SYDNEY", null);
+        byte[] biometrics = new BiometricsRecordBuilder()
+                .biometrics(SampleData.sampleBiometric())
+                .certificateReference(1)
+                .build(lds2Key);
 
         sb.append("\n# LDS2 Travel Records: EntryRecords 0101, ExitRecords 0102,\n");
         sb.append("# EF.Certificates 011A; EF.CardAccess advertises PACE + CA (3DES/AES).\n");
@@ -382,7 +392,7 @@ public final class EmrtdPersoExporter {
         sb.append("@dob ").append(SampleData.DATE_OF_BIRTH).append('\n');
         sb.append("@doe ").append(SampleData.DATE_OF_EXPIRY).append('\n');
         sb.append("@ca ").append(Hex.format(caScalar)).append('\n');
-        sb.append("@transparent 0201 ").append(Hex.format(SampleData.sampleBiometric())).append('\n');
+        sb.append("@transparent 0201 ").append(Hex.format(biometrics)).append('\n');
         sb.append("@record 011A ").append(Hex.format(certRecord)).append('\n');
     }
 
@@ -507,14 +517,30 @@ public final class EmrtdPersoExporter {
         }
     }
 
-    /** Loads a PKCS#8 RSA private key from a PEM/DER file. */
+    /**
+     * Loads a PKCS#8 private key from a PEM/DER file.  Both signing algorithms
+     * in scope are accepted: EC (P-256) and RSA.  The previous RSA-only loader
+     * made the CLI reject the EC LDS2-TS keys used by real LDS2 scripts.
+     */
     public static PrivateKey loadPrivateKey(String path) throws Exception {
         String pem = new String(java.nio.file.Files.readAllBytes(
                 java.nio.file.Paths.get(path)), java.nio.charset.StandardCharsets.US_ASCII);
         String base64 = pem.replaceAll("-----[A-Z ]+-----", "").replaceAll("\\s", "");
         byte[] der = java.util.Base64.getDecoder().decode(base64);
-        return java.security.KeyFactory.getInstance("RSA")
-                .generatePrivate(new java.security.spec.PKCS8EncodedKeySpec(der));
+        java.security.spec.PKCS8EncodedKeySpec spec =
+                new java.security.spec.PKCS8EncodedKeySpec(der);
+        java.security.spec.InvalidKeySpecException ecFailure;
+        try {
+            return java.security.KeyFactory.getInstance("EC").generatePrivate(spec);
+        } catch (java.security.spec.InvalidKeySpecException e) {
+            ecFailure = e;
+        }
+        try {
+            return java.security.KeyFactory.getInstance("RSA").generatePrivate(spec);
+        } catch (java.security.spec.InvalidKeySpecException e) {
+            throw new java.security.spec.InvalidKeySpecException(
+                    "private key is neither EC nor RSA PKCS#8: " + path, ecFailure);
+        }
     }
 
     public static void main(String[] args) throws Exception {

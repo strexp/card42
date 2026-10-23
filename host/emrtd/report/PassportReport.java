@@ -14,6 +14,7 @@ import card42.host.emrtd.lds.Dg15;
 import card42.host.emrtd.lds.Dg2;
 import card42.host.emrtd.lds.Lds2Record;
 import card42.host.emrtd.lds.security.SecurityInfo;
+import card42.host.emrtd.pa.Lds2Verifier;
 
 /**
  * Text / JSON rendering of a read eMRTD (H1.5).  It deliberately depends only
@@ -123,11 +124,23 @@ public final class PassportReport {
      * are listed in file order; use {@code -json=1} for the hex payloads.
      */
     public static String lds2Text(CardAccess access, Map<String, List<byte[]>> groups) {
+        return lds2Text(access, groups, null);
+    }
+
+    /**
+     * The named-EF LDS2 report with optional authenticity results.  When
+     * {@code verification} is supplied, each record is followed by its
+     * signature/profile/trust status (Doc 9303-10 §5, Doc 9303-12 §7.1.2).
+     */
+    public static String lds2Text(CardAccess access, Map<String, List<byte[]>> groups,
+                                  Map<String, List<Lds2Verifier.Verification>> verification) {
         StringBuilder b = new StringBuilder();
         appendAccess(b, access);
         if (groups != null) {
             for (Map.Entry<String, List<byte[]>> group : groups.entrySet()) {
                 List<byte[]> records = group.getValue();
+                List<Lds2Verifier.Verification> results =
+                        verification == null ? null : verification.get(group.getKey());
                 b.append(group.getKey()).append(": ").append(records.size())
                         .append(" record(s)\n");
                 for (int i = 0; i < records.size(); i++) {
@@ -136,8 +149,33 @@ public final class PassportReport {
                             .append(record.length).append(" B) tags: ")
                             .append(outerTags(record)).append('\n');
                     indent(b, Lds2Record.parse(group.getKey(), record).toText(), "    ");
+                    if (results != null && i < results.size()) {
+                        b.append("    ").append(verificationText(results.get(i))).append('\n');
+                    }
                 }
             }
+        }
+        return b.toString();
+    }
+
+    private static String verificationText(Lds2Verifier.Verification result) {
+        Lds2Verifier.CertificateCheck check = result.certificate;
+        boolean certificate = result.label != null
+                && result.label.toLowerCase(java.util.Locale.ROOT).contains("certif");
+        StringBuilder b = new StringBuilder("verification      : ");
+        b.append(result.valid() ? "valid" : "INVALID");
+        b.append(" (").append(certificate ? "certificate" : "signature");
+        if (!certificate) {
+            b.append('=').append(result.signatureValid);
+        }
+        b.append(", profile=").append(check != null && check.profileValid);
+        b.append(", trust=").append(check != null && check.trusted);
+        if (check != null && check.subject != null) {
+            b.append(", signer=").append(check.subject);
+        }
+        b.append(')');
+        if (!result.problems.isEmpty()) {
+            b.append(" -- ").append(String.join("; ", result.problems));
         }
         return b.toString();
     }
@@ -188,6 +226,11 @@ public final class PassportReport {
      * arrays of {@code {length, tags, hex, parsed}}.
      */
     public static String lds2Json(CardAccess access, Map<String, List<byte[]>> groups) {
+        return lds2Json(access, groups, null);
+    }
+
+    public static String lds2Json(CardAccess access, Map<String, List<byte[]>> groups,
+                                  Map<String, List<Lds2Verifier.Verification>> verification) {
         Json.Obj out = new Json.Obj();
         if (access != null) {
             Json.Arr infos = new Json.Arr();
@@ -202,9 +245,14 @@ public final class PassportReport {
         if (groups != null) {
             Json.Obj files = new Json.Obj();
             for (Map.Entry<String, List<byte[]>> group : groups.entrySet()) {
+                List<Lds2Verifier.Verification> results =
+                        verification == null ? null : verification.get(group.getKey());
                 Json.Arr recordArr = new Json.Arr();
-                for (byte[] record : group.getValue()) {
-                    recordArr.raw(recordJson(group.getKey(), record).build());
+                for (int i = 0; i < group.getValue().size(); i++) {
+                    Lds2Verifier.Verification result =
+                            results != null && i < results.size() ? results.get(i) : null;
+                    recordArr.raw(recordJson(group.getKey(), group.getValue().get(i), result)
+                            .build());
                 }
                 files.raw(group.getKey(), recordArr.build());
             }
@@ -214,11 +262,36 @@ public final class PassportReport {
     }
 
     private static Json.Obj recordJson(String label, byte[] record) {
-        return new Json.Obj()
+        return recordJson(label, record, null);
+    }
+
+    private static Json.Obj recordJson(String label, byte[] record,
+                                       Lds2Verifier.Verification verification) {
+        Json.Obj out = new Json.Obj()
                 .put("length", record.length)
                 .put("tags", outerTags(record))
                 .put("hex", Hex.format(record))
                 .raw("parsed", Lds2Record.parse(label, record).toJson());
+        if (verification != null) {
+            Lds2Verifier.CertificateCheck check = verification.certificate;
+            Json.Arr problems = new Json.Arr();
+            for (String problem : verification.problems) {
+                problems.add(problem);
+            }
+            boolean certificate = label != null
+                    && label.toLowerCase(java.util.Locale.ROOT).contains("certif");
+            Json.Obj verificationJson = new Json.Obj()
+                    .put("valid", verification.valid())
+                    .put("profileValid", check != null && check.profileValid)
+                    .put("trusted", check != null && check.trusted)
+                    .put("signer", check == null ? null : check.subject)
+                    .raw("problems", problems.build());
+            if (!certificate) {
+                verificationJson.put("signatureValid", verification.signatureValid);
+            }
+            out.raw("verification", verificationJson.build());
+        }
+        return out;
     }
 
     private static void indent(StringBuilder out, String text, String prefix) {

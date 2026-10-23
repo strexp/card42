@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.Set;
 
 import card42.host.common.codec.Json;
+import card42.host.common.codec.TlvCursor;
 
 /**
  * A Visa Record (ICAO Doc 9303-10 §5.2.3, Table 90):
@@ -23,6 +24,7 @@ public final class VisaRecord extends Lds2Record {
 
     public final String issuingState;
     public final byte[] signedInfo;
+    private final byte[] signedInfoEncoded;
     public final Map<Integer, byte[]> fields;
     public final byte[] signature;
     public final Integer certificateReference;
@@ -32,8 +34,19 @@ public final class VisaRecord extends Lds2Record {
         super(raw);
         Map<Integer, byte[]> top = direct(raw);
         issuingState = ascii(top.get(0x5F28));
-        signedInfo = top.get(0x71);
-        fields = signedInfo != null ? direct(signedInfo) : top;
+        TlvCursor cursor = new TlvCursor(raw);
+        byte[] encoded = null;
+        byte[] value = null;
+        while (cursor.next() == TlvCursor.Status.OK) {
+            if (cursor.tag() == 0x71) {
+                encoded = cursor.encoded();
+                value = cursor.value();
+                break;
+            }
+        }
+        signedInfo = value;
+        signedInfoEncoded = encoded;
+        fields = value != null ? direct(value) : top;
         signature = top.get(0x5F37);
         certificateReference = number(top.get(0x5F38));
         boolean complete = signedInfo != null && signature != null && certificateReference != null;
@@ -48,8 +61,11 @@ public final class VisaRecord extends Lds2Record {
         return "Visa record";
     }
 
-    /** The complete {@code 71 || Len || value} signed by the LDS2-TS key. */
+    /** The complete {@code 71 || Len || value} exactly as read from the card. */
     public byte[] signedInfoTlv() {
+        if (signedInfoEncoded != null) {
+            return signedInfoEncoded.clone();
+        }
         return signedInfo == null ? null : tlv(0x71, signedInfo);
     }
 

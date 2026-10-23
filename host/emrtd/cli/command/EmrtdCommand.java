@@ -46,9 +46,10 @@ public final class EmrtdCommand {
         out.println("  lds2    -host=... [-app=travel|visa|biometrics] "
                 + "(-pace -doc=... -dob=YYMMDD -doe=YYMMDD | -can=<CAN>)");
         out.println("          [-ca] [-ta -ta-chain=<file> -ta-key=<hex>] "
-                + "[-record=entry|exit|visa|cert|all] [-json=1]");
+                + "[-csca=<cert>] [-record=entry|exit|visa|cert|all] [-json=1]");
         out.println("          [-append=<json> -ts-key=<pem> [-cert-ref=n]]  "
-                + "structured Travel/Visa/Certificate append");
+                + "structured Travel/Visa/Biometrics/Certificate append");
+        out.println("          (certificate append requires -csca=<CSCA cert>)");
         out.println("  apdu    -host=... -apdu=<hex>");
         out.println("  ta-export -dir=<path>   write a demo CV certificate chain + terminal key");
     }

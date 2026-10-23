@@ -14,19 +14,35 @@ public final class Lds2Signature {
     private Lds2Signature() {
     }
 
+    /**
+     * The LDS2 record does not carry a signature AlgorithmIdentifier, so the
+     * verifier tries the Doc 9303-12 signature algorithms compatible with the
+     * signer key.  SHA-256 is preferred; SHA-384/512 and RSA SHA-1 are fallbacks
+     * for cards written by other implementations.
+     */
+    private static final String[] EC_ALGORITHMS = {
+            "SHA256withECDSA", "SHA384withECDSA", "SHA512withECDSA", "SHA1withECDSA" };
+    private static final String[] RSA_ALGORITHMS = {
+            "SHA256withRSA", "SHA384withRSA", "SHA512withRSA", "SHA1withRSA" };
+
     public static boolean verify(PublicKey key, byte[] signedInfoTlv, byte[] signature) {
         if (key == null || signedInfoTlv == null || signature == null) {
             return false;
         }
-        try {
-            String algorithm = "EC".equalsIgnoreCase(key.getAlgorithm())
-                    ? "SHA256withECDSA" : "SHA256withRSA";
-            Signature verifier = Signature.getInstance(algorithm);
-            verifier.initVerify(key);
-            verifier.update(signedInfoTlv);
-            return verifier.verify(signature);
-        } catch (Exception e) {
-            return false;
+        String[] candidates = "EC".equalsIgnoreCase(key.getAlgorithm())
+                ? EC_ALGORITHMS : RSA_ALGORITHMS;
+        for (String algorithm : candidates) {
+            try {
+                Signature verifier = Signature.getInstance(algorithm);
+                verifier.initVerify(key);
+                verifier.update(signedInfoTlv);
+                if (verifier.verify(signature)) {
+                    return true;
+                }
+            } catch (Exception e) {
+                // Try the next compatible algorithm.
+            }
         }
+        return false;
     }
 }

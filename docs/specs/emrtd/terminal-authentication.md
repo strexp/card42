@@ -155,6 +155,11 @@ TA 的两动挑战-响应（§7.1.2），全程在已建立的 SM 内，命令�
   与应用扩展（`id-icao-lds2-*-access` = `2.23.136.1.1.9.1.3` / `…9.2.3` / `…9.3.3`，
   Doc 9303-10 Table 99）逐位 AND 求有效授权；`EmrtdApplet.requirePace()` 升级为
   `requireAccess(bits)`，按 Table 96/97/98 门控 LDS2 EF 选择/读/写/追加。
+- **个性化 tail**：`FF07/FF09` 的 4 字节授权为
+  `[ePassport, Travel, Visa, Bio]`。三个 LDS2 字节**全为 0** 视为 legacy
+  ePassport-only 脚本（如 `03 00 00 00`），卡侧默认 `0x0F`；若只有一个 LDS2 应用为 0
+  而其他字节非 0，则该应用仍是显式拒绝。这样旧 perso 不会出现“TA 成功但所有 LDS2
+  访问 6982”，而合法的单应用拒绝仍可表达。
 - **缓冲**：复用包级 `EmrtdScratch`/`SmScratch`，命令路径不 `new` 大数组（真卡余量实测见 §2）。
 - **SecurityInfo**：`TerminalAuthenticationInfo`（protocol `id-TA = 0.4.0.127.0.7.2.2.2`，
   **version 1**，默认 EF.CVCA FID 因此 `efCVCA` 省略）；`ChipAuthenticationInfo` version 1。

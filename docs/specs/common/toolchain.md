@@ -335,7 +335,11 @@ eMRTD 真卡：`card-emrtd-install` 创建的 LDS1 实例带 GP `CardReset` 权�
   密钥）；测试替身（`ClearingHost`）、示例密钥（`TestKeys`）与测试助手分别在
   `test/emv/unit/host/clearing` 与 `test/common/fixtures`。测试依赖 `card42.host`，反向无依赖。
   `-host=socket:...` 经 `COMService` 的 `SocketCardTerminalProvider` 打模拟器；该 provider 由
-  `card42.host.common.transport.Terminals` 在运行时按名解析，主机栈无编译期依赖。
+  `card42.host.common.transport.Terminals` 在运行时按名解析，主机栈无编译期依赖。provider
+  可位于 module path 或 classpath（`Terminals` 在未注册时反射加载并 `Security.addProvider`）。
+  **JDK 21 注意**：`-p COMService --add-modules ALL-MODULE-PATH` 会遮蔽 `jdk.crypto.ec`，使
+  `SHA256withECDSA` 不可用，影响 eMRTD PA/LDS2 验签；集成测试 runner 已改用
+  `-cp <classes>:<COMService>/socketprovider.jar`，CLI 建议同样用 classpath。
 - **条件跳过与覆盖边界**：下列 suite 只在各自门控构建/介质下执行，不在默认矩阵内，故其规范
   覆盖仅存在于对应矩阵；引用这些行为时以门控矩阵为准：
   - `ContactlessTest`（及 `TerminalCliTest` 的 contactless 路径）仅在 `TEST_CONTACTLESS=1`
@@ -442,12 +446,11 @@ java -p tools/java_card_devkit_simulator-linux-bin-*/client/COMService \
 退出码：`0` 成功（SW=9000）、`1` 卡拒绝（非 9000）、`2` 用法或连接错误。
 
 `terminal pay` 的传输描述符支持 `pcsc[:<idx>]`（真卡）与 `socket:<host>:<port>`（模拟器）。
-打模拟器时需把模拟器的 socket provider 放到 module path：
+打模拟器时把模拟器的 socket provider 放到 classpath（或 module path；见上节 JDK 21 注意）：
 
 ```bash
-java -p tools/java_card_devkit_simulator-linux-bin-*/client/COMService \
-     --add-modules ALL-MODULE-PATH -jar build/deliverables/card42-emv-cli.jar \
-     terminal pay -iface=contact -host=socket:localhost:9025 \
+java -cp build/deliverables/card42-emv-cli.jar:build/deliverables/card42-emv.jar:build/deliverables/card42-common.jar:tools/java_card_devkit_simulator-linux-bin-*/client/COMService/socketprovider.jar \
+     card42.host.emv.cli.Main terminal pay -iface=contact -host=socket:localhost:9025 \
      -ca-keys=perso/emv/sample.ca.keys -pin=1234 -floor=none
 ```
 

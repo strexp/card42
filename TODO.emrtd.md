@@ -89,13 +89,29 @@
     `-ca`、`-ta -ta-chain -ta-key` 与 `-record=entry|exit|visa|cert|all`，可在 PACE/TA 授权后读
     Travel/Visa 的全部记录 EF；`EmrtdLds2CliIntegrationTest` 端到端覆盖（模拟器）。
   - **LDS2 结构化写入 + 记录容量（2026-10-22）**：新增 `TravelRecordBuilder`/`VisaRecordBuilder`/
-    `CertificateRecordBuilder`，按 Table 86/90/83 编码并由 LDS2-TS 私钥签名（RSA SHA256withRSA/
-    EC SHA256withECDSA），`Lds2RecordWriter` 负责 APPEND + SW 检查，`Lds2CertificateStore`
-    负责 EF.Certificates 的复用/追加与 `5F38` 引用，`Lds2Signature` 提供验签；CLI
-    `-append=<json>` 支持 entry/exit/visa/certificate；示例 JSON 在 `perso/emrtd/append-*.json`。样例 `perso/emrtd/sample-*.perso` 已改为
-    Table 86/90/83 的多条记录（Travel 3 Entry + 1 Exit、Visa 2、每个 LDS2 应用 1 个包装证书），
+    `BiometricsRecordBuilder`/`CertificateRecordBuilder`，按 Table 86/90/93/83 编码并由 LDS2-TS
+    私钥签名（RSA SHA256withRSA / EC SHA256withECDSA），`Lds2RecordWriter` 负责 APPEND 或
+    UPDATE BINARY+ACTIVATE + SW 检查，`Lds2CertificateStore` 负责 EF.Certificates 的复用/追加与
+    `5F38` 引用，`Lds2Signature` 提供验签；CLI `-append=<json>` 支持 entry/exit/visa/biometrics/
+    certificate。样例 `perso/emrtd/sample-*.perso` 已改为 Table 86/90/93/83 的多条记录
+    （Travel 3 Entry + 1 Exit、Visa 2、Biometrics 1、每个 LDS2 应用 1 个包装证书），
     `Lds2SampleTest` 解析并验签。Travel/Visa 记录上限 256→**640 B**、Entry/Exit/Visa 池
     1→**2 KB**（每包约 +3 KB 持久；真卡需复测余量）。
+  - **LDS2 签名 PKI / P0 修复（2026-10-23）**：`EmrtdPersoExporter.loadPrivateKey` 同时支持
+    EC/RSA PKCS#8；`SodBuilder`/`CardSecurityBuilder` 支持 ECDSA-SHA-256 DSC。新增
+    `Lds2Verifier`：`5F38`→EF.Certificates→X.509→CSCA 链→LDS2 Signer EKU/profile→`5F37` 验签；
+    CLI `lds2 -csca` 与报告输出 `valid/signatureValid/profileValid/trusted`。`Lds2CertificateStore`
+    校验 Doc 9303-12 §7.1.2 profile，`5F3A` country/serial 从证书推导；`-ts-key` 必须在
+    APPEND 前证明与 `5F38` 证书公钥匹配，并在写入后读回验签；证书 append 必须带 `-csca`。
+    `TravelRecord`/`VisaRecord`/`BiometricsRecord` 保留原始 `73`/`71`/`5F2E` 编码，`Lds2Signature`
+    兼容 SHA-256/384/512（及 RSA SHA-1）。
+  - **示例证书与 TA 授权（2026-10-23）**：样例 LDS2 Signer 改为独立
+    `perso/emrtd/lds2.crt/key`（仅 AKI + critical `.8.1/.8.2/.8.3` EKU），不再用 DSC 冒充；
+    sample DSC 重新签发为带 KU/DocumentType/SAN/IAN/CRLDP 的合规 DS 证书；Additional
+    Biometrics sample 改为 `7F2E { 5F2E, 5F37, 5F38 }` 签名结构。卡侧 `TaTrustStore` 在
+    CVCA tail 的三个 LDS2 字节全为 0 时默认 `0x0F`（legacy ePassport-only perso），避免
+    “TA OK 但所有 LDS2 访问 6982”；单个应用为 0 而其他字节非 0 仍是显式拒绝。PA/CA 增加
+    DSC 有效期/DocumentType 校验与 EF.CardSecurity CMS 签名校验（有 `-csca` 时）。
   - **主机 LDS2 结构化读取（2026-10-22）**：`host/emrtd/lds/Lds2Record` + `TravelRecord`/
     `VisaRecord`/`CertificateRecord` 按 Table 86/90/83 解析命名字段（容错 demo 记录，`wellFormed`
     标明完整性）；`PassportReport.lds2Text/Json` 同时输出 tag/hex 与结构化字段。
@@ -173,8 +189,8 @@
   明确对手方需求时按该私有约定另议。判据见
   [`docs/specs/emrtd/algorithm-support.md`](docs/specs/emrtd/algorithm-support.md) §5。
 - **范围外**：国别 profile、生物 CVM、LDS2 之外的附加应用；代码内自签证书（`SodBuilder`
-  沿用 openssl 夹具 `perso/emrtd/{csca,dsc}.crt`，生产需替换真实 CSCA/DSC 并补有效期/
-  策略/吊销，见 `risks.md`）。
+  沿用 openssl 夹具 `perso/emrtd/{csca,dsc}.crt`，LDS2 用 `perso/emrtd/lds2.crt`；生产需
+  替换真实 CSCA/DSC/LDS2 Signer 并补 CRL/OCSP，见 `risks.md`）。
 
 ## 统一验收门
 

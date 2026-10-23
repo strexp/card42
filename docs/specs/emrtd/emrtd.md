@@ -196,9 +196,17 @@ EF.SOD 是外层 `77` 标签内的 CMS SignedData（RFC 5652）（Doc 9303-10 §
 - `CmsSignedData` 提取封装的 LDS Security Object（`eContent`）、首个签名者证书、signed
   attributes、摘要/签名 OID 与签名。
 - `LdsSecurityObject` 解析 `SEQUENCE { version, hashAlgorithm, dataGroupHashValues }`。
-- `DscVerifier` 用受信任的 CSCA 库校验 Document Signer Certificate；`PassiveAuthentication`
-  校验 `messageDigest` signed attribute、验证对 signed attributes（重编码为 SET OF）的签名，
-  并把每个读到的 DG 与其哈希比对。
+- `DscVerifier` 用受信任的 CSCA 库校验 Document Signer Certificate：X.509 v3、当前有效期、
+  issuer 与 CSCA 匹配、CSCA 签名；`PassiveAuthentication` 校验 `messageDigest` signed attribute、
+  验证对 signed attributes（重编码为 SET OF）的签名，并把每个读到的 DG 与其哈希比对；
+  `verifyDocumentType` 再按 `2.23.136.1.1.6.2` 校验 DSC 的 DocumentType 覆盖 DG1 的证件类型。
+- `PassiveAuthentication.verifyCms` 也用于 **EF.CardSecurity**：`read -ca` / `lds2 -ca` 在把
+  CardSecurity 的 CA 公钥用于 Chip Authentication 之前，先用 `-csca` 提供的 CSCA 验证其 CMS
+  签名（Doc 9303-11 §6.2 / H7.2）。`-csca` 可指向证书文件或目录；目录下的 `.crt/.cer/
+  .pem/.der/.crl` 会被加载。若提供了匹配的 CSCA CRL，`CscaKeyStore.checkRevocation` 会校验
+  CRL 签名/有效期并检查吊销；未提供 CRL 时只表示“未检查吊销”，不表示已通过。
+- 个性化侧的 `SodBuilder`/`CardSecurityBuilder` 同时支持 RSA PKCS#1 v1.5 与 ECDSA-SHA-256
+  的 DSC 私钥；CLI 的 `EmrtdPersoExporter.loadPrivateKey` 接受 EC/RSA PKCS#8。
 
 ## 8. 个性化
 
@@ -314,20 +322,30 @@ INSTALL 时由实例 AID 决定（`EmrtdInstallParameters.role()`）：
 的低字节（`0x01 || SFI`，Doc 9303-10 §5.1）。
 
 **结构化读取**：`host/emrtd/lds/Lds2Record` 按 EF 选择 `TravelRecord`（Table 86）、
-`VisaRecord`（Table 90）或 `CertificateRecord`（Table 83），解析顶层 `5F44 || 73 || 5F37 || 5F38`
-（Visa：`5F28 || 71 || 5F37 || 5F38`）并暴露命名字段；`wellFormed` 只在签名、证书引用和必填字段
-齐全时为 true。对旧版/不完整记录（例如只有 `5F44 || 5F37` 或裸 X.509）仍走容错路径并在
-报告中标 `[incomplete]`，不抛异常；`perso/emrtd/sample-*.perso` 已改为合规多记录。`PassportReport.lds2Text/Json` 同时输出原始 tag/hex 和结构化字段。
+`VisaRecord`（Table 90）、`BiometricsRecord`（Table 93）或 `CertificateRecord`（Table 83），
+解析顶层 `5F44 || 73 || 5F37 || 5F38`（Visa：`5F28 || 71 || 5F37 || 5F38`；Biometrics：
+`7F2E { 5F2E, 5F37, 5F38 }`）并暴露命名字段；`wellFormed` 只在签名、证书引用和必填字段
+齐全时为 true。`signedInfoTlv()` 保留卡上原始的 `73`/`71`/`5F2E` 编码（含原 length 字节），
+不会因重新编码 BER length 而误验失败。对旧版/不完整记录（例如只有 `5F44 || 5F37` 或裸 X.509）
+仍走容错路径并在报告中标 `[incomplete]`，不抛异常；`perso/emrtd/sample-*.perso` 已改为合规多记录。
+`PassportReport.lds2Text/Json` 同时输出原始 tag/hex、结构化字段和验签/证书 profile/信任状态。
 
-**结构化写入**：`TravelRecordBuilder`/`VisaRecordBuilder` 按 Table 86/90 的固定 DO 顺序编码，
-签名覆盖完整 `73`/`71` DO（RSA 用 SHA256withRSA，EC 用 SHA256withECDSA），
-`CertificateRecordBuilder` 生成 `5F3A + 72`，`Lds2RecordWriter.append` 通过 APPEND RECORD
-写入并检查 SW；`Lds2CertificateStore.findOrAppend` 按 X.509 字节复用已有证书并返回 `5F38`
-引用（不存在时追加一条并返回下一个记录号）。`Lds2Signature`/`TravelRecord.verify`/`VisaRecord.verify`
-用 EF.Certificates 公钥校验 `5F37`。CLI `-append=<json>` 支持 `entry`/`exit`/`visa`/`certificate`。
-Travel/Visa 记录上限由 256 B 提升到 **640 B**、池 2 KB（Certificates 仍 900 B/1 KB），以容纳
-RSA-2048 LDS2-TS 签名；`EmrtdLds2WriteIntegrationTest` 用样例 DSC 签名、APPEND、读回结构化字段
-并用 `EF.Certificates` 验签。注意这会增加每包约 3 KB 持久占用，真卡需复测 6F00 余量。
+**结构化写入**：`TravelRecordBuilder`/`VisaRecordBuilder`/`BiometricsRecordBuilder` 按
+Table 86/90/93 的固定 DO 顺序编码，签名覆盖完整 `73`/`71`/`5F2E` DO（RSA 用 SHA256withRSA，
+EC 用 SHA256withECDSA），`CertificateRecordBuilder` 生成 `5F3A + 72`，
+`Lds2RecordWriter.append` 通过 APPEND RECORD 写入，Additional Biometrics 则通过
+UPDATE BINARY + ACTIVATE（`writeBiometrics`）。`Lds2CertificateStore.findOrAppend` 先按
+Doc 9303-12 §7.1.2 校验 LDS2 Signer 证书（subject 仅 C/CN、CN≤9、仅 AKI + critical EKU、
+`.8.1/.8.2/.8.3`、≤900 B、有效期、CSCA 链），再按 X.509 字节复用已有证书；`5F3A` 的
+country/serial 从证书 subject C / serial 推导，不再接受调用方覆盖。`Lds2Verifier` 负责
+`5F38` → EF.Certificates → X.509 → CSCA 链 → EKU/profile → `5F37` 验签；CLI `lds2 -csca`
+和报告输出 `valid/signatureValid/profileValid/trusted`。`Lds2Signature` 按 key 类型尝试
+ECDSA/RSA 的 SHA-256/384/512（及 RSA SHA-1）以兼容不带 AlgorithmIdentifier 的记录。
+CLI `-append=<json>` 支持 `entry`/`exit`/`visa`/`biometrics`/`certificate`；证书 append 必须
+带 `-csca`，签名 append 会在 APPEND 前校验 `-ts-key` 与 `5F38` 证书公钥匹配，并在写入后读回验签。
+Travel/Visa 记录上限 **640 B**、池 2 KB（Certificates 900 B/1 KB）；`EmrtdLds2WriteIntegrationTest`
+用 `perso/emrtd/lds2.crt/key` 签名、APPEND、读回结构化字段并用 EF.Certificates 验签。
+注意这会增加每包约 3 KB 持久占用，真卡需复测 6F00 余量。
 
 `READ RECORD` 按 Doc 9303-10 §3.7.2 Table 11 使用扩展 Le `00 00 00`（整个记录）；记录长度超过
 短 APDU 的 SM 窗口（231/223 B）时，卡侧以 `EmrtdScratch.record`/`recordEnvelope`（各 1 KB，
@@ -422,18 +440,19 @@ ECDH + KDF + SM 往返在纯 JVM 中用独立 JCE 密钥对验证（`EmrtdLds2Te
 `card42.host.emrtd.cli.Main`（`card42-emrtd-cli.jar` 入口）：
 
 ```
-Main terminal emrtd read    -host=<spec> -doc=<no> -dob=YYMMDD -doe=YYMMDD [-pace] [-can=<6 digits>] [-ca] [-json=1]
+Main terminal emrtd read    -host=<spec> -doc=<no> -dob=YYMMDD -doe=YYMMDD [-pace] [-can=<6 digits>] [-ca] [-csca=<cert>] [-json=1]
 Main terminal emrtd inspect -host=<spec> [-json=1]
 Main terminal emrtd lds2    -host=<spec> [-app=travel|visa|biometrics] \
                             (-pace -doc=<no> -dob=YYMMDD -doe=YYMMDD | -can=<CAN>) \
-                            [-ca] [-ta -ta-chain=<file> -ta-key=<hex>] \
+                            [-ca] [-ta -ta-chain=<file> -ta-key=<hex>] [-csca=<cert>] \
                             [-record=entry|exit|visa|cert|all] [-json=1] \
                             [-append=<json> -ts-key=<pem> [-cert-ref=n]]
 Main terminal emrtd apdu    -host=<spec> -apdu=<hex>
 Main version | help
 ```
 
-- `<spec>` 为 `pcsc[:<reader-index>]` 或 `socket:<host>:<port>`。
+- `<spec>` 为 `pcsc[:<reader-index>]` 或 `socket:<host>:<port>`；`-csca` 可为证书文件或包含
+  CSCA 证书/CRL 的目录。
 - `read` 跑 AA（明文）、BAC（或 `-pace`/`-can` 时的 PACE）与 SM，读 DG1/DG2/COM/DG15/SOD，并对照
   `perso/emrtd/` 下的 CSCA 文件验证 PA；`-ca` 时在 SM 建立后读 EF.CardAccess/EF.CardSecurity
   执行 Chip Authentication 再读数据组；输出文本报告，`-json=1` 时输出 JSON 对象（证件号、
@@ -444,10 +463,13 @@ Main version | help
   记录必须 PACE）；`-ca` 可选 Chip Authentication，`-ta`（需 `-ca`、`-ta-chain`、`-ta-key`）跑
   Terminal Authentication 以获得 LDS2 授权位。`-record=entry|exit|visa|cert|all` 选择记录 EF
   （travel 默认 entry，visa 默认 visa）；输出每个 EF 的 SecurityInfo 与记录（文本或 JSON，
-  JSON 含记录 hex）。`-append=<json>` 用结构化 JSON 生成并 APPEND 一条记录（`type` =
-  `entry`/`exit`/`visa`/`certificate`；Travel/Visa 由 `-ts-key` 的 PKCS#8 PEM 签名，证书记录用
-  `certificateFile`/`country`/`serialHex`，`-cert-ref` 选择 `5F38` 引用）。示例见
-  `perso/emrtd/append-entry.json`、`append-visa.json`、`append-certificate.json`。
+  JSON 含记录 hex 和 `verification`）。`-append=<json>` 用结构化 JSON 生成并写入一条记录
+  （`type` = `entry`/`exit`/`visa`/`biometrics`/`certificate`；Travel/Visa/Biometrics 由
+  `-ts-key` 的 PKCS#8 EC/RSA PEM 签名，`-cert-ref` 选择 `5F38` 引用；证书记录用
+  `certificateFile`，`country`/`serialHex` 可选但必须与证书一致，且必须提供 `-csca`；
+  证书已存在时按 X.509 字节复用原记录而不是重复追加）。写入后会读回并用 EF.Certificates
+  验签，失败即非零退出。示例见
+  `perso/emrtd/append-entry.json`、`append-visa.json`、`append-biometrics.json`、`append-certificate.json`。
 - `apdu` 发一条原始 APDU，打印 `SW=` 与响应数据。
 - 退出码：`0` 成功，失败非零并输出 `error: <message>`。
 
@@ -514,7 +536,10 @@ DER 转换。完整决策、APDU 序列与开放点见 [terminal-authentication.
   构造器 `TaContext.ensureKeys()`）建一次，个性化只写密钥字节、命令路径不分配——J3R180 实测在
   个性化事务内构建会 `6F00`（`docs/specs/common/risks.md` §2/§4）。
 - **授权**：`TaContext.effectiveAuth` = 活跃信任点授权 ∧ 每张已验证证书的 CHAT/应用扩展逐位
-  AND（App 序号 Travel/Visa/Bio = 1/2/3）；`EmrtdApplet.requireLds2Access(bit)` 门控 LDS2 选择/
+  AND（App 序号 Travel/Visa/Bio = 1/2/3）；个性化 tail 的 4 字节为
+  `[ePassport, Travel, Visa, Bio]`，**三个 LDS2 字节全为 0 时视为 legacy ePassport-only
+  脚本并默认 `0x0F`**（单个应用为 0 而其他 LDS2 字节非 0 仍是显式拒绝），避免 TA 成功但所有
+  LDS2 访问回 `6982`；`EmrtdApplet.requireLds2Access(bit)` 门控 LDS2 选择/
   读/写/追加，位按文件选：Travel/Visa 的 **EF.Certificates 用 b3/b4**，其余（Entry/Exit/VisaRecords、
   Additional Biometrics）用 b1/b2（Doc 9303-10 §5.4.2 Table 96/97/98）；`requireLds1ChatAccess(fid)`
   在存在信任点时按 ePassport CHAT 位（b1=DG3、b2=DG4）门控 LDS1 的 DG3/DG4 读；无信任点时仅

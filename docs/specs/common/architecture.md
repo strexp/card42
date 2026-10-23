@@ -193,7 +193,7 @@ test/           测试（package card42.test，目录为功能分组而非包）
 deploy/         deploy.conf（both）/ deploy-emv.conf / deploy-emv-test.conf / deploy-emrtd.conf
 perso/emv/      sample.perso / sample-test.perso / sample-j3r180.perso（真卡示例）/
                 sample-j3r180-test.perso / sample.perso.sda.keys / sample.ca.keys
-perso/emrtd/    csca.crt / csca.key / dsc.crt / dsc.key / portrait.png / sample.perso
+perso/emrtd/    csca.crt/key, dsc.crt/key, lds2.crt/key, portrait.png, sample-*.perso
                 （样例护照与 PA 夹具）
 ```
 

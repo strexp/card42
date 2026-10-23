@@ -62,12 +62,30 @@ final class TaTrustStore {
     private TaTrustStore() {
     }
 
-    /** Seeds the session authorization from the active CVCA trust point. */
+    /**
+     * Seeds the session authorization from the active CVCA trust point.
+     *
+     * <p>The personalization tail is four bytes: ePassport (byte 0) followed by
+     * Travel/Visa/Biometrics (bytes 1..3).  When <b>all three</b> LDS2 bytes
+     * are zero the tail is a legacy ePassport-only script ({@code 03 00 00 00})
+     * and the LDS2 bytes default to all access bits.  A zero in one application
+     * while another LDS2 byte is non-zero is still an explicit deny for that
+     * application.  The DV/IS certificate extensions are ANDed in {@link
+     * TaContext}, so the default can never exceed what the CVC chain grants.
+     * Without the default a legacy script produces a successful TA followed by
+     * {@code 6982} on every LDS2 read/append.
+     */
     static void seedAuthorization() {
         short active = activeTrustPoint();
         if (active >= 0) {
             Util.arrayCopyNonAtomic(trustAuth, (short) (active * 4), effectiveAuth,
                     (short) 0, (short) 4);
+            if (effectiveAuth[1] == 0 && effectiveAuth[2] == 0
+                    && effectiveAuth[3] == 0) {
+                effectiveAuth[1] = (byte) 0x0F;
+                effectiveAuth[2] = (byte) 0x0F;
+                effectiveAuth[3] = (byte) 0x0F;
+            }
         } else {
             Util.arrayFillNonAtomic(effectiveAuth, (short) 0, (short) 4, (byte) 0);
         }
