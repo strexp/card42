@@ -30,7 +30,9 @@ $(HOST_COMMON_STAMP): $(HOST_COMMON_SRC)
 
 $(JAR_COMMON): $(HOST_COMMON_STAMP)
 	@mkdir -p $(dir $@)
-	$(JAR) cf $@ -C $(HOST_COMMON_CLASSES) .
+	@printf 'Manifest-Version: 1.0\nAutomatic-Module-Name: card42.host.common\n\n' \
+	  > $(BUILD_DIR)/common.mf
+	$(JAR) cfm $@ $(BUILD_DIR)/common.mf -C $(HOST_COMMON_CLASSES) .
 
 # EMV library (host/emv minus host/emv/cli).
 $(HOST_EMV_LIB_STAMP): $(HOST_EMV_LIB_SRC) $(HOST_COMMON_STAMP)
@@ -41,7 +43,7 @@ $(HOST_EMV_LIB_STAMP): $(HOST_EMV_LIB_SRC) $(HOST_COMMON_STAMP)
 
 $(JAR_EMV): $(HOST_EMV_LIB_STAMP)
 	@mkdir -p $(dir $@)
-	@printf 'Manifest-Version: 1.0\nClass-Path: card42-common.jar\n\n' \
+	@printf 'Manifest-Version: 1.0\nAutomatic-Module-Name: card42.host.emv\nClass-Path: card42-common.jar\n\n' \
 	  > $(BUILD_DIR)/emv.mf
 	$(JAR) cfm $@ $(BUILD_DIR)/emv.mf -C $(HOST_EMV_LIB_CLASSES) .
 
@@ -55,7 +57,7 @@ $(HOST_EMV_CLI_STAMP): $(HOST_EMV_CLI_SRC) $(HOST_EMV_LIB_STAMP)
 
 $(JAR_EMV_CLI): $(HOST_EMV_CLI_STAMP)
 	@mkdir -p $(dir $@)
-	@printf 'Manifest-Version: 1.0\nMain-Class: %s\nClass-Path: card42-common.jar card42-emv.jar\n\n' \
+	@printf 'Manifest-Version: 1.0\nAutomatic-Module-Name: card42.host.emv.cli\nMain-Class: %s\nClass-Path: card42-common.jar card42-emv.jar\n\n' \
 	  '$(MAIN_CLASS)' > $(BUILD_DIR)/emv-cli.mf
 	$(JAR) cfm $@ $(BUILD_DIR)/emv-cli.mf -C $(HOST_EMV_CLI_CLASSES) .
 
@@ -70,7 +72,7 @@ $(HOST_EMRTD_LIB_STAMP): $(HOST_EMRTD_LIB_SRC) $(HOST_COMMON_STAMP)
 $(JAR_EMRTD): $(HOST_EMRTD_LIB_STAMP)
 	@if [ -n "$(HOST_EMRTD_LIB_SRC)" ]; then \
 	  mkdir -p $(dir $@); \
-	  printf 'Manifest-Version: 1.0\nClass-Path: card42-common.jar\n\n' \
+	  printf 'Manifest-Version: 1.0\nAutomatic-Module-Name: card42.host.emrtd\nClass-Path: card42-common.jar\n\n' \
 	    > $(BUILD_DIR)/emrtd.mf; \
 	  $(JAR) cfm $@ $(BUILD_DIR)/emrtd.mf -C $(HOST_EMRTD_LIB_CLASSES) .; \
 	fi
@@ -86,7 +88,7 @@ $(HOST_EMRTD_CLI_STAMP): $(HOST_EMRTD_CLI_SRC) $(HOST_EMRTD_LIB_STAMP)
 $(JAR_EMRTD_CLI): $(HOST_EMRTD_CLI_STAMP)
 	@if [ -n "$(HOST_EMRTD_CLI_SRC)" ]; then \
 	  mkdir -p $(dir $@); \
-	  printf 'Manifest-Version: 1.0\nMain-Class: %s\nClass-Path: card42-common.jar card42-emrtd.jar\n\n' \
+	  printf 'Manifest-Version: 1.0\nAutomatic-Module-Name: card42.host.emrtd.cli\nMain-Class: %s\nClass-Path: card42-common.jar card42-emrtd.jar\n\n' \
 	    '$(EMRTD_MAIN_CLASS)' > $(BUILD_DIR)/emrtd-cli.mf; \
 	  $(JAR) cfm $@ $(BUILD_DIR)/emrtd-cli.mf -C $(HOST_EMRTD_CLI_CLASSES) .; \
 	fi

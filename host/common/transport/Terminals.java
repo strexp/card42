@@ -29,19 +29,31 @@ import javax.smartcardio.TerminalFactory;
  */
 public final class Terminals {
 
-    static {
-        // Take over the T=0 response retrieval from the JDK.  SunPCSC issues
-        // the GET RESPONSE with the CLA of the command that returned '61 xx'
-        // (sun/security/smartcardio/ChannelImpl.java), but EMV v4.4 Book 1
-        // removed Part II (transport protocols) and defers to the EMV Contact
-        // Interface Specification; the equivalent EMV v4.1 Book 1 §9.3.1.3
-        // Table 32 fixes it at CLA='00'.  Strict cards (e.g. the ICBC Visa
-        // contact card) reject the non-zero CLA with '6E00', so
-        // Terminal.transmit performs the retrieval per EMV instead.
-        System.setProperty("sun.security.smartcardio.t0GetResponse", "false");
-    }
+    /** True once the JDK T=0 response-retrieval setting has been applied. */
+    private static boolean t0Configured;
 
     private Terminals() {
+    }
+
+    /**
+     * Takes over the T=0 response retrieval from the JDK.  SunPCSC issues the
+     * GET RESPONSE with the CLA of the command that returned '61 xx'
+     * (sun/security/smartcardio/ChannelImpl.java), but EMV v4.4 Book 1 removed
+     * Part II (transport protocols) and defers to the EMV Contact Interface
+     * Specification; the equivalent EMV v4.1 Book 1 §9.3.1.3 Table 32 fixes it
+     * at CLA='00'.  Strict cards (e.g. the ICBC Visa contact card) reject the
+     * non-zero CLA with '6E00', so {@link Terminal#transmit} performs the
+     * retrieval per EMV instead.
+     *
+     * <p>This is a JVM-global setting.  It is applied explicitly when a
+     * {@link Terminals} connection is opened, not on class load, so merely
+     * linking the library does not change the process configuration.
+     */
+    public static synchronized void configureT0Response() {
+        if (!t0Configured) {
+            System.setProperty("sun.security.smartcardio.t0GetResponse", "false");
+            t0Configured = true;
+        }
     }
 
     /** An open card connection: the terminal, the connected card and the channel wrapper. */
@@ -67,6 +79,7 @@ public final class Terminals {
      * {@code pcsc[:<reader-index>]} or {@code socket:<host>:<port>}.
      */
     public static CardTerminal getTerminal(String[] connectionParams) throws Exception {
+        configureT0Response();
         if (connectionParams.length >= 1 && connectionParams[0].equals("socket")) {
             if (connectionParams.length != 3) {
                 throw new IllegalArgumentException("Host must be socket:<host>:<port>");
