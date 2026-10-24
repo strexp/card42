@@ -71,7 +71,8 @@ card/emrtd    eMRTD LDS1/LDS2 applet (`card42.emrtd`), depends on card/common
 host/common   Shared host library (`card42.host.common`)
 host/emv      EMV host library + CLI (`card42.host.emv`; `cli/` = the CLI jar)
 host/emrtd    eMRTD host library + CLI (`card42.host.emrtd`; `cli/` = the CLI jar)
-test/common   Fixtures/stubs shared by the unit and integration builds
+test/common   Shared fixtures/stubs, the pure-JVM runner + common suites,
+              and the media-neutral integration support
 test/emv      EMV unit + integration suites
 test/emrtd    eMRTD unit + integration suites
 perso/emv     EMV personalization scripts and key profiles
@@ -96,6 +97,9 @@ The full module, package and source layout is in
 make                 # debug + release CAPs and the five host jars
 make verify          # verify every generated export file
 make test-unit       # pure-JVM unit tests (no simulator required)
+make test-unit-emv   # common guards + EMV unit suites
+make test-unit-emrtd # common guards + eMRTD unit suites
+make test-unit-common # shared/common unit suites only
 make test-both-sim   # both matrix: EMV + eMRTD coexist (no EMV card-block)
 make test-emv-sim    # EMV matrix: deploy + personalize + every EMV suite
 make test-emrtd-sim  # eMRTD matrix: LDS1 + LDS2 + BAC + SM + PA + AA + PACE

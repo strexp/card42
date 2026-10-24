@@ -51,6 +51,7 @@ help:
 	@echo '  make verify               verify every export file (.exp)'
 	@echo '  make clean                remove $(BUILD_DIR)'
 	@echo '  make test-unit            pure-JVM unit tests (no simulator)'
+	@echo '  make test-unit-<mod>      module unit tests, <mod> = common | emv | emrtd'
 	@echo '  make test-<mod>-sim       simulator integration suites, <mod> = emv | emrtd | both'
 	@echo '  make test-<mod>-card      real-card integration suites'
 	@echo '  make sim-<mod>-install    simulator: load CAPs + create instances'

@@ -3,8 +3,8 @@
 # The card-side classes are linked against the minimal javacard.framework stubs
 # in test/common/stubs (placed before the API jar) and the host-side classes
 # run directly.  All suites share package card42.test, so they are collected
-# recursively; test/common holds the fixtures/stubs shared with the integration
-# build.
+# recursively.  Shared unit support and the runner live in test/common/unit;
+# EMV and eMRTD suite lists live with their own tests (EmvSuites/EmrtdSuites).
 #
 # UNIT_CARD_SRC is an explicit list on purpose: the stubs are deliberately
 # minimal, and the applet entry/base classes plus the command and RSA/key
@@ -13,7 +13,7 @@
 # `find card` glob fails with ~32 javac errors, so the compilable subset is
 # listed here, grouped by module and package.
 
-.PHONY: test-unit
+.PHONY: test-unit test-unit-common test-unit-emv test-unit-emrtd
 
 UNIT_DIR      := $(BUILD_DIR)/unit
 UNIT_STUBS    := $(UNIT_DIR)/stubs
@@ -102,5 +102,17 @@ $(UNIT_CLASS_STAMP): $(UNIT_STUB_STAMP) $(UNIT_CARD_SRC) $(UNIT_HOST_SRC) $(UNIT
 	  $(UNIT_CARD_SRC) $(UNIT_HOST_SRC) $(UNIT_SRC)
 	@touch $@
 
+UNIT_RUN := $(JAVA) -cp $(UNIT_CP) card42.test.UnitTests
+
 test-unit: $(UNIT_CLASS_STAMP)
-	$(JAVA) -cp $(UNIT_CP) card42.test.UnitTests
+	$(UNIT_RUN)
+
+# Module-scoped runs: common guards plus the selected module's suites.
+test-unit-common: $(UNIT_CLASS_STAMP)
+	$(UNIT_RUN) common
+
+test-unit-emv: $(UNIT_CLASS_STAMP)
+	$(UNIT_RUN) emv
+
+test-unit-emrtd: $(UNIT_CLASS_STAMP)
+	$(UNIT_RUN) emrtd

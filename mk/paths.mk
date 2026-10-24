@@ -86,5 +86,10 @@ HOST_CLASSES := $(BUILD_DIR)/host/classes
 HOST_STAMP   := $(HOST_CLASSES)/.compiled
 HOST_SRC          := $(shell find host -name '*.java')
 INTEGRATION_SRC   := $(shell find test/emv/integration test/emrtd/integration -name '*.java')
-TEST_COMMON_SRC   := $(shell find test/common -name '*.java')
+# test/common holds fixtures/stubs and the media-neutral integration support.
+# Unit-only sources (Asserts/NvmProbe/NvmReport/UnitTests/guards) live under
+# test/common/unit and depend on the Java Card stubs, which the integration
+# build does not put on its class path.
+TEST_COMMON_SRC   := $(shell find test/common -name '*.java' \
+                       -not -path 'test/common/unit/*')
 HOST_TEST_SOURCES := $(HOST_SRC) $(INTEGRATION_SRC) $(TEST_COMMON_SRC)

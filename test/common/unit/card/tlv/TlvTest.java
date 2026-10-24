@@ -2,7 +2,6 @@ package card42.test;
 
 import card42.common.Tlv;
 import card42.common.TlvReader;
-import card42.emv.TlvTags;
 import javacard.framework.ISO7816;
 
 /**
@@ -31,7 +30,7 @@ final class TlvTest {
         short p = Tlv.appendTag((short) 0x5A, b, (short) 0);
         Asserts.eq(1, p, "appendTag 1-byte returns +1");
         Asserts.eq(0x5A, b[0] & 0xFF, "appendTag 1-byte");
-        p = Tlv.appendTag(TlvTags.TAG_EXPIRY_DATE, b, (short) 0);
+        p = Tlv.appendTag((short) 0x5F24, b, (short) 0);
         Asserts.eq(2, p, "appendTag 2-byte returns +2");
         Asserts.eq(0x5F, b[0] & 0xFF, "appendTag 2-byte hi");
         Asserts.eq(0x24, b[1] & 0xFF, "appendTag 2-byte lo");
@@ -57,7 +56,7 @@ final class TlvTest {
         // --- append + read back (one-byte tag) ------------------------------
         byte[] buf = new byte[32];
         byte[] val = { 0x12, 0x34, 0x56 };
-        p = Tlv.append(TlvTags.TAG_PAN, val, (short) 0, (short) 3, buf, (short) 0);
+        p = Tlv.append((short) 0x5A, val, (short) 0, (short) 3, buf, (short) 0);
         Asserts.eq(5, p, "append total length");
         Asserts.eq(0x5A, Tlv.getTag(buf, (short) 0), "getTag 1-byte");
         Asserts.eq(1, Tlv.lengthFieldLength(buf, (short) 1), "lengthFieldLength 1");
@@ -66,7 +65,7 @@ final class TlvTest {
         Asserts.eq(5, Tlv.totalLength(buf, (short) 0), "totalLength 1-byte tag");
 
         // --- append + read back (two-byte tag) ------------------------------
-        p = Tlv.append(TlvTags.TAG_EXPIRY_DATE, val, (short) 0, (short) 3, buf, (short) 0);
+        p = Tlv.append((short) 0x5F24, val, (short) 0, (short) 3, buf, (short) 0);
         Asserts.eq(6, p, "append 2-byte tag total");
         Asserts.eq(0x5F24, Tlv.getTag(buf, (short) 0), "getTag 2-byte");
         Asserts.eq(2, Tlv.tagLength(buf, (short) 0), "tagLength 2-byte");

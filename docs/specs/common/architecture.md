@@ -192,21 +192,27 @@ host/emrtd/     card42.host.emrtd：transport/EmrtdTerminal；
                 TaChain（demo CVCA 链））；
                 report/PassportReport（渲染使用 lds2/Lds2VerificationView，不依赖 pa）；
                 cli/（Main / EmrtdCommand；公共 CommandRegistry 注册命令）
-test/           测试（package card42.test，目录为功能分组而非包）
+test/           测试（package card42.test，目录是归属标记而非包）
   common/       fixtures/TestKeys（示例 CA/SDA 密钥 + SdaKeys 档案 + CaKeyStore）；
-                stubs/（javacard.framework / javacard.security / javacardx.crypto 极小桩）
-  emv/unit/     UnitTests + support/Asserts；card/（{tlv,data,state,risk,perso,crypto}）、
+                stubs/（javacard.framework / javacard.security / javacardx.crypto 极小桩）；
+                unit/（UnitTests + CommonSuites；support/Asserts / NvmProbe / NvmReport；
+                host/{LayeringTest,TestLayoutTest,codec,util,transport}；
+                card/{AllocationCensusTest,NvmBaselineTest,tlv,crypto}）；
+                integration/support/（Checks / TestTerminals）
+  emv/unit/     EmvSuites + card/（{tlv,data,state,risk,perso,crypto}）、
                 host/（{codec,crypto,perso,clearing,cli,util,oda,transport,kernel,
-                lib}）+ AllocationCensusTest（卡侧分配普查守卫）
+                lib}）
   emv/integration/ card/（EmvFlow / Boundary / AesFlow / Directory / Log / Velocity /
                 IssuerScript / CardBlock / OnlineClosedLoop）；host/kernel/{contact,contactless}、
-                host/cli/TerminalCliTest；support/（Checks / TestTerminals）
-  emrtd/unit/   card/（EmrtdCryptoTest / EmrtdLds2Test）、host/（EmrtdHostTest /
-                EmrtdCardAccessTest）
+                host/cli/TerminalCliTest
+  emrtd/unit/   EmrtdSuites + card/（EmrtdCryptoTest / EmrtdLds2Test / EmrtdCommandTest /
+                EmrtdPersoStreamTest / EmrtdTaCardTest）、host/（EmrtdHostTest /
+                EmrtdCardAccessTest / LDS parser suites）
   emrtd/integration/ EmrtdBacTest / EmrtdLds2IntegrationTest / EmrtdLds2AppsIntegrationTest /
                 EmrtdLds2WriteIntegrationTest / EmrtdLds2OpsIntegrationTest /
                 EmrtdLds2AlgorithmsIntegrationTest / EmrtdLds2CliIntegrationTest /
-                EmrtdPaceIntegrationTest / EmrtdChipAuthIntegrationTest
+                EmrtdPaceIntegrationTest / EmrtdChipAuthIntegrationTest /
+                EmrtdLdsParsersIntegrationTest
 deploy/         deploy.conf（both）/ deploy-emv.conf / deploy-emv-test.conf / deploy-emrtd.conf
 perso/emv/      sample.perso / sample-test.perso / sample-j3r180.perso（真卡示例）/
                 sample-j3r180-test.perso / sample.perso.sda.keys / sample.ca.keys

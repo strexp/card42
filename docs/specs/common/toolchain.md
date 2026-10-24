@@ -290,7 +290,8 @@ eMRTD 真卡：`card-emrtd-install` 创建的 LDS1 实例带 GP `CardReset` 权�
     第二阶段（重启模拟器、重新部署/个性化）在第二个模拟器生命周期执行）；主机内核 suite 在
     `test/emv/integration/host/kernel/{contact,contactless}/`（`ContactKernelTest`、
     `ContactlessTest`）；CLI suite 在 `test/emv/integration/host/cli/`（`TerminalCliTest`）；
-    测试替身与助手（`Checks`/`TestTerminals`）在 `test/emv/integration/support/`。
+    测试替身与助手（`Checks`/`TestTerminals`）在
+    `test/common/integration/support/`（EMV 与 eMRTD 集成套件共用）。
   - eMRTD `test/emrtd/integration/`：`EmrtdBacTest`（SELECT + AA + BAC + SM 读 DG1/DG2/COM/DG15/SOD
     + PA）、`EmrtdLds2IntegrationTest`（LDS2 Travel 记录 + CardAccess）、
     `EmrtdLds2AppsIntegrationTest`（LDS2 Visa/Additional Biometrics）、
@@ -308,24 +309,32 @@ eMRTD 真卡：`card-emrtd-install` 创建的 LDS1 实例带 GP `CardReset` 权�
     真卡并非全部 suite 可移植：`LogTest` 依赖测试实例 `06`；`ContactlessTest` 需非接触读卡器
     且断言 AIP `0x6900`/DDA/CDA（对 SDA-only 卡不可移植）；`IssuerScriptTest` 与 `CardBlockTest`
     会 block 整卡（不可逆），故 `CARD_PORTABLE_SUITES` 不含两者。
-- **纯 JVM 单测**（package `card42.test`）：`make test-unit` 无需模拟器。
+- **纯 JVM 单测**（package `card42.test`）：`make test-unit` 无需模拟器；
+  `make test-unit-common|-emv|-emrtd` 可按模块运行（模块模式仍先跑公共守卫）。
+  - 公共入口与套件在 `test/common/unit/`：`UnitTests` 为调度器，`CommonSuites` 列公共/守卫套件；
+    `support/{Asserts,NvmProbe,NvmReport}`；host/common 原语在
+    `host/{codec,util,transport}`，card/common 原语在 `card/{tlv,crypto}`；
+    `LayeringTest`/`TestLayoutTest`/`AllocationCensusTest`/`NvmBaselineTest` 是跨模块守卫/基线。
   - EMV 卡内类（`Tlv`/`TlvReader`/`DolReader`/`Dgi`/`DgiReader`/`TlvTags`/`EMVCommands`/
     `EMVStatus`/`EMVRoles`/`EMVCodes`/
     `EMVProtocolState`/`EMVStaticData`/`Defaults`/`PaymentData`/`FciBuilder`/`RecordBuilder`/
     `DirectoryBuilder`/`SdaCertificateData`/`CardRiskManagement`/`Iad`/`RecordStore`/
-    `TransactionLog`/`OfflineRisk`/`ConstantTime`/`RetailMac`/`AesCmac`/`MacAlgorithm`/
-    `CryptoProfile`/`SessionKey`/`SecureMessaging`/`PersoErrors`/`PersoRules`）链接
-    `test/common/stubs` 的极小 `Util`/`ISOException`/`JCSystem`/`CryptoException` 桩，套件在
-    `test/emv/unit/card/{tlv,data,state,risk,perso,crypto}`。
+    `TransactionLog`/`OfflineRisk`/`CryptoProfile`/`SessionKey`/`SecureMessaging`/
+    `PersoErrors`/`PersoRules`）链接 `test/common/stubs` 的极小
+    `Util`/`ISOException`/`JCSystem`/`CryptoException` 桩，套件在
+    `test/emv/unit/card/{tlv,data,state,risk,perso,crypto}`，列表在 `EmvSuites`。
   - eMRTD 卡内类（`Tlv`/`BacCrypto`/`MrzKeySeed`/`SecureMessaging`/
     `AbstractSecureMessaging`/`Iso7816Sm`/`Iso7816SmAes`/`Pace`/
     `ChipAuth`/`LdsFileSystem`/`Lds2FileSystem`/`LdsCatalog`/`AaCrypto`/`EmrtdTags`）链接
     `test/common/stubs`（含 JCE 背书的 `MessageDigest`/`Signature`/`RandomData`/`KeyAgreement`/
-    RSA 密钥桩），套件在 `test/emrtd/unit/card/`。
-  - host 组件覆盖 `PersoScript`/`Sda`/`Tags`/`TagPolicy`/`AcCrypto`/`SmCrypto`/`ClearingHost`
-    与终端内核数据/算法，套件在 `test/emv/unit/host/{codec,crypto,perso,clearing,cli,util,oda,transport,kernel}`；
-    eMRTD host 套件在 `test/emrtd/unit/host/`（`EmrtdHostTest`/`EmrtdCardAccessTest`）。`UnitTests`
-    为调度器（`test/emv/unit/`），`Asserts` 为断言助手（`test/emv/unit/support/`）。
+    RSA 密钥桩），套件在 `test/emrtd/unit/card/`，host 套件在 `test/emrtd/unit/host/`，
+    列表在 `EmrtdSuites`。
+  - EMV host 组件覆盖 `PersoScript`/`Sda`/`TagPolicy`/`AcCrypto`/`SmCrypto`/`ClearingHost`
+    与终端内核数据/算法，套件在
+    `test/emv/unit/host/{codec,crypto,perso,clearing,cli,oda,transport,kernel}`。
+  - `test/common/unit` 只进单元构建（`UNIT_SRC`），不参与 `make host`/集成构建；
+    集成共享的 `Checks`/`TestTerminals` 在 `test/common/integration/support/`，
+    由 `TEST_COMMON_SRC` 编入 `HOST_TEST_SOURCES`。
 - **参考主机栈 package `card42.host.<module>`**：`host/common/{util,codec,crypto,transport,report,cli}`
   为内核与各模块**共用**的原语；`host/emv/kernel/{core,data,entry,oda,analysis,cvm,script}`
   （package `card42.host.emv.kernel.<submodule>`）为终端内核；`host/emv/report`、
