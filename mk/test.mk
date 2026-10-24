@@ -28,6 +28,10 @@
 EMV_SUITES   := EmvFlowTest ContactKernelTest DirectoryTest BoundaryTest LogTest VelocityTest \
                 AesFlowTest ContactlessTest OnlineClosedLoopTest TerminalCliTest IssuerScriptTest
 EMRTD_SUITES := EmrtdBacTest EmrtdCvcaTest EmrtdLds2IntegrationTest EmrtdLds2AppsIntegrationTest EmrtdLds2WriteIntegrationTest EmrtdLds2OpsIntegrationTest EmrtdLds2AlgorithmsIntegrationTest EmrtdLds2CliIntegrationTest EmrtdPaceIntegrationTest EmrtdChipAuthIntegrationTest EmrtdChipAuthAesIntegrationTest EmrtdTaAlgorithmsIntegrationTest EmrtdLds1ChipAuthIntegrationTest EmrtdTerminalAuthIntegrationTest EmrtdPerfTest
+# Simulator-only eMRTD suites: they rely on the demo personalization (all
+# data groups, TA trust point) and are not part of the real-card matrix.
+EMRTD_SIM_SUITES := EmrtdLdsParsersIntegrationTest
+EMRTD_ALL_SIM_SUITES := $(EMRTD_SUITES) $(EMRTD_SIM_SUITES)
 
 # Both matrix: a single coexistence deployment runs the production EMV suites
 # that need only the production instances (the test instances 04/06/08 are not
@@ -73,19 +77,19 @@ test-emv-sim-run: sim-emv-install sim-emv-perso $(HOST_STAMP)
 	$(SIM_ENV) $(CLASSES_CWD) $(RUN_SUITE) $(S)
 
 test-emrtd-sim: sim-emrtd-install sim-emrtd-perso $(HOST_STAMP)
-	$(SIM_ENV) $(ROOT_CWD) $(RUN_SUITE) $(EMRTD_SUITES)
+	$(SIM_ENV) $(ROOT_CWD) $(RUN_SUITE) $(EMRTD_ALL_SIM_SUITES)
 
 test-emrtd-sim-run: sim-emrtd-install sim-emrtd-perso $(HOST_STAMP)
-	@case " $(EMRTD_SUITES) " in \
+	@case " $(EMRTD_ALL_SIM_SUITES) " in \
 	  *" $(S) "*) ;; \
-	  *) echo "test-emrtd-sim-run: $(S) is not an eMRTD suite;"; \
-	     echo "choose one of: $(EMRTD_SUITES)"; exit 1;; \
+	  *) echo "test-emrtd-sim-run: $(S) is not an eMRTD simulator suite;"; \
+	     echo "choose one of: $(EMRTD_ALL_SIM_SUITES)"; exit 1;; \
 	esac
 	$(SIM_ENV) $(ROOT_CWD) $(RUN_SUITE) $(S)
 
 test-both-sim: sim-both-install sim-both-perso $(HOST_STAMP)
 	$(SIM_ENV) $(ROOT_CWD) $(RUN_SUITE) $(BOTH_EMV_SUITES)
-	$(SIM_ENV) $(ROOT_CWD) $(RUN_SUITE) $(EMRTD_SUITES)
+	$(SIM_ENV) $(ROOT_CWD) $(RUN_SUITE) $(EMRTD_ALL_SIM_SUITES)
 
 # --- Real card --------------------------------------------------------------
 # The CAP must already be installed and personalized (card-<mod>-install /

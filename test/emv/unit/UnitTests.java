@@ -47,6 +47,11 @@ public final class UnitTests {
         EmrtdPersoStreamTest.run();
         EmrtdHostTest.run();
         EmrtdHostNegativeTest.run();
+        LdsCommonTest.run();
+        MrzTest.run();
+        DgBiometricTest.run();
+        DgTextTest.run();
+        MrvTest.run();
         EmrtdCliTest.run();
         PassportReportTest.run();
         Lds2SampleTest.run();

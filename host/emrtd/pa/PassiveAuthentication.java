@@ -97,7 +97,10 @@ public final class PassiveAuthentication {
             throw new IllegalStateException("DSC DocumentType extension is malformed");
         }
         List<Der.Tlv> entries = Der.children(value, fields.get(1));
-        String code = dg1.documentCode();
+        String code = dg1 == null ? null : dg1.documentCode();
+        if (code == null || code.isEmpty()) {
+            throw new IllegalStateException("DG1 has no usable document code");
+        }
         for (Der.Tlv entry : entries) {
             if (entry.tag != 0x13) {
                 continue;

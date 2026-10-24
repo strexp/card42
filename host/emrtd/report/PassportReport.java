@@ -30,14 +30,17 @@ public final class PassportReport {
     public static String text(Dg1 dg1, Com com, Dg15 dg15, Dg2 dg2) {
         StringBuilder b = new StringBuilder();
         if (dg1 != null) {
-            b.append("Document number : ").append(dg1.documentNumber).append('\n');
-            b.append("Surname         : ").append(dg1.surname).append('\n');
-            b.append("Given names     : ").append(dg1.givenNames).append('\n');
-            b.append("Nationality     : ").append(dg1.nationality).append('\n');
-            b.append("Issuing state   : ").append(dg1.issuingState).append('\n');
-            b.append("Date of birth   : ").append(dg1.dateOfBirth).append('\n');
-            b.append("Sex             : ").append(dg1.sex).append('\n');
-            b.append("Date of expiry  : ").append(dg1.dateOfExpiry).append('\n');
+            b.append("Document number : ").append(value(dg1.documentNumber)).append('\n');
+            b.append("Surname         : ").append(value(dg1.surname)).append('\n');
+            b.append("Given names     : ").append(value(dg1.givenNames)).append('\n');
+            b.append("Nationality     : ").append(value(dg1.nationality)).append('\n');
+            b.append("Issuing state   : ").append(value(dg1.issuingState)).append('\n');
+            b.append("Date of birth   : ").append(value(dg1.dateOfBirth)).append('\n');
+            b.append("Sex             : ").append(value(dg1.sex)).append('\n');
+            b.append("Date of expiry  : ").append(value(dg1.dateOfExpiry)).append('\n');
+            b.append("MRZ             : ").append(dg1.status())
+                    .append(dg1.mrz() == null ? "" : " (" + dg1.mrz().layout + ")").append('\n');
+            appendIssues(b, dg1.issues());
         }
         if (com != null) {
             b.append("LDS version     : ").append(com.ldsVersion)
@@ -53,7 +56,9 @@ public final class PassportReport {
         }
         if (dg2 != null && dg2.image != null) {
             b.append("Face image      : ").append(dg2.image.length)
-                    .append(" B JPEG/JP2\n");
+                    .append(" B ").append(dg2.faces.isEmpty() ? "JPEG/JP2"
+                            : dg2.faces.get(0).image.format.id()).append('\n');
+            b.append("Face records    : ").append(dg2.faces.size()).append('\n');
         }
         if (dg15 != null) {
             if (dg15.ecdsa) {
@@ -63,6 +68,25 @@ public final class PassportReport {
             }
         }
         return b.toString();
+    }
+
+    private static String value(String text) {
+        return text == null ? "-" : text;
+    }
+
+    /** Prints issue codes only: issue messages never carry field values. */
+    private static void appendIssues(StringBuilder b, java.util.List<card42.host.emrtd.lds.common.LdsIssue> issues) {
+        if (issues == null || issues.isEmpty()) {
+            return;
+        }
+        b.append("Parse issues    : ");
+        for (int i = 0; i < issues.size(); i++) {
+            if (i > 0) {
+                b.append(", ");
+            }
+            b.append(issues.get(i).code);
+        }
+        b.append('\n');
     }
 
     /**
@@ -81,14 +105,22 @@ public final class PassportReport {
                     .put("issuingState", dg1.issuingState)
                     .put("dateOfBirth", dg1.dateOfBirth)
                     .put("sex", dg1.sex)
-                    .put("dateOfExpiry", dg1.dateOfExpiry);
+                    .put("dateOfExpiry", dg1.dateOfExpiry)
+                    .put("mrzStatus", dg1.status().name())
+                    .put("mrzLayout", dg1.mrz() == null ? null : dg1.mrz().layout.name())
+                    .put("mrzIssueCount", dg1.issues().size());
         }
         if (com != null) {
             out.put("ldsVersion", com.ldsVersion)
                     .put("unicodeVersion", com.unicodeVersion);
         }
         if (dg2 != null && dg2.image != null) {
-            out.put("faceImageBytes", dg2.image.length);
+            out.put("faceImageBytes", dg2.image.length)
+                    .put("faceCount", dg2.faces.size())
+                    .put("faceFormat", dg2.faces.isEmpty() ? null
+                            : dg2.faces.get(0).image.format.id())
+                    .put("faceWidth", dg2.faces.isEmpty() ? 0 : dg2.faces.get(0).image.width)
+                    .put("faceHeight", dg2.faces.isEmpty() ? 0 : dg2.faces.get(0).image.height);
         }
         if (dg15 != null) {
             if (dg15.ecdsa) {

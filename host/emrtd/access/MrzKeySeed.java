@@ -43,22 +43,7 @@ public final class MrzKeySeed {
 
     /** The 7-3-1 check digit of an MRZ field (Doc 9303-3 §4.9). */
     public static int checkDigit(String field) {
-        int[] weights = { 7, 3, 1 };
-        int sum = 0;
-        for (int i = 0; i < field.length(); i++) {
-            sum += value(field.charAt(i)) * weights[i % 3];
-        }
-        return sum % 10;
-    }
-
-    private static int value(char c) {
-        if (c >= '0' && c <= '9') {
-            return c - '0';
-        }
-        if (c >= 'A' && c <= 'Z') {
-            return c - 'A' + 10;
-        }
-        return 0; // '<' and anything else
+        return card42.host.emrtd.lds.common.MrzCheckDigit.compute(field);
     }
 
     private static String padRight(String s, int length) {

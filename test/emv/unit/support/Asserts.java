@@ -48,6 +48,11 @@ final class Asserts {
         check(expected.equals(actual), what + " (expected " + expected + ", got " + actual + ")");
     }
 
+    /** Compares two enum values (parse status, MRZ layout, ...). */
+    static void eq(Enum<?> expected, Enum<?> actual, String what) {
+        check(expected == actual, what + " (expected " + expected + ", got " + actual + ")");
+    }
+
     static void bytes(byte[] expected, byte[] actual, String what) {
         check(Arrays.equals(expected, actual), what
                 + " (expected " + Hex.format(expected)

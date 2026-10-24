@@ -13,6 +13,7 @@ import card42.host.common.codec.DerWriter;
 import card42.host.common.codec.TlvWriter;
 import card42.host.common.util.Hex;
 import card42.host.emrtd.access.MrzKeySeed;
+import card42.host.emrtd.perso.BiometricRecordBuilder;
 import card42.host.emrtd.perso.Dg2Builder;
 import card42.host.emrtd.perso.LdsScript;
 import card42.host.emrtd.lds.security.SecurityInfo;
@@ -32,9 +33,9 @@ import card42.host.emrtd.lds.security.SecurityInfo;
 
 final class SampleData {
 
-    /** The ICAO sample TD3 MRZ (Doc 9303-11 sample). */
+    /** The card42 demo TD3 MRZ (ICAO Doc 9303-4 field layout). */
     static final String LINE1 = "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<";
-    static final String LINE2 = "L898902C<3UTO6908061F9406236ZE184226B<<<<<10";
+    static final String LINE2 = "L898902C<3UTO6908061F9406236ZE184226B<<<<<14";
     static final String DOCUMENT_NUMBER = "L898902C<";
     static final String DATE_OF_BIRTH = "690806";
     static final String DATE_OF_EXPIRY = "940623";
@@ -165,48 +166,63 @@ final class SampleData {
         return Dg2Builder.buildFromImage(portrait);
     }
 
-    /** DG3 = {@code 63 { 7F61 { 7F60 { 5F2E <fingerprint> } } }} (fingerprints). */
+    /** A minimal JPEG payload used by the displayed/biometric sample images. */
+    private static final byte[] SAMPLE_JPEG =
+            Hex.parse("FFD8FFE000104A46494600010100000100010000FFD9");
+
+    /**
+     * DG3 = {@code 63 { 7F61 { 02, 7F60 { A1 CBEFF, 5F2E ISO 19794-4 } } }}
+     * around a synthetic finger image record.
+     */
     static byte[] dg3() {
-        byte[] bir = tlv(0x7F60, tlv(0x5F2E,
-                Hex.parse("0102030405060708090A0B0C0D0E0F1011121314")));
-        return tlv(0x63, tlv(0x7F61, bir));
+        byte[] fingerprint = BiometricRecordBuilder.fingerImageRecord(
+                1, 0, 320, 400, BiometricRecordBuilder.COMPRESSION_JPEG, SAMPLE_JPEG);
+        return BiometricRecordBuilder.dg3(fingerprint);
     }
 
-    /** DG4 = {@code 76 { 7F61 { 7F60 { 5F2E <iris> } } }} (irises). */
+    /**
+     * DG4 = {@code 76 { 7F61 { 02, 7F60 { A1 CBEFF, 5F2E ISO 19794-6 } } }}
+     * around a synthetic right-eye image record.
+     */
     static byte[] dg4() {
-        byte[] bir = tlv(0x7F60, tlv(0x5F2E,
-                Hex.parse("2122232425262728292A2B2C2D2E2F30")));
-        return tlv(0x76, tlv(0x7F61, bir));
+        byte[] iris = BiometricRecordBuilder.irisRecord(
+                1, 8, 640, 480, SAMPLE_JPEG);
+        return BiometricRecordBuilder.dg4(iris);
     }
 
-    /** DG5 = {@code 65 { 5F2E <portrait> }} (displayed portrait). */
+    /** DG5 = {@code 65 { 02 count, 5F40 portrait }} (displayed portrait). */
     static byte[] dg5() {
-        return tlv(0x65, tlv(0x5F2E, Hex.parse("FFD8FFE000104A4649460001")));
+        return BiometricRecordBuilder.dg5(SAMPLE_JPEG);
     }
 
-    /** DG7 = {@code 67 { 7F61 { 5F2E <signature image> } }} (signature). */
+    /** DG7 = {@code 67 { 02 count, 5F43 signature }} (displayed signature). */
     static byte[] dg7() {
-        return tlv(0x67, tlv(0x7F61, tlv(0x5F2E, Hex.parse("FFD8FFE000104A4649460002"))));
+        return BiometricRecordBuilder.dg7(SAMPLE_JPEG);
     }
 
-    /** DG8 = {@code 68 { 5F2B..5F2E }} (data features). */
+    /** DG8 = {@code 68 { 02 count, <proprietary templates> }} (data features). */
     static byte[] dg8() {
         ByteArrayOutputStream inner = new ByteArrayOutputStream();
+        TlvWriter.writeTlv(inner, 0x02, new byte[] { 0x02 });
         TlvWriter.writeTlv(inner, 0x5F2B, Hex.parse("01010101"));
         TlvWriter.writeTlv(inner, 0x5F2C, Hex.parse("02020202"));
-        TlvWriter.writeTlv(inner, 0x5F2D, Hex.parse("03030303"));
-        TlvWriter.writeTlv(inner, 0x5F2E, Hex.parse("04040404"));
         return tlv(0x68, inner.toByteArray());
     }
 
-    /** DG9 = {@code 69 { 5F2B <structure feature points> }}. */
+    /** DG9 = {@code 69 { 02 count, <proprietary templates> }} (structure features). */
     static byte[] dg9() {
-        return tlv(0x69, tlv(0x5F2B, Hex.parse("000102030405060708090A0B")));
+        ByteArrayOutputStream inner = new ByteArrayOutputStream();
+        TlvWriter.writeTlv(inner, 0x02, new byte[] { 0x01 });
+        TlvWriter.writeTlv(inner, 0x5F2B, Hex.parse("000102030405060708090A0B"));
+        return tlv(0x69, inner.toByteArray());
     }
 
-    /** DG10 = {@code 6A { 5F2B <substance feature points> }}. */
+    /** DG10 = {@code 6A { 02 count, <proprietary templates> }} (substance features). */
     static byte[] dg10() {
-        return tlv(0x6A, tlv(0x5F2B, Hex.parse("101112131415161718191A1B")));
+        ByteArrayOutputStream inner = new ByteArrayOutputStream();
+        TlvWriter.writeTlv(inner, 0x02, new byte[] { 0x01 });
+        TlvWriter.writeTlv(inner, 0x5F2B, Hex.parse("101112131415161718191A1B"));
+        return tlv(0x6A, inner.toByteArray());
     }
 
     /**
@@ -245,10 +261,17 @@ final class SampleData {
         return tlv(0x6D, tlv(0x5F2B, Hex.parse("2021222324252627")));
     }
 
-    /** DG16 = {@code 70 { 61 { 5F0E <name> } }} (persons to notify, §4.7.16). */
+    /**
+     * DG16 = {@code 70 { 02 count, A1 { 5F50, 5F51, 5F52, 5F53 }, A2 { ... } }}
+     * (persons to notify, ICAO Doc 9303-10 §4.7.16).
+     */
     static byte[] dg16() {
-        return tlv(0x70, tlv(0x61, tlv(0x5F0E,
-                "UTOPIA<CONTACT".getBytes(java.nio.charset.StandardCharsets.US_ASCII))));
+        java.util.List<byte[]> persons = new java.util.ArrayList<byte[]>();
+        persons.add(BiometricRecordBuilder.personToNotify(1, "20260101",
+                "UTOPIA<CONTACT", "+4680000001", "UTOPIA<STREET 1"));
+        persons.add(BiometricRecordBuilder.personToNotify(2, "20260101",
+                "UTOPIA<SECOND", "+4680000002", "UTOPIA<STREET 2"));
+        return BiometricRecordBuilder.dg16(persons);
     }
 
     /**

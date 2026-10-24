@@ -31,10 +31,16 @@
   - **CA 对端点校验修复**：`P256.isLessThanP` 改为显式无符号逐字节比较（不再依赖
     `Util.arrayCompare` 的平台相关符号性）；修复前某平台会间歇性把合法坐标判为 `>= p` 回
     `6A80`，导致 LDS2 CA 集成测试随机失败。
-  - **主机 `card42.host.emrtd`**：`EmrtdTerminal`/`LdsReader`、DG1/DG2/DG15/COM/SOD、
-    `Bac`/`Iso7816Sm`/`Iso7816SmAes`/`ChipAuth`/`Pace`、`CscaKeyStore`/`DscVerifier`/
+  - **主机 `card42.host.emrtd`**：`EmrtdTerminal`/`LdsReader`、`Bac`/`Iso7816Sm`/
+    `Iso7816SmAes`/`ChipAuth`/`Pace`、`CscaKeyStore`/`DscVerifier`/
     `PassiveAuthentication`、AA、`EmrtdPersoExporter`/`SodBuilder`/`Dg2Builder`/
     `CardSecurityBuilder`/`LdsScript`、CLI（`-pace`、`-ca`、`lds2`）。
+  - **LDS 字段模型（2026-10-24）**：`lds/common` 的 `LdsDataGroup`/`ParseStatus`/
+    `LdsIssue`/`LdsParseResult`/`LdsTlv`/`LdsText`/`LdsDate`/`Cbeff`/`ImageData`，
+    `lds1` 的 DG1–DG16 专用模型与 TD1/TD2/TD3 `Mrz`，`lds2` 的 `Mrv` 与
+    `VisaRecord` MRV 访问器；样例 DG3/4/5/7/16 按 Doc 9303-10 合规化；新增
+    `EmrtdLdsParsersIntegrationTest`。矩阵与限制见
+    [`docs/specs/emrtd/lds-parsers.md`](docs/specs/emrtd/lds-parsers.md)。
   - **真卡 / 互操作**：J3R180 安装、个性化与读取（接触、非接触）；项目工具与第三方独立
     主机库（BAC、LDS1 读取、PA、AA、PACE 两 profile、LDS2 CardAccess/CardSecurity）均通过。
   - **真卡堆耗尽修复**：`LdsFile`/`Lds2TransparentFile` 改为惰性按实际长度分配、`persoBuffer`

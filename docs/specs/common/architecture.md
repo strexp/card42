@@ -170,10 +170,14 @@ host/emv/       card42.host.emv：
                 TerminalApduCommand / TerminalEntryPointCommand / IssuerCommand / CardCommand
 host/emrtd/     card42.host.emrtd：transport/EmrtdTerminal；
                 lds/common/（LdsFileUtil / AlgorithmIds / CmsSignedData / Sod /
-                LdsSecurityObject / CardAccess / CardSecurity）；
-                lds/lds1/（Dg1 / Dg2 / Dg15 / Dg / Com）；
+                LdsSecurityObject / CardAccess / CardSecurity / LdsDataGroup /
+                ParseStatus / LdsIssue / LdsParseResult / LdsTlv / LdsText /
+                LdsDate / LdsBytes / MrzCheckDigit / Cbeff / ImageData）；
+                lds/lds1/（Dg1 / Mrz / Dg2 / FaceImage / Dg3 / FingerImage /
+                Dg4 / IrisImage / Dg5 / Dg7 / Dg8 / Dg9 / Dg10 / Dg11 / Dg12 /
+                Dg13 / Dg16 / PersonToNotify / Dg15 / Dg / Com）；
                 lds/lds2/（Lds2Record / TravelRecord / VisaRecord / BiometricsRecord /
-                CertificateRecord / 各 RecordBuilder / Lds2Signature）；
+                CertificateRecord / 各 RecordBuilder / Lds2Signature / Mrv）；
                 lds/security/（SecurityInfo / UnknownSecurityInfo / PaceInfo /
                 ChipAuthenticationInfo / ChipAuthenticationPublicKeyInfo /
                 ActiveAuthenticationInfo / TerminalAuthenticationInfo）；
@@ -183,8 +187,9 @@ host/emrtd/     card42.host.emrtd：transport/EmrtdTerminal；
                 pa/（CscaKeyStore / DscVerifier / PassiveAuthentication / Lds2Verifier /
                 Lds2CertificateProfile / Lds2RecordVerifier）；
                 aa/ActiveAuthentication；perso/（SodBuilder / Dg2Builder /
-                CardSecurityBuilder / LdsScript）；tools/（EmrtdPersoExporter /
-                SampleData（样例 DG/密钥数据）/ TaChain（demo CVCA 链））；
+                BiometricRecordBuilder / CardSecurityBuilder / LdsScript）；
+                tools/（EmrtdPersoExporter / SampleData（样例 DG/密钥数据）/
+                TaChain（demo CVCA 链））；
                 report/PassportReport（渲染使用 lds2/Lds2VerificationView，不依赖 pa）；
                 cli/（Main / EmrtdCommand；公共 CommandRegistry 注册命令）
 test/           测试（package card42.test，目录为功能分组而非包）

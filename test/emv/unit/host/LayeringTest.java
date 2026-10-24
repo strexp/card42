@@ -87,6 +87,31 @@ final class LayeringTest {
             });
         }
         Asserts.check(violations.isEmpty(), "module layering violations: " + violations);
+
+        // Dependency guard for the LDS parser layer: it must stay JDK-only
+        // (no JMRTD, no image decoder, no AWT) so the eMRTD jar remains
+        // consumable by a terminal without those libraries.
+        List<String> dependencies = new ArrayList<String>();
+        try (Stream<Path> files = Files.walk(host)) {
+            files.filter(p -> p.toString().endsWith(".java")).forEach(p -> {
+                String code;
+                try {
+                    code = stripComments(Files.readString(p));
+                } catch (Exception e) {
+                    dependencies.add(p + " (unreadable)");
+                    return;
+                }
+                if (code.contains("org.jmrtd")) {
+                    dependencies.add(p + ": JMRTD must not be a card42 dependency");
+                }
+                String normalized = p.toString().replace('\\', '/');
+                if (normalized.startsWith("host/emrtd/lds/")
+                        && (code.contains("javax.imageio") || code.contains("java.awt"))) {
+                    dependencies.add(p + ": the LDS parser layer must not decode images");
+                }
+            });
+        }
+        Asserts.check(dependencies.isEmpty(), "LDS dependency violations: " + dependencies);
     }
 
     private static void checkReference(Path file, String module, String reference,

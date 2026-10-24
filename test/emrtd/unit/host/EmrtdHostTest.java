@@ -28,7 +28,7 @@ import card42.host.emrtd.report.PassportReport;
 final class EmrtdHostTest {
 
     private static final String LINE1 = "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<";
-    private static final String LINE2 = "L898902C<3UTO6908061F9406236ZE184226B<<<<<10";
+    private static final String LINE2 = "L898902C<3UTO6908061F9406236ZE184226B<<<<<14";
 
     private EmrtdHostTest() {
     }

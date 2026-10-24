@@ -271,10 +271,15 @@ LDS2 指令为 `@lds2 <role>`、`@cardaccess`、`@cardsecurity`、`@record <fid>
 host/emrtd/
 ├── transport/ EmrtdTerminal
 ├── lds/common/ LdsFileUtil, AlgorithmIds, CmsSignedData, Sod,
-│              LdsSecurityObject, CardAccess, CardSecurity
-├── lds/lds1/  Dg, Dg1, Dg2, Dg15, Com
+│              LdsSecurityObject, CardAccess, CardSecurity,
+│              LdsDataGroup, ParseStatus, LdsIssue, LdsParseResult,
+│              LdsTlv, LdsText, LdsDate, LdsBytes, MrzCheckDigit,
+│              Cbeff, ImageData
+├── lds/lds1/  Dg, Dg1, Mrz, Dg2, FaceImage, Dg3, FingerImage,
+│              Dg4, IrisImage, Dg5, Dg7, Dg8/Dg9/Dg10,
+│              Dg11, Dg12, Dg13, Dg16, PersonToNotify, Dg15, Com
 ├── lds/lds2/  Lds2Record, TravelRecord/VisaRecord/BiometricsRecord/
-│              CertificateRecord + builders, Lds2Signature
+│              CertificateRecord + builders, Lds2Signature, Mrv
 ├── lds/security/ SecurityInfo, PaceInfo, ChipAuthenticationInfo,
 │              ChipAuthenticationPublicKeyInfo, ActiveAuthenticationInfo
 ├── access/    LdsReader, MrzKeySeed, Bac, Iso7816Sm, Iso7816SmAes,
@@ -282,11 +287,14 @@ host/emrtd/
 ├── access/lds2/ Lds2RecordWriter, Lds2CertificateStore, Lds2Search, Lds2Fmm
 ├── pa/        CscaKeyStore, DscVerifier, PassiveAuthentication
 ├── aa/        ActiveAuthentication
-├── perso/     SodBuilder, Dg2Builder, CardSecurityBuilder, LdsScript
+├── perso/     SodBuilder, Dg2Builder, BiometricRecordBuilder,
+│              CardSecurityBuilder, LdsScript
 ├── tools/     EmrtdPersoExporter, SampleData, TaChain
 ├── report/    PassportReport
 └── cli/       Main, command/EmrtdCommand
 ```
+
+字段模型、状态/issue 语义与 DG 支持矩阵见 [`lds-parsers.md`](lds-parsers.md)。
 
 ## 10. 验证
 
@@ -294,10 +302,13 @@ host/emrtd/
   LDS2 文件系统/记录命令、CardAccess/SecurityInfo、DG3–DG16、Chip Authentication ECDH
   往返与 PA 篡改拒绝、PACE KDF（`test/emrtd/unit`）；`EmrtdPersoStreamTest` 另覆盖分页 EF
   （跨页读写、更新 gap、容量/激活拒绝）、DGI 流式帧解析（头/值跨块、空值、截断、超长）与
-  LDS1/LDS2 逐块（1–13 B）个性化，含 5000 B DG2。
+  LDS1/LDS2 逐块（1–13 B）个性化，含 5000 B DG2。LDS 字段模型测试：
+  `LdsCommonTest`（TLV 偏移/截断、编码、日期、校验位、分发器）、`MrzTest`、
+  `DgBiometricTest`（DG2/3/4）、`DgTextTest`（DG5/7/8–13/16）、`MrvTest`。
 - `make test-emrtd-sim` — 模拟器端到端：SELECT LDS1、AA、BAC、SM 读 DG1/DG2/COM/DG15/SOD、
   PA（DSC 链 + 签名 + DG 哈希）、LDS2 Travel/Visa/Biometrics 三应用（CardAccess、PACE/CA/TA、
   READ/APPEND/SEARCH RECORD、FMM、READ BINARY、UPDATE BINARY + ACTIVATE）、
+  `EmrtdLdsParsersIntegrationTest`（PACE→CA→TA 后读 DG1–DG16 并断言字段模型）、
   PACE（3DES/AES-128，MRZ 与 CAN）、LDS1 Chip Authentication（PACE → 主文件 EF.CardSecurity → CA →
   新 SM 下读 DG1）；样例 DG2 约 8 KB（>4096），覆盖流式个性化 + 分页 EF + 大 DG 读回。
   新增 `EmrtdLds2OpsIntegrationTest`（Doc 9303-10 §3.7/§3.8 全部文件命令）、
@@ -445,13 +456,30 @@ ECDH + KDF + SM 往返在纯 JVM 中用独立 JCE 密钥对验证（`EmrtdLds2Te
 `EmrtdLds1ChipAuthIntegrationTest`（LDS1）覆盖；真卡部署依赖其 ECC/`KeyAgreement` 支持
 （与 PACE 同一门控，见 [risks.md](../common/risks.md)）。
 
-## 14. DG3–DG16 (Doc 9303-10 §4.7.3–4.7.16)
+## 14. DG1–DG16 字段模型 (Doc 9303-10 §4.7)
 
 `LdsFileUtil` 把每个数据组编号映射到 FID 与外层标签（`63`、`76`、`65`–`6E`、`6F`、`70`）。
-`Dg` 是通用解析器/生成器：识别外层标签，保留 EF 原始字节，并按标签暴露嵌套值
-（`value`/`values`），`Dg.wrap` 从内层 TLV 列表构造数据组。报告消费的组（DG1/DG2/DG15）
-保留专用解析器。DG14（`6E`，Security Options）由个性化构造为标准
-`6E { SET OF SecurityInfo }`，与 EF.CardSecurity 的 eContent 同源（见 §8、§12）。
+`LdsDataGroup` 是所有解析器的公共接口：`dg()`、`raw()`（完整 EF）、`status()`
+（`OK`/`PARTIAL`/`INVALID`）与 `issues()`；静态 `LdsDataGroup.parse(dg, bytes)` 按号分发。
+数据问题只进 `LdsIssue`（稳定 code + 相对 EF 的 offset），不抛异常；`raw` 永远可用。
+
+- **DG1**：`Dg1` + `Mrz`（TD1/TD2/TD3），完整字段、逐项与复合校验位、`LdsDate`；
+  旧字段（`documentNumber`/`surname` 等）保留。
+- **DG2**：`Dg2` + `FaceImage`，CBEFF（`A1`）+ ISO/IEC 19794-5、多脸、尺寸/格式；
+  `image` 仍是第一张脸；无 ISO 头的老 BDB 用签名扫描回退并标 `PARTIAL`。
+- **DG3/DG4**：`Dg3`/`Dg4` + `FingerImage`/`IrisImage`，ISO/IEC 19794-4/-6 图像记录、
+  指位/眼位/质量/格式；ISO 19794-2 minutiae 记录只保留 raw。
+- **DG5/DG7**：`65 { 02, 5F40 }` / `67 { 02, 5F43 }` 的显示肖像/签名列表（无 CBEFF）。
+- **DG8/DG9/DG10**：规范标记 “To Be Defined”，只暴露 `02` 实例数与完整模板 TLV。
+- **DG11/DG12**：按 Table 71/73 的全部字段；重复项用列表、未知 tag 保留、UTF-8 回退、
+  `5F55` 兼容 ASCII 与 BCD。
+- **DG13**：签发国自定义，只校验 `6D` 外层并保留 value。
+- **DG16**：`70 { 02, A1..An { 5F50..5F53 } }` 多联系人模型。
+- **DG14/DG15**：仍由 `SecurityInfo`/`Dg15` 专用解析；通用 `Dg` 作为 raw/TLV 回退。
+
+`Dg` 仍是通用解析器/生成器：识别外层标签，保留原始字节，并按 tag 暴露嵌套值；
+`Dg.wrap` 从内层 TLV 列表构造数据组。字段、issue 与限制的完整矩阵见
+[`lds-parsers.md`](lds-parsers.md)。
 
 ## 15. 主机 CLI
 

@@ -5,6 +5,7 @@ import java.util.Set;
 
 import card42.host.common.codec.Json;
 import card42.host.common.codec.TlvCursor;
+import card42.host.emrtd.lds.common.LdsDate;
 
 /**
  * A Visa Record (ICAO Doc 9303-10 §5.2.3, Table 90):
@@ -29,6 +30,14 @@ public final class VisaRecord extends Lds2Record {
     public final byte[] signature;
     public final Integer certificateReference;
     public final boolean wellFormed;
+    /** MRV-A, or null when the record does not carry a valid two-line MRV-A. */
+    public final Mrv mrvA;
+    /** MRV-B, or null when the record does not carry a valid two-line MRV-B. */
+    public final Mrv mrvB;
+    /** {@code 5F25} as a calendar date, or null. */
+    public final LdsDate effectiveDateValue;
+    /** {@code 5F24} as a calendar date, or null. */
+    public final LdsDate expirationDateValue;
 
     public VisaRecord(byte[] raw) {
         super(raw);
@@ -54,6 +63,34 @@ public final class VisaRecord extends Lds2Record {
             complete = complete && fields.containsKey(tag);
         }
         wellFormed = complete;
+        mrvA = parseMrv(machineReadableVisaA());
+        mrvB = parseMrv(machineReadableVisaB());
+        effectiveDateValue = dateField(0x5F25);
+        expirationDateValue = dateField(0x5F24);
+    }
+
+    /** Parses a two-line MRV, or returns null when the field is absent. */
+    private static Mrv parseMrv(String value) {
+        return value == null || value.trim().isEmpty() ? null : Mrv.parse(value);
+    }
+
+    /**
+     * Reads a visa date field: LDS2 uses either {@code YYMMDD} or
+     * {@code YYYYMMDD} depending on the issuing State.
+     */
+    private LdsDate dateField(int tag) {
+        byte[] value = fields.get(tag);
+        if (value == null) {
+            return null;
+        }
+        String text = new String(value, java.nio.charset.StandardCharsets.US_ASCII).trim();
+        if (text.length() == 8) {
+            return LdsDate.yyyymmdd(text);
+        }
+        if (text.length() == 6) {
+            return LdsDate.yymmdd(text, java.time.LocalDate.now().getYear());
+        }
+        return null;
     }
 
     @Override
@@ -99,6 +136,26 @@ public final class VisaRecord extends Lds2Record {
 
     public String machineReadableVisaB() {
         return field(0x5F72);
+    }
+
+    /** The parsed MRV-A, or null when absent or not an MRV-A layout. */
+    public Mrv mrvA() {
+        return mrvA;
+    }
+
+    /** The parsed MRV-B, or null when absent or not an MRV-B layout. */
+    public Mrv mrvB() {
+        return mrvB;
+    }
+
+    /** {@code 5F25} as a calendar date, or null. */
+    public LdsDate effectiveDateValue() {
+        return effectiveDateValue;
+    }
+
+    /** {@code 5F24} as a calendar date, or null. */
+    public LdsDate expirationDateValue() {
+        return expirationDateValue;
     }
 
     public String numberOfEntries() {
@@ -196,6 +253,10 @@ public final class VisaRecord extends Lds2Record {
         b.append("  mrz               : ").append(mrz()).append('\n');
         b.append("  machineReadableA  : ").append(machineReadableVisaA()).append('\n');
         b.append("  machineReadableB  : ").append(machineReadableVisaB()).append('\n');
+        b.append("  mrvA              : ")
+                .append(mrvA == null ? "-" : mrvA.layout + " " + mrvA.status).append('\n');
+        b.append("  mrvB              : ")
+                .append(mrvB == null ? "-" : mrvB.layout + " " + mrvB.status).append('\n');
         b.append("  numberOfEntries   : ").append(numberOfEntries()).append('\n');
         b.append("  durationOfStay    : ").append(durationOfStay()).append('\n');
         b.append("  passportNumber    : ").append(passportNumber()).append('\n');
@@ -230,6 +291,12 @@ public final class VisaRecord extends Lds2Record {
                 .put("mrz", mrz())
                 .put("machineReadableVisaA", machineReadableVisaA())
                 .put("machineReadableVisaB", machineReadableVisaB())
+                .put("mrvALayout", mrvA == null ? null : mrvA.layout.name())
+                .put("mrvBLayout", mrvB == null ? null : mrvB.layout.name())
+                .put("effectiveDateIso", effectiveDateValue == null
+                        || !effectiveDateValue.valid ? null : effectiveDateValue.toString())
+                .put("expirationDateIso", expirationDateValue == null
+                        || !expirationDateValue.valid ? null : expirationDateValue.toString())
                 .put("numberOfEntries", numberOfEntries())
                 .put("durationOfStay", durationOfStay())
                 .put("passportNumber", passportNumber())
