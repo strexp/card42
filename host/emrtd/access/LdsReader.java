@@ -9,13 +9,28 @@ import card42.host.emrtd.transport.EmrtdTerminal;
 
 /**
  * Reads one LDS1 elementary file: SELECT FILE then chunked READ BINARY
- * (H0.3).  The chunk size keeps the SM-wrapped response inside the card's
- * 256-byte APDU buffer.
+ * (H0.3).  Offset reads request Le=256 (the short-APDU maximum) so the card
+ * can cap the window to its active secure-messaging profile; a smaller
+ * specific Le makes some chips answer 6CXX for every file shorter than the
+ * request and then reject the continuation of the SM session.
  */
 public final class LdsReader {
 
-    /** Maximum READ BINARY length; the SM wrapper adds ~25 bytes of overhead. */
+    /**
+     * READ BINARY Le for a short-EF-identifier read (SFI) and for callers that
+     * need a fixed window; the chunked EF reads below use {@link #READ_LE}.
+     * The 3DES SM wrapper adds ~25 bytes of overhead to a response.
+     */
     public static final int CHUNK = 0xE7;
+
+    /**
+     * READ BINARY Le for chunked EF reads: 256 asks the card for the largest
+     * short-APDU window.  The card caps the returned plaintext to the active SM
+     * profile (231 B for 3DES, 223 B for AES-128), so one request cannot exceed
+     * the response buffer, while a file shorter than the request returns its
+     * actual length with 9000 instead of a 6CXX wrong-length status.
+     */
+    public static final int READ_LE = 256;
 
     /**
      * Le for READ RECORD.  Doc 9303-10 §3.7.2 Table 11/Appendix H.2 requires the
@@ -86,26 +101,44 @@ public final class LdsReader {
         ResponseAPDU selected = terminal.selectFile(fid);
         if (selected.getSW() != 0x9000) {
             throw new IllegalStateException("SELECT FILE " + String.format("%04X", fid)
-                    + " failed: " + Sw.format(selected.getSW()));
+                    + " failed: " + Sw.formatWithDescription(selected.getSW()));
         }
+        return readSelected(terminal, fid);
+    }
+
+    /**
+     * Reads the EF that is already selected, concatenating the chunks.  Used by
+     * {@link #read} and {@link #readMf} after their own SELECT.
+     */
+    private static byte[] readSelected(EmrtdTerminal terminal, int fid) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         int offset = 0;
         while (true) {
-            ResponseAPDU r = terminal.readBinary(offset, CHUNK);
+            ResponseAPDU r = terminal.readBinary(offset, READ_LE);
             int sw = r.getSW();
-            // 6CXX: wrong Le, the card reports the exact remaining length.  Real
-            // passports use this instead of returning the shorter window.
+            // 6CXX: wrong Le, the card reports the exact remaining length.  A
+            // zero length means the offset is already at the EF end.  Real
+            // passports use this form instead of returning the shorter window;
+            // retrying works there, but some chips also invalidate the SM
+            // session after a wrong-length command, hence READ_LE above.
             if ((sw & 0xFF00) == 0x6C00) {
                 int exact = sw & 0xFF;
-                r = terminal.readBinary(offset, exact == 0 ? 256 : exact);
+                if (exact == 0) {
+                    break;
+                }
+                r = terminal.readBinary(offset, exact);
                 sw = r.getSW();
             }
-            if (sw == 0x6B00 || sw == 0x6A82) {
-                break; // offset beyond the end of the EF
+            // 6B00/6A82: offset beyond the EF; some chips (observed on a PRC
+            // passport) answer 6A86 for an offset past the end instead.
+            if (sw == 0x6B00 || sw == Sw.FILE_NOT_FOUND
+                    || (sw == Sw.INCORRECT_P1P2 && offset > 0)) {
+                break;
             }
             if (sw != 0x9000) {
-                throw new IllegalStateException("READ BINARY failed: "
-                        + Sw.format(sw));
+                throw new IllegalStateException("READ BINARY " + String.format("%04X", fid)
+                        + " at offset " + offset + " failed: "
+                        + Sw.formatWithDescription(sw));
             }
             byte[] data = r.getData();
             if (data.length == 0) {
@@ -113,10 +146,10 @@ public final class LdsReader {
             }
             out.write(data, 0, data.length);
             offset += data.length;
-            // Do NOT stop on a short chunk: the card caps a window to the active
-            // SM profile (AES returns at most 223 B, under the requested 0xE7),
-            // so only the offset reaching the EF end (0 bytes / 6B00 / 6A82)
-            // means the file is complete.
+            // Do NOT stop on a short chunk: the card caps the window to the
+            // active SM profile (231 B for 3DES, 223 B for AES-128, under the
+            // requested 256), so only the offset reaching the EF end (0 bytes /
+            // 6B00 / 6A82 / 6A86) means the file is complete.
         }
         return out.toByteArray();
     }
@@ -124,12 +157,15 @@ public final class LdsReader {
     /**
      * Reads a master-file EF (EF.CardAccess 011C, EF.CardSecurity 011D): SELECT
      * MF then SELECT FILE by FID (Doc 9303-10 §3.11.3/§3.11.4).  The eMRTD DF
-     * serves a different file for the same FID (EF.CVCA / EF.SOD).
+     * serves a different file for the same FID (EF.CVCA / EF.SOD), so this is
+     * only used when the caller actually needs the MF file (PACE/CA), not for a
+     * BAC-only document.
      */
     public static byte[] readMf(EmrtdTerminal terminal, int fid) throws Exception {
         ResponseAPDU mf = terminal.selectMf();
         if (mf.getSW() != 0x9000) {
-            throw new IllegalStateException("SELECT MF failed: " + Sw.format(mf.getSW()));
+            throw new IllegalStateException("SELECT MF failed: "
+                    + Sw.formatWithDescription(mf.getSW()));
         }
         return read(terminal, fid);
     }

@@ -130,7 +130,7 @@ final class EmrtdReadCommand {
             // PACE (Doc 9303-10 §3.11.4 Table 34).
             ChipAuth.Result caResult = ca ? chipAuthentication(terminal, trust) : null;
             boolean caOk = caResult != null;
-            if (ca && trust == null) {
+            if (caOk && trust == null) {
                 status(json, "EF.CardSecurity signature: not verified (no -csca)");
             }
 
@@ -215,11 +215,14 @@ final class EmrtdReadCommand {
     }
 
     /**
-     * Chip Authentication (ICAO Doc 9303-11 §6.2): read the LDS1 EF.CardAccess,
-     * then the master-file EF.CardSecurity (SELECT MF followed by SELECT 011D;
+     * Chip Authentication (ICAO Doc 9303-11 §6.2): read EF.CardAccess and the
+     * master-file EF.CardSecurity (SELECT MF followed by SELECT 011D;
      * Doc 9303-10 §3.11.4) and re-key the secure messaging with the chip's
      * static public key.  Returns null when the card does not advertise a
      * usable ECDH/3DES Chip Authentication profile.
+     *
+     * <p>This is only reached for {@code -ca}, which requires PACE.  A BAC-only
+     * passport has no PACE and therefore never reads these two optional files.
      */
     static ChipAuth.Result chipAuthentication(EmrtdTerminal terminal) throws Exception {
         return chipAuthentication(terminal, null);
@@ -239,7 +242,7 @@ final class EmrtdReadCommand {
             return null;
         }
         CardSecurity cardSecurity = CardSecurity.parse(
-                readMasterFile(terminal, LdsFileUtil.FID_CARD_SECURITY));
+                LdsReader.readMf(terminal, LdsFileUtil.FID_CARD_SECURITY));
         if (trust != null) {
             PassiveAuthentication.verifyCardSecurity(cardSecurity, trust);
         }
@@ -253,15 +256,6 @@ final class EmrtdReadCommand {
         }
         return ChipAuth.authenticateResult(terminal, chipPublicKeyW,
                 cardAccess.chipAuthenticationInfos().get(0));
-    }
-
-    /** Reads a master-file EF: SELECT MF then SELECT FILE by FID (Doc 9303-10 §3.11). */
-    static byte[] readMasterFile(EmrtdTerminal terminal, int fid) throws Exception {
-        ResponseAPDU mf = terminal.selectMf();
-        if (mf.getSW() != 0x9000) {
-            throw new IllegalStateException("SELECT MF -> " + sw(mf.getSW()));
-        }
-        return LdsReader.read(terminal, fid);
     }
 
     private static String sw(int sw) {

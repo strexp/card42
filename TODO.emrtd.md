@@ -49,6 +49,14 @@
     导致的 `6F00`）；真卡连续 50 次 PACE 通过。
   - **MF-level EF.CardAccess**：LDS1 实例以 GP `CardReset` 默认选中 + 卡侧 `SELECT MF`
     分支，reader 可在选应用前于 MF 读 `011C`（PACE）；接触/非接触均验证。
+  - **BAC-only 护照真卡读取（2026-10-25）**：偏移分块 `READ BINARY` 改用 `READ_LE=256`，
+    由卡按活动 SM profile 截断；EOF 接受 `6B00`/`6A82`/`6A86`（offset > 0）/`6C00`。避免
+    指定 Le 大于文件长度时卡回 `6CXX`、随后 SM 会话拒绝续读（`6987`）。`read` 的 BAC 路径
+    不读取 EF.CardAccess/EF.CardSecurity；`selectMf` 保持 ISO/IEC 7816-4 的 P2=0C（与 JMRTD
+    一致）。真卡（ACR1581 PICC，中国 BAC-only 护照）`read` 完成 BAC 并读出
+    DG1/DG2/DG11/DG12/DG15/SOD（DG2 约 20 KB JPEG2000）；PA/AA 因无对应 CSCA、DG15 受
+    BAC 保护而未验证。`make test-unit`、`make test-emrtd-sim` 与完整 PACE/CA/PA 模拟器样例
+    全部通过。
   - **响应缓冲转瞬态 / EEPROM 写入削减**：`EmrtdApplet` 的 `plain`/`response`（各 256 B 实例
     持久）与静态 `smOut`（512 B）改为包级共享的瞬态 `EmrtdScratch`（`io` 320 B 兼作解包命令与
     SM 封装响应、`response` 256 B，均 `CLEAR_ON_DESELECT`，安装期一次分配，命令路径不再

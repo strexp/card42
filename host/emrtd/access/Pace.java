@@ -198,7 +198,7 @@ public final class Pace {
                 new CommandAPDU(0x00, 0x86, 0x00, 0x00, ga(0x85, tPcd), 256));
         if (step4.getSW() != 0x9000) {
             throw new IllegalStateException("PACE step 4 failed: "
-                    + Sw.format(step4.getSW()));
+                    + Sw.formatWithDescription(step4.getSW()));
         }
         byte[] tPicc = Tags.find(step4.getData(), 0x86);
         byte[] expected = Arrays.copyOf(tokenMac(ksMac, tokenInput(oid, P256.encode(pkPcd2)), aes), 8);
@@ -222,7 +222,7 @@ public final class Pace {
                 new CommandAPDU(0x10, 0x86, 0x00, 0x00, data, 256));
         if (r.getSW() != 0x9000) {
             throw new IllegalStateException("PACE GENERAL AUTHENTICATE failed: "
-                    + Sw.format(r.getSW()));
+                    + Sw.formatWithDescription(r.getSW()));
         }
         return r.getData();
     }
@@ -230,7 +230,7 @@ public final class Pace {
     private static void check(ResponseAPDU r, String what) {
         if (r.getSW() != 0x9000) {
             throw new IllegalStateException(what + " failed: "
-                    + Sw.format(r.getSW()));
+                    + Sw.formatWithDescription(r.getSW()));
         }
     }
 

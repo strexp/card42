@@ -46,8 +46,8 @@ import card42.host.emrtd.transport.EmrtdTerminal;
  *       (Doc 9303-11 §9.8.4);</li>
  *   <li>EF.CardAccess PACE selection fallbacks - DH generic mapping and an
  *       unmapped profile (BSI TR-03110-3 A.3);</li>
- *   <li>LDS1 READ BINARY 6CXX retry and the 6B00/6A82 end-of-EF branches
- *       (Doc 9303-10 §3.6.3);</li>
+ *   <li>LDS1 READ BINARY 6CXX retry and the 6B00/6A82/6A86/6C00 end-of-EF
+ *       branches (Doc 9303-10 §3.6.3);</li>
  *   <li>EF.CardSecurity outer {@code 77} strip (Doc 9303-10 §3.11.4);</li>
  *   <li>algorithm OID mapping including the ECDSA signature OIDs
  *       (Doc 9303-11 §9.2);</li>
@@ -187,7 +187,7 @@ final class EmrtdHostNegativeTest {
                 "PACE falls back to the first info for an unmapped profile");
     }
 
-    /** LDS1 READ BINARY 6CXX retry and the 6B00/6A82 end-of-EF branches. */
+    /** LDS1 READ BINARY 6CXX retry and the 6B00/6A82/6A86/6C00 EOF branches. */
     private static void ldsReaderBranches() throws Exception {
         // 6CXX: the card reports the exact length; the reader re-reads with it.
         ScriptedTerminal retry = new ScriptedTerminal();
@@ -198,11 +198,13 @@ final class EmrtdHostNegativeTest {
         retry.add(0x9000, new byte[0]);          // next offset: EF end (0 bytes)
         Asserts.bytes(exact, LdsReader.read(new EmrtdTerminal(retry), 0x0101),
                 "READ BINARY retries 6CXX with the exact length");
+        Asserts.eq(LdsReader.READ_LE, retry.commands.get(1).getNe(),
+                "chunked READ BINARY requests Le=256");
         Asserts.eq(0x10, retry.commands.get(2).getNe(),
                 "READ BINARY 6CXX retry uses Le = SW2");
 
         // A short window must NOT be treated as EOF: under AES secure messaging
-        // the card caps a window at 223 B although the reader requested 0xE7, so
+        // the card caps a window at 223 B although the reader requested 256, so
         // the reader continues until the offset passes the EF end.
         ScriptedTerminal shortWindow = new ScriptedTerminal();
         byte[] first = new byte[100];
@@ -214,7 +216,7 @@ final class EmrtdHostNegativeTest {
             second[i] = (byte) (i + 100);
         }
         shortWindow.add(0x9000, new byte[0]);    // SELECT FILE
-        shortWindow.add(0x9000, first);          // short window (< CHUNK)
+        shortWindow.add(0x9000, first);          // short window (< READ_LE)
         shortWindow.add(0x9000, second);         // more data
         shortWindow.add(0x9000, new byte[0]);    // EF end
         byte[] joined = new byte[first.length + second.length];
@@ -242,6 +244,29 @@ final class EmrtdHostNegativeTest {
         endA.add(0x6A82, new byte[0]);
         Asserts.bytes(full, LdsReader.read(new EmrtdTerminal(endA), 0x0101),
                 "READ BINARY 6A82 ends the EF");
+
+        // 6A86: some chips answer incorrect P1/P2 for an offset past the end.
+        ScriptedTerminal endIncorrect = new ScriptedTerminal();
+        endIncorrect.add(0x9000, new byte[0]);
+        endIncorrect.add(0x9000, full);
+        endIncorrect.add(0x6A86, new byte[0]);
+        Asserts.bytes(full, LdsReader.read(new EmrtdTerminal(endIncorrect), 0x0101),
+                "READ BINARY 6A86 past the EF end ends the read");
+
+        // 6C00: the card reports zero remaining bytes instead of 6CXX+data.
+        ScriptedTerminal endC = new ScriptedTerminal();
+        endC.add(0x9000, new byte[0]);
+        endC.add(0x9000, full);
+        endC.add(0x6C00, new byte[0]);
+        Asserts.bytes(full, LdsReader.read(new EmrtdTerminal(endC), 0x0101),
+                "READ BINARY 6C00 means the EF end");
+
+        // 6A86 at the first offset is not an EOF: the command itself is wrong.
+        ScriptedTerminal wrongP1P2 = new ScriptedTerminal();
+        wrongP1P2.add(0x9000, new byte[0]);
+        wrongP1P2.add(0x6A86, new byte[0]);
+        Asserts.rejects(() -> read(wrongP1P2),
+                "READ BINARY 6A86 at offset 0 is rejected");
 
         // Any other error propagates.
         ScriptedTerminal error = new ScriptedTerminal();

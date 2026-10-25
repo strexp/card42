@@ -109,6 +109,11 @@ public final class EmrtdTerminal {
      * SELECT MF (ISO/IEC 7816-4 §7.1.1): P1=00, P2=0C, FID 3F00.  A reader uses
      * this to read EF.CardAccess at the MF level (Doc 9303-10 §3.11.3) before
      * selecting the eMRTD application.
+     *
+     * <p>The P2=0C (no FCI) form is the one JMRTD and our applet use.  Do not
+     * probe P2=00 as a fallback here: the only observed chip that rejects
+     * P2=0C is a BAC-only passport that has no MF EF to read in the first
+     * place, and the read path must not select MF for such a document.
      */
     public ResponseAPDU selectMf() throws Exception {
         return transmit(0x00, 0xA4, 0x00, 0x0C, new byte[] { 0x3F, 0x00 }, 0);

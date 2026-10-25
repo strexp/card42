@@ -141,9 +141,13 @@ APDU 缓冲的响应由终端分块。单次 `READ BINARY` 及**短 Le** 的 `RE
 profile 的块大小**决定（`SecureMessaging.maxResponseData()`，构造期算一次）：3DES（8 B 块）
 为 231（`0xE7`，DO87 的 `0x81` 长度 + 232 B M2 填充 + DO99/DO8E 共 250 B）；AES-128（16 B 块）
 为 223（`0xDF`，填充后到 224 B，包络 242 B）。232/224 B 明文会分别到 258 B 超限，真卡表现为
-`6700`（JMRTD 用 AES PACE 读大 DG 时暴露）。主机 `LdsReader` 请求 `CHUNK = 0xE7`，但**不得**
+`6700`（JMRTD 用 AES PACE 读大 DG 时暴露）。主机 `LdsReader` 的偏移分块读请求
+`READ_LE = 256`（短 APDU 最大窗口），由卡按活动 SM profile 截断到 231/223 B；**不得**
 以「返回块 < 请求块」判 EOF——AES 下卡会合法地只回 223 B，须读到位移越过 EF 末尾（0 字节 /
-`6B00`/`6A82`）才算完整。AES-128 的 PACE SM 用 `Iso7816SmAes`（§16）。
+`6B00`/`6A82`/`6A86`）才算完整。**不要**用 `0xE7` 这种“具体窗口”值做偏移分块：部分芯片
+（实测某中国护照）对指定 Le 大于文件长度回 `6CXX`，随后还会让当前 SM 会话拒绝续读命令，
+而 Le=256 会直接返回实际长度并保持会话。短 EF 标识符读取仍用 `CHUNK = 0xE7`。
+AES-128 的 PACE SM 用 `Iso7816SmAes`（§16）。
 
 **READ RECORD 的大记录路径（2026-10-22）**：`READ BINARY` 可以用偏移分块，但记录 EF 没有偏移，
 而 Doc 9303-10 §3.7.2 Table 11 规定 `READ RECORD` 的 Le 是扩展形式 `00 00 00`（一次返回整个
@@ -428,6 +432,22 @@ store，所有实例共享一份 EF.CardAccess/EF.CardSecurity。EF.CardSecurity
 EF.CardAccess 的 SecurityInfos 与 CA 公钥，故示例中 LDS1 与 LDS2 使用同一 CA 密钥对与
 同一份 EF.CardSecurity。
 
+### 12.1 主机读取策略（与 JMRTD 对齐）
+
+- EF.CardAccess/EF.CardSecurity 只在需要 PACE/CA 时读取；`read` 的 BAC 路径**不读取、也不要求**
+  这两个文件。BAC-only 证件因此可以直接走 BAC → SM → DG1/DG2/…；`-ca` 本就要求 `-pace`，
+  只有带 PACE 的证件才会进入 CA 路径。
+- `EmrtdTerminal.selectMf()` 使用 ISO/IEC 7816-4 的 P2=0C（无 FCI）形式，与 JMRTD 一致；
+  BAC-only 路径本身不需要 SELECT MF。EF.CardSecurity 通过 `SELECT MF` + `SELECT 011D` 读取
+  （Doc 9303-10 §3.11.4）。
+- 偏移分块 `READ BINARY` 请求 `Le=256`（短 APDU 最大窗口），由卡按活动 SM profile 截断到
+  231/223 B；不以“短块”判 EOF，EOF 接受 0 字节、`6B00`、`6A82`、`6A86`（offset > 0）
+  与 `6C00`。JMRTD 用 8 B 预读 + 外层 TLV 长度来请求精确长度；本实现不解析文件长度，
+  `Le=256` 让卡直接返回实际长度，既避免指定 Le 大于文件长度触发 `6CXX`、随后 SM 会话
+  拒绝续读（`6987`），也对 EF.CVCA 等非 TLV 文件同样适用。
+- `Sw.formatWithDescription` 在异常中附带 `6A82`（文件/应用不存在）、`6A86`（P1/P2 不正确）、
+  `6D00`（指令不支持）等含义，便于诊断。
+
 ## 13. Chip Authentication (Doc 9303-11 §6.2, BSI TR-03110-3 A.4/B.2)
 
 芯片持有静态 P-256 密钥对，其公钥公布在 EF.CardSecurity。终端生成临时 P-256 密钥对，用
@@ -500,10 +520,11 @@ Main version | help
 - `<spec>` 为 `pcsc[:<reader-index>]` 或 `socket:<host>:<port>`；`-csca` 可为证书文件或包含
   CSCA 证书/CRL 的目录。
 - `read` 跑 AA（明文）、BAC（或 `-pace`/`-can` 时的 PACE）与 SM，读 DG1/DG2/COM/DG15/SOD，并对照
-  `perso/emrtd/` 下的 CSCA 文件验证 PA；`-ca` 时在 SM 建立后读 EF.CardAccess/EF.CardSecurity
-  执行 Chip Authentication 再读数据组；输出文本报告，`-json=1` 时输出 JSON 对象（证件号、
-  姓名、日期、LDS/Unicode 版本、AA 模长位数）。`-can` 用 CAN 口令（`DO'83'=02`、
-  `f(CAN)` = 原始 CAN 字符）跑 PACE-CAN，此时可省略 `-doc/-dob/-doe`。
+  `perso/emrtd/` 下的 CSCA 文件验证 PA；BAC 路径不读 EF.CardAccess/EF.CardSecurity，`-ca`
+  （需 `-pace`）时才在 SM 建立后读这两个文件并执行 Chip Authentication。输出文本报告，
+  `-json=1` 时输出 JSON 对象（证件号、姓名、日期、LDS/Unicode 版本、AA 模长位数）。`-can`
+  用 CAN 口令（`DO'83'=02`、`f(CAN)` = 原始 CAN 字符）跑 PACE-CAN，此时可省略
+  `-doc/-dob/-doe`。
 - `inspect` 无 BAC 读 COM/DG15，报告公开数据。
 - `lds2` SELECT 一个 LDS2 DF，先读公开的 EF.CardAccess，再按 `-pace`/`-can` 建立 PACE（LDS2
   记录必须 PACE）；`-ca` 可选 Chip Authentication，`-ta`（需 `-ca`、`-ta-chain`、`-ta-key`）跑
@@ -526,7 +547,7 @@ PACE（Password Authenticated Connection Establishment）为在 EF.CardAccess �
 安全报文与 **MRZ**（`DO'83'=01`）或 **CAN**（`DO'83'=02`）口令：`id-PACE-ECDH-GM-3DES-CBC-CBC`
 （`0.4.0.127.0.7.2.2.4.2.1`）与 `id-PACE-ECDH-GM-AES-CBC-CMAC-128`
 （`0.4.0.127.0.7.2.2.4.2.2`），P-256（标准化域参数 id 12）。MSE:Set AT 的 OID 末字节选择
-profile。
+profile。BAC-only 证件对 `MSE:Set AT` 回 `6D00`/`6A81`；主机异常保留状态字及其说明。
 
 **EF.CardAccess 宣告 3DES 与 AES-128 两个 profile**（`EmrtdPersoExporter.cardAccessInfos`）。
 AES-128 一度因真卡上每包开销约比原生 DES retail MAC 高一个数量级（每 231 B `READ BINARY` 约 1.4 s
