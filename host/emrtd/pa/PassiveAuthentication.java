@@ -16,6 +16,7 @@ import card42.host.common.codec.DerWriter;
 import card42.host.emrtd.lds.common.AlgorithmIds;
 import card42.host.emrtd.lds.common.CardSecurity;
 import card42.host.emrtd.lds.common.CmsSignedData;
+import card42.host.emrtd.lds.common.LdsFileUtil;
 import card42.host.emrtd.lds.lds1.Dg1;
 import card42.host.emrtd.lds.common.LdsSecurityObject;
 import card42.host.emrtd.lds.common.Sod;
@@ -114,12 +115,29 @@ public final class PassiveAuthentication {
         throw new IllegalStateException("DSC DocumentType does not authorize " + code);
     }
 
-    /** True when the data group bytes match the hash in the security object. */
+    /**
+     * True when the data group matches the hash in the security object.
+     *
+     * <p>An EF may be larger than the encoded data group it carries (fixed-size
+     * allocation, with the remainder left untouched by the issuer).  The SOD
+     * covers the encoded data group (tag || length || value), not the EF
+     * padding, so the input is reduced with
+     * {@link LdsFileUtil#encodedDataGroup(int, byte[])} before hashing.
+     * Malformed bytes and a wrong outer tag never match.
+     */
     public static boolean verifyDataGroup(LdsSecurityObject securityObject, int dataGroup,
                                           byte[] bytes) throws Exception {
         byte[] expected = securityObject.dataGroupHashes.get(dataGroup);
-        return expected != null
-                && Arrays.equals(expected, digest(securityObject.digestAlgorithm, bytes));
+        if (expected == null) {
+            return false;
+        }
+        byte[] encoded;
+        try {
+            encoded = LdsFileUtil.encodedDataGroup(dataGroup, bytes);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+        return Arrays.equals(expected, digest(securityObject.digestAlgorithm, encoded));
     }
 
     /**

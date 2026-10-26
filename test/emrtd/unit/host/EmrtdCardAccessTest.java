@@ -18,6 +18,7 @@ import card42.host.common.util.Hex;
 import card42.host.emrtd.lds.common.CardAccess;
 import card42.host.emrtd.lds.security.ChipAuthenticationInfo;
 import card42.host.emrtd.lds.security.ChipAuthenticationPublicKeyInfo;
+import card42.host.emrtd.lds.common.LdsFileUtil;
 import card42.host.emrtd.lds.lds1.Dg;
 import card42.host.emrtd.lds.common.LdsSecurityObject;
 import card42.host.emrtd.lds.security.PaceInfo;
@@ -44,6 +45,7 @@ final class EmrtdCardAccessTest {
         cardSecurityParsing();
         genericDataGroups();
         passiveAuthenticationTamper();
+        passiveAuthenticationTrailingData();
         passiveAuthenticationSignerSelection();
         passiveAuthenticationPss();
     }
@@ -199,6 +201,36 @@ final class EmrtdCardAccessTest {
         } catch (Exception e) {
             Asserts.check(true, "SOD under a wrong CSCA is rejected");
         }
+    }
+
+    /**
+     * The EF can be larger than the data group it carries: issuers may allocate
+     * a fixed-size file and leave the remainder untouched (observed on PRC
+     * passports).  The SOD covers the encoded data group, not the EF padding.
+     */
+    private static void passiveAuthenticationTrailingData() throws Exception {
+        byte[] dg11 = tlv(0x6B, tlv(0x5C, new byte[] { 0x5F, 0x0E, 0x5F, 0x0F }));
+        byte[] ef = new byte[dg11.length + 177];
+        System.arraycopy(dg11, 0, ef, 0, dg11.length);
+        for (int i = dg11.length; i < ef.length; i++) {
+            ef[i] = (byte) (i * 31 + 7);
+        }
+        java.util.Map<Integer, byte[]> hashes = new java.util.LinkedHashMap<Integer, byte[]>();
+        hashes.put(11, MessageDigest.getInstance("SHA-256").digest(dg11));
+        byte[] sod = SodBuilder.build(hashes,
+                EmrtdPersoExporter.loadPrivateKey("perso/emrtd/dsc.key"),
+                EmrtdPersoExporter.loadCertificate("perso/emrtd/dsc.crt"));
+        CscaKeyStore trust = CscaKeyStore.fromFiles(new java.io.File("perso/emrtd/csca.crt"));
+        LdsSecurityObject securityObject = PassiveAuthentication.verify(Sod.parse(sod), trust);
+
+        Asserts.bytes(dg11, LdsFileUtil.encodedDataGroup(11, ef),
+                "DG11 EF padding is trimmed to the outer TLV");
+        Asserts.check(PassiveAuthentication.verifyDataGroup(securityObject, 11, ef),
+                "DG11 EF padding does not affect the hash");
+        Asserts.check(!PassiveAuthentication.verifyDataGroup(securityObject, 11,
+                tlv(0x6C, new byte[] { 1 })), "a wrong DG outer tag is rejected");
+        Asserts.check(!PassiveAuthentication.verifyDataGroup(securityObject, 11,
+                new byte[] { 0x6B }), "a truncated DG outer TLV is rejected");
     }
 
     /**

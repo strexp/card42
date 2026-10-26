@@ -209,6 +209,11 @@ EF.SOD 是外层 `77` 标签内的 CMS SignedData（RFC 5652）（Doc 9303-10 §
   签名（Doc 9303-11 §6.2 / H7.2）。`-csca` 可指向证书文件或目录；目录下的 `.crt/.cer/
   .pem/.der/.crl` 会被加载。若提供了匹配的 CSCA CRL，`CscaKeyStore.checkRevocation` 会校验
   CRL 签名/有效期并检查吊销；未提供 CRL 时只表示“未检查吊销”，不表示已通过。
+- DG 的 EF 可能比编码后的 DG 对象大：部分发行方按固定容量分配 EF，尾部字节未初始化（PRC
+  护照实测 EF.DG11=208 B、DG11 对象=31 B，EF.DG15=256 B、DG15 对象=165 B）。SOD 覆盖的是 DG
+  的 BER-TLV（tag‖length‖value），因此 `LdsFileUtil.encodedDataGroup` 按外层 TLV 截取，
+  `PassiveAuthentication.verifyDataGroup` 对截取后的字节计算摘要；EF 尾部字节不参与 PA，
+  tag 不符或 TLV 截断按“不匹配”处理。
 - 个性化侧的 `SodBuilder`/`CardSecurityBuilder` 同时支持 RSA PKCS#1 v1.5 与 ECDSA-SHA-256
   的 DSC 私钥；CLI 的 `EmrtdPersoExporter.loadPrivateKey` 接受 EC/RSA PKCS#8。
 

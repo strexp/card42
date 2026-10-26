@@ -1,5 +1,7 @@
 package card42.host.emrtd.lds.common;
 
+import card42.host.common.codec.TlvCursor;
+
 /**
  * LDS1/LDS2 file identifier / outer-tag mapping (ICAO Doc 9303-10 §4.6/§4.7 for
  * LDS1 and §5.1–§5.3 for LDS2), the host mirror of the card's
@@ -86,6 +88,38 @@ public final class LdsFileUtil {
         default:
             return 0;
         }
+    }
+
+    /**
+     * The encoded data group (tag || length || value) inside a read EF.
+     *
+     * <p>An EF can be larger than the data group it carries: some issuers
+     * allocate a fixed-size file and leave the bytes after the outer TLV
+     * untouched (observed on PRC passports, where EF.DG11 is 208 bytes while
+     * DG11 is a 31-byte object).  The SOD signs the data group, never the EF
+     * padding, so Passive Authentication and any other comparison must hash
+     * the bytes returned here.
+     *
+     * @throws IllegalArgumentException when the EF is empty, its first object
+     *     is truncated, or its tag is not the tag of {@code dg}
+     */
+    public static byte[] encodedDataGroup(int dg, byte[] ef) {
+        int expectedTag = dgTag(dg);
+        if (expectedTag == 0) {
+            throw new IllegalArgumentException("not an LDS1 data group: " + dg);
+        }
+        if (ef == null || ef.length == 0) {
+            throw new IllegalArgumentException("DG" + dg + " EF is empty");
+        }
+        TlvCursor cursor = new TlvCursor(ef);
+        if (cursor.next() != TlvCursor.Status.OK) {
+            throw new IllegalArgumentException("DG" + dg + " outer TLV is truncated");
+        }
+        if (cursor.tag() != expectedTag) {
+            throw new IllegalArgumentException(String.format(
+                    "DG%d outer tag is %02X, expected %02X", dg, cursor.tag(), expectedTag));
+        }
+        return cursor.encoded();
     }
 
     /** The FID of an elementary file by its outer tag, or 0. */
